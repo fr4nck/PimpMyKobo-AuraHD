@@ -3,20 +3,19 @@
 verify-recovery.py - read-only verifier for a Kobo Aura HD recoveryfs tree.
 
 The source directory is NEVER opened for writing. The tool checks the recovery
-manifest, factory gzip archives and Aura HD E606C0-specific boot artifacts.
+manifest, fully reads the factory tar+gzip archives and validates the expected
+Aura HD E606C0-specific boot artifacts.
 """
 
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
-import os
 import re
-import sys
+import tarfile
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 CHUNK = 4 * 1024 * 1024
 MD5_RE = re.compile(r"^([0-9a-fA-F]{32})\s+([ *])(.+)$")
@@ -27,13 +26,13 @@ FR = {
     "root": "Recovery",
     "missing_root": "Le chemin fourni n'est pas un répertoire.",
     "manifest": "Manifeste fs.md5sum",
-    "gzip": "Archives usine",
+    "manifest_ok": "fichiers conformes",
+    "archives": "Archives usine tar+gzip",
     "artifacts": "Fichiers E606C0",
     "hashes": "SHA-256",
     "ok": "OK",
     "missing": "ABSENT",
     "bad": "ERREUR",
-    "unreadable": "ILLISIBLE",
     "summary_ok": "RECOVERY COHÉRENT POUR LES CONTRÔLES EFFECTUÉS",
     "summary_bad": "RECOVERY INCOMPLET OU INCOHÉRENT",
     "root_hint": "Certains fichiers sont illisibles. Relancez éventuellement avec les droits root/administrateur.",
@@ -45,47 +44,68 @@ EN = {
     "root": "Recovery",
     "missing_root": "The supplied path is not a directory.",
     "manifest": "fs.md5sum manifest",
-    "gzip": "Factory archives",
+    "manifest_ok": "matching files",
+    "archives": "Factory tar+gzip archives",
     "artifacts": "E606C0 files",
     "hashes": "SHA-256",
     "ok": "OK",
     "missing": "MISSING",
     "bad": "ERROR",
-    "unreadable": "UNREADABLE",
     "summary_ok": "RECOVERY IS CONSISTENT FOR THE CHECKS PERFORMED",
     "summary_bad": "RECOVERY IS INCOMPLETE OR INCONSISTENT",
     "root_hint": "Some files are unreadable. Re-run with root/administrator rights if appropriate.",
 }
 
 
-def digest_file(path: Path, algorithm: str) -> str:
+def digest_stream(handle: BinaryIO, algorithm: str) -> str:
     h = hashlib.new(algorithm)
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(CHUNK)
-            if not chunk:
-                break
-            h.update(chunk)
+    while True:
+        chunk = handle.read(CHUNK)
+        if not chunk:
+            break
+        h.update(chunk)
     return h.hexdigest()
 
 
-def validate_gzip(path: Path) -> dict[str, Any]:
-    result: dict[str, Any] = {"path": str(path), "exists": path.is_file(), "ok": False}
+def digest_file(path: Path, algorithm: str) -> str:
+    with path.open("rb") as handle:
+        return digest_stream(handle, algorithm)
+
+
+def validate_tar_gzip(path: Path) -> dict[str, Any]:
+    """Fully stream a .tgz without extracting anything to disk."""
+    result: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.is_file(),
+        "ok": False,
+        "members": 0,
+        "regular_files": 0,
+        "payload_bytes": 0,
+    }
     if not result["exists"]:
         result["error"] = "missing"
         return result
+
     try:
-        total = 0
-        with path.open("rb") as raw, gzip.GzipFile(fileobj=raw, mode="rb") as gz:
-            while True:
-                chunk = gz.read(CHUNK)
-                if not chunk:
-                    break
-                total += len(chunk)
-        result["ok"] = True
-        result["uncompressed_bytes"] = total
         result["compressed_bytes"] = path.stat().st_size
-    except (OSError, EOFError, gzip.BadGzipFile) as exc:
+        with tarfile.open(path, mode="r|gz") as archive:
+            for member in archive:
+                result["members"] += 1
+                if not member.isfile():
+                    continue
+                result["regular_files"] += 1
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise tarfile.ReadError(f"cannot read member: {member.name}")
+                while True:
+                    chunk = extracted.read(CHUNK)
+                    if not chunk:
+                        break
+                    result["payload_bytes"] += len(chunk)
+        if result["members"] == 0:
+            raise tarfile.ReadError("archive contains no members")
+        result["ok"] = True
+    except (OSError, EOFError, tarfile.TarError) as exc:
         result["error"] = str(exc)
     return result
 
@@ -102,7 +122,7 @@ def parse_manifest(path: Path) -> tuple[list[tuple[str, str]], list[str]]:
         line = raw_line
         if not line.strip():
             continue
-        # GNU md5sum may prefix an escaped record with a backslash.
+        # GNU md5sum prefixes escaped filenames with a backslash.
         if line.startswith("\\"):
             line = line[1:]
         match = MD5_RE.match(line)
@@ -110,22 +130,23 @@ def parse_manifest(path: Path) -> tuple[list[tuple[str, str]], list[str]]:
             errors.append(f"line {lineno}: unsupported manifest entry")
             continue
         expected = match.group(1).lower()
-        rel = match.group(3)
-        rel = rel.replace("\\n", "\n").replace("\\\\", "\\")
-        if rel.startswith("./"):
-            rel = rel[2:]
-        entries.append((expected, rel))
+        relative = match.group(3)
+        relative = relative.replace("\\n", "\n").replace("\\\\", "\\")
+        if relative.startswith("./"):
+            relative = relative[2:]
+        entries.append((expected, relative))
     return entries, errors
 
 
 def safe_member(root: Path, relative: str) -> Path | None:
-    # Reject absolute paths and path traversal even though we only read.
+    """Reject absolute paths, traversal and symlinks escaping the recovery tree."""
     rel = Path(relative)
     if rel.is_absolute():
         return None
+    root_resolved = root.resolve(strict=False)
     candidate = (root / rel).resolve(strict=False)
     try:
-        candidate.relative_to(root.resolve(strict=False))
+        candidate.relative_to(root_resolved)
     except ValueError:
         return None
     return candidate
@@ -198,7 +219,6 @@ def find_artifacts(root: Path) -> dict[str, Any]:
                 item["error"] = str(exc)
         result["files"][key] = item
 
-    # Keep an inventory of other hardware-specific candidates for diagnostics.
     if ntx.is_dir():
         try:
             result["other_candidates"] = sorted(
@@ -212,8 +232,8 @@ def find_artifacts(root: Path) -> dict[str, Any]:
         result["other_candidates"] = []
 
     result["ok"] = result["exists"] and all(
-        item.get("exists") for item in result["files"].values()
-    )
+        item.get("exists") and not item.get("error") for item in result["files"].values()
+    ) and not result.get("inventory_error")
     return result
 
 
@@ -244,21 +264,24 @@ def inspect_recovery(root: Path, verify_md5: bool, include_hashes: bool) -> dict
         return result
 
     archives = [root / "upgrade" / "fs.tgz", root / "upgrade" / "db.tgz"]
-    result["archives"] = [validate_gzip(path) for path in archives]
+    result["archives"] = [validate_tar_gzip(path) for path in archives]
     result["artifacts"] = find_artifacts(root)
     result["manifest"] = verify_manifest(root) if verify_md5 else {"skipped": True, "ok": True}
 
+    hashes_ok = True
     if include_hashes:
         artifact_paths = [
             root / "upgrade" / "ntx508" / "u-boot_mddr_512-E606C0-K4X2G323PC.bin",
             root / "upgrade" / "ntx508" / "uImage-E606C0",
         ]
         result["sha256"] = hash_selected(archives + artifact_paths)
+        hashes_ok = all(item.get("sha256") and not item.get("error") for item in result["sha256"])
 
     result["ok"] = (
         all(item.get("ok") for item in result["archives"])
         and result["artifacts"].get("ok", False)
         and result["manifest"].get("ok", False)
+        and hashes_ok
     )
     return result
 
@@ -291,7 +314,7 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
         print("  SKIPPED")
     elif manifest.get("ok"):
         print(
-            f"  {lang['ok']}: {manifest.get('matched', 0)}/{manifest.get('checked', 0)} fichiers conformes"
+            f"  {lang['ok']}: {manifest.get('matched', 0)}/{manifest.get('checked', 0)} {lang['manifest_ok']}"
         )
     else:
         print(
@@ -302,13 +325,14 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
         if manifest.get("unreadable"):
             print(f"  {lang['root_hint']}")
 
-    print(f"{lang['gzip']}:")
+    print(f"{lang['archives']}:")
     for item in result["archives"]:
         name = Path(item["path"]).name
         if item.get("ok"):
             print(
-                f"  {name}: {lang['ok']} — {human_size(item.get('compressed_bytes'))} -> "
-                f"{human_size(item.get('uncompressed_bytes'))}"
+                f"  {name}: {lang['ok']} — {item.get('members', 0)} entries, "
+                f"{human_size(item.get('compressed_bytes'))} compressed, "
+                f"{human_size(item.get('payload_bytes'))} file payload"
             )
         else:
             state = lang["missing"] if item.get("error") == "missing" else lang["bad"]
@@ -317,7 +341,7 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
     print(f"{lang['artifacts']}:")
     for key, item in result["artifacts"]["files"].items():
         name = Path(item["path"]).name
-        if item.get("exists"):
+        if item.get("exists") and not item.get("error"):
             print(f"  {key}: {lang['ok']} — {name} ({item.get('size', '?')} bytes)")
         else:
             print(f"  {key}: {lang['missing']} — {name}")
@@ -327,6 +351,8 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
         for item in result["sha256"]:
             if item.get("sha256"):
                 print(f"  {item['sha256']}  {item['path']}")
+            else:
+                print(f"  {lang['bad']}  {item['path']}  {item.get('error', '')}")
 
     print()
     print(lang["summary_ok"] if result.get("ok") else lang["summary_bad"])
