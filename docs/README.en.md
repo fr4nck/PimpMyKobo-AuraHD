@@ -8,10 +8,11 @@ The documentation is organized around two goals: **rescue** an Aura HD using dat
 
 For an Aura HD that no longer boots or whose factory reset failed:
 
-1. [Recover files from your own Aura HD](recover-files-en.md)
-2. [Inspect the microSD read-only](inspect-aura-hd-en.md)
-3. [Verify `recoveryfs`](verify-recovery-en.md)
-4. [Understand the observed rescue procedure](rescue-en.md)
+1. [Protect the microSD on Windows before inspection](windows-preservation-en.md)
+2. [Recover files from your own Aura HD](recover-files-en.md)
+3. [Inspect the microSD read-only](inspect-aura-hd-en.md)
+4. [Verify `recoveryfs`](verify-recovery-en.md)
+5. [Understand the observed rescue procedure](rescue-en.md)
 
 ## Hardware reference
 
