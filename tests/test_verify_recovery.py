@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import gzip
 import hashlib
 import importlib.util
+import io
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,15 +20,21 @@ def md5(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
+def write_tgz(path: Path, member_name: str, payload: bytes) -> None:
+    with tarfile.open(path, "w:gz") as archive:
+        info = tarfile.TarInfo(member_name)
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+
+
 def build_recovery(root: Path) -> None:
     (root / "upgrade" / "ntx508").mkdir(parents=True)
     sample = b"recovery sample\n"
     (root / "sample.txt").write_bytes(sample)
     (root / "fs.md5sum").write_text(f"{md5(sample)}  sample.txt\n", encoding="utf-8")
 
-    for name, payload in (("fs.tgz", b"factory rootfs" * 100), ("db.tgz", b"factory database" * 50)):
-        with gzip.open(root / "upgrade" / name, "wb") as gz:
-            gz.write(payload)
+    write_tgz(root / "upgrade" / "fs.tgz", "etc/synthetic.conf", b"factory rootfs" * 100)
+    write_tgz(root / "upgrade" / "db.tgz", ".kobo/synthetic.db", b"factory database" * 50)
 
     (root / "upgrade" / "ntx508" / "u-boot_mddr_512-E606C0-K4X2G323PC.bin").write_bytes(
         b"u-boot synthetic"
@@ -44,6 +51,7 @@ class VerifyRecoveryTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertTrue(result["manifest"]["ok"])
             self.assertTrue(all(item["ok"] for item in result["archives"]))
+            self.assertTrue(all(item["members"] == 1 for item in result["archives"]))
             self.assertTrue(result["artifacts"]["ok"])
             self.assertEqual(len(result["sha256"]), 4)
 
@@ -60,7 +68,7 @@ class VerifyRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             build_recovery(root)
-            (root / "upgrade" / "fs.tgz").write_bytes(b"not gzip")
+            (root / "upgrade" / "fs.tgz").write_bytes(b"not a tar gzip archive")
             result = verify.inspect_recovery(root, True, False)
             self.assertFalse(result["ok"])
             self.assertFalse(result["archives"][0]["ok"])
@@ -69,11 +77,11 @@ class VerifyRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             build_recovery(root)
-            outside = root.parent / "outside.txt"
+            outside = root.parent / f"{root.name}-outside.txt"
             outside.write_bytes(b"outside")
             try:
                 (root / "fs.md5sum").write_text(
-                    f"{md5(b'outside')}  ../outside.txt\n", encoding="utf-8"
+                    f"{md5(b'outside')}  ../{outside.name}\n", encoding="utf-8"
                 )
                 result = verify.inspect_recovery(root, True, False)
                 self.assertFalse(result["ok"])
