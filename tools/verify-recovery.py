@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-verify-recovery.py - read-only verifier for a Kobo Aura HD recoveryfs tree.
-
-The source directory is NEVER opened for writing. The tool checks the recovery
-manifest, fully validates the factory tar+gzip archives and validates the
-expected Aura HD E606C0-specific boot artifacts.
-"""
+"""Read-only verifier for a Kobo Aura HD recoveryfs tree."""
 
 from __future__ import annotations
 
@@ -22,6 +16,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 CHUNK = 4 * 1024 * 1024
+TAR_END_SIZE = 1024
 MD5_RE = re.compile(r"^([0-9a-fA-F]{32})\s+([ *])(.+)$")
 UBOOT_MAGIC = 0x27051956
 JSON_SCHEMA_VERSION = 1
@@ -36,15 +31,13 @@ FR = {
     "archives": "Archives usine tar+gzip",
     "artifacts": "Fichiers E606C0",
     "hashes": "SHA-256",
-    "ok": "OK",
-    "missing": "ABSENT",
-    "bad": "ERREUR",
-    "partial": "PARTIEL",
+    "ok": "OK", "missing": "ABSENT", "bad": "ERREUR", "partial": "PARTIEL",
     "summary_ok": "RECOVERY COHÉRENT POUR LES CONTRÔLES EFFECTUÉS",
     "summary_bad": "RECOVERY INCOMPLET OU INCOHÉRENT",
     "summary_partial": "RECOVERY PARTIELLEMENT VÉRIFIÉ — NE PAS LE CONSIDÉRER VALIDÉ",
     "root_hint": "Certains fichiers sont illisibles. Relancez éventuellement avec les droits root/administrateur.",
 }
+
 EN = {
     "title": "PimpMyKobo-AuraHD — read-only recoveryfs verification",
     "readonly": "NO WRITES: the recovery tree is only read.",
@@ -55,10 +48,7 @@ EN = {
     "archives": "Factory tar+gzip archives",
     "artifacts": "E606C0 files",
     "hashes": "SHA-256",
-    "ok": "OK",
-    "missing": "MISSING",
-    "bad": "ERROR",
-    "partial": "PARTIAL",
+    "ok": "OK", "missing": "MISSING", "bad": "ERROR", "partial": "PARTIAL",
     "summary_ok": "RECOVERY IS CONSISTENT FOR THE CHECKS PERFORMED",
     "summary_bad": "RECOVERY IS INCOMPLETE OR INCONSISTENT",
     "summary_partial": "RECOVERY WAS ONLY PARTIALLY VERIFIED — DO NOT TREAT IT AS VALIDATED",
@@ -82,7 +72,6 @@ def digest_file(path: Path, algorithm: str) -> str:
 
 
 def safe_member(root: Path, relative: str) -> Path | None:
-    """Reject absolute paths, traversal and symlinks escaping the recovery tree."""
     rel = Path(relative)
     if rel.is_absolute():
         return None
@@ -116,8 +105,22 @@ def safe_critical_path(root: Path, relative: str) -> tuple[Path | None, str | No
     return path, None
 
 
+def _gzip_tail_and_size(path: Path) -> tuple[int, bytes]:
+    """Read the complete gzip stream, forcing CRC32/ISIZE validation."""
+    total = 0
+    tail = b""
+    with gzip.open(path, "rb") as gz:
+        while True:
+            chunk = gz.read(CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+            tail = (tail + chunk)[-TAR_END_SIZE:]
+    return total, tail
+
+
 def validate_tar_gzip(path: Path) -> dict[str, Any]:
-    """Validate gzip framing/CRC and stream every tar member without extracting."""
+    """Validate gzip CRC/size, tar EOF markers, members and regular-file payloads."""
     result: dict[str, Any] = {
         "path": str(path),
         "exists": False,
@@ -134,36 +137,30 @@ def validate_tar_gzip(path: Path) -> dict[str, Any]:
     result["compressed_bytes"] = size
 
     try:
-        with path.open("rb") as raw:
-            with gzip.GzipFile(fileobj=raw, mode="rb") as gz:
-                with tarfile.open(fileobj=gz, mode="r|") as archive:
-                    for member in archive:
-                        result["members"] += 1
-                        if not member.isfile():
-                            continue
-                        result["regular_files"] += 1
-                        extracted = archive.extractfile(member)
-                        if extracted is None:
-                            raise tarfile.ReadError(f"cannot read member: {member.name}")
-                        while True:
-                            chunk = extracted.read(CHUNK)
-                            if not chunk:
-                                break
-                            result["payload_bytes"] += len(chunk)
-                # Force gzip to consume its footer and any remaining/concatenated data.
-                # This makes CRC32, ISIZE and trailing corruption observable.
+        uncompressed_bytes, tail = _gzip_tail_and_size(path)
+        result["uncompressed_bytes"] = uncompressed_bytes
+        if uncompressed_bytes < TAR_END_SIZE or tail != b"\x00" * TAR_END_SIZE:
+            raise tarfile.ReadError("tar end marker missing or truncated")
+
+        with tarfile.open(path, mode="r:gz") as archive:
+            for member in archive:
+                result["members"] += 1
+                if not member.isfile():
+                    continue
+                result["regular_files"] += 1
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise tarfile.ReadError(f"cannot read member: {member.name}")
                 while True:
-                    remainder = gz.read(CHUNK)
-                    if not remainder:
+                    chunk = extracted.read(CHUNK)
+                    if not chunk:
                         break
-                    if any(remainder):
-                        raise tarfile.ReadError("non-zero data found after tar end marker")
-            # After GzipFile reaches EOF, raw should also be at EOF. If not, reject.
-            trailing = raw.read(1)
-            if trailing:
-                raise gzip.BadGzipFile("unexpected trailing bytes after gzip stream")
+                    result["payload_bytes"] += len(chunk)
+
         if result["members"] == 0:
             raise tarfile.ReadError("archive contains no members")
+        if result["regular_files"] == 0:
+            raise tarfile.ReadError("archive contains no regular files")
         result["ok"] = True
     except (OSError, EOFError, gzip.BadGzipFile, tarfile.TarError, zlib.error) as exc:
         result["error"] = str(exc)
@@ -179,6 +176,10 @@ def _decode_gnu_escaped_name(value: str) -> str:
             nxt = value[i + 1]
             if nxt == "n":
                 out.append("\n")
+                i += 2
+                continue
+            if nxt == "r":
+                out.append("\r")
                 i += 2
                 continue
             if nxt == "\\":
@@ -238,33 +239,28 @@ def verify_manifest(root: Path) -> dict[str, Any]:
     exists, _, stat_error = stat_regular_file(manifest)
     result["exists"] = exists
     if not exists:
-        if stat_error and stat_error != "missing":
+        if stat_error and stat_error not in ("missing", "not a regular file"):
             result["unreadable"].append({"path": "fs.md5sum", "error": stat_error})
         result["error"] = stat_error or "missing"
         return result
 
     entries, parse_errors = parse_manifest(manifest)
     result["invalid_entries"].extend(parse_errors)
-
     for expected, relative in entries:
         path = safe_member(root, relative)
         if path is None:
             result["invalid_entries"].append(f"unsafe path: {relative}")
             continue
         result["checked"] += 1
-
         exists, _, stat_error = stat_regular_file(path)
         if not exists:
-            if stat_error == "missing" or stat_error == "not a regular file":
+            if stat_error in ("missing", "not a regular file"):
                 result["missing"].append(relative)
             else:
                 result["unreadable"].append({"path": relative, "error": stat_error})
             continue
         try:
             actual = digest_file(path, "md5")
-        except PermissionError as exc:
-            result["unreadable"].append({"path": relative, "error": str(exc)})
-            continue
         except OSError as exc:
             result["unreadable"].append({"path": relative, "error": str(exc)})
             continue
@@ -276,10 +272,7 @@ def verify_manifest(root: Path) -> dict[str, Any]:
             )
 
     result["ok"] = bool(entries) and not (
-        result["missing"]
-        or result["mismatched"]
-        or result["unreadable"]
-        or result["invalid_entries"]
+        result["missing"] or result["mismatched"] or result["unreadable"] or result["invalid_entries"]
     )
     return result
 
@@ -315,9 +308,10 @@ def validate_legacy_uimage(path: Path) -> dict[str, Any]:
                 raise ValueError(
                     f"uImage header CRC mismatch: expected 0x{header_crc:08X}, got 0x{actual_header_crc:08X}"
                 )
-            if size != 64 + data_size:
+            minimum_size = 64 + data_size
+            if size < minimum_size:
                 raise ValueError(
-                    f"uImage size mismatch: header declares {data_size} data bytes, file is {size} bytes"
+                    f"uImage size mismatch: header declares {data_size} data bytes, file is only {size} bytes"
                 )
 
             crc = 0
@@ -333,10 +327,16 @@ def validate_legacy_uimage(path: Path) -> dict[str, Any]:
                 raise ValueError(
                     f"uImage data CRC mismatch: expected 0x{data_crc:08X}, got 0x{crc:08X}"
                 )
+
+            padding = handle.read()
+            if any(padding):
+                raise ValueError("non-zero bytes found after declared uImage payload")
+
         result.update({
             "ok": True,
             "magic": f"0x{magic:08X}",
             "data_size": data_size,
+            "padding_bytes": len(padding),
             "header_crc": f"0x{header_crc:08X}",
             "data_crc": f"0x{data_crc:08X}",
         })
@@ -352,6 +352,7 @@ def find_artifacts(root: Path) -> dict[str, Any]:
         "exists": False,
         "files": {},
         "other_candidates": [],
+        "warnings": [],
         "ok": False,
     }
     if unsafe:
@@ -369,41 +370,60 @@ def find_artifacts(root: Path) -> dict[str, Any]:
 
     try:
         uboot_candidates = sorted(
-            p for p in ntx_path.glob("u-boot_mddr_512-E606C0-*.bin")
-            if safe_member(root, str(p.relative_to(root))) is not None
+            path for path in ntx_path.glob("u-boot_mddr_512-E606C0-*.bin")
+            if safe_member(root, str(path.relative_to(root))) is not None
         )
     except (OSError, ValueError) as exc:
         result["error"] = str(exc)
         return result
 
-    uboot_items = []
+    uboot_items: list[dict[str, Any]] = []
     for path in uboot_candidates:
         exists, size, error = stat_regular_file(path)
-        item = {"path": str(path), "exists": exists, "size": size, "ok": bool(exists and size and size > 0)}
+        item: dict[str, Any] = {
+            "path": str(path),
+            "exists": exists,
+            "size": size,
+            "ok": bool(exists and size and size > 0),
+        }
         if error:
             item["error"] = error
         if exists and size == 0:
             item["error"] = "empty file"
         uboot_items.append(item)
     result["files"]["uboot_candidates"] = uboot_items
-    result["selected_uboot"] = next((x for x in uboot_items if x.get("ok")), None)
+    valid_uboot = [item for item in uboot_items if item.get("ok")]
+    if len(valid_uboot) == 1:
+        result["selected_uboot"] = valid_uboot[0]
+    elif len(valid_uboot) > 1:
+        result["selected_uboot"] = None
+        result["warnings"].append(
+            "multiple non-empty E606C0 U-Boot variants found; no RAM variant selected automatically"
+        )
+    else:
+        result["selected_uboot"] = None
 
     kernel_path, kernel_unsafe = safe_critical_path(root, "upgrade/ntx508/uImage-E606C0")
     if kernel_unsafe or kernel_path is None:
-        kernel = {"path": str(root / "upgrade/ntx508/uImage-E606C0"), "exists": False, "ok": False, "error": kernel_unsafe}
+        kernel = {
+            "path": str(root / "upgrade/ntx508/uImage-E606C0"),
+            "exists": False,
+            "ok": False,
+            "error": kernel_unsafe,
+        }
     else:
         kernel = validate_legacy_uimage(kernel_path)
     result["files"]["kernel"] = kernel
 
     try:
         result["other_candidates"] = sorted(
-            p.name for p in ntx_path.iterdir()
-            if p.is_file() and (p.name.startswith("u-boot") or p.name.startswith("uImage"))
+            path.name for path in ntx_path.iterdir()
+            if path.is_file() and (path.name.startswith("u-boot") or path.name.startswith("uImage"))
         )
     except OSError as exc:
         result["inventory_error"] = str(exc)
 
-    result["ok"] = bool(result.get("selected_uboot")) and kernel.get("ok", False) and not result.get("inventory_error")
+    result["ok"] = bool(valid_uboot) and kernel.get("ok", False) and not result.get("inventory_error")
     return result
 
 
@@ -456,16 +476,19 @@ def inspect_recovery(root: Path, verify_md5: bool, include_hashes: bool) -> dict
         return result
 
     archives: list[Path] = []
-    archive_results = []
+    archive_results: list[dict[str, Any]] = []
     for rel in ("upgrade/fs.tgz", "upgrade/db.tgz"):
         path, unsafe = safe_critical_path(root, rel)
         if unsafe or path is None:
-            archive_results.append({"path": str(root / rel), "exists": False, "ok": False, "error": unsafe})
+            archive_results.append({
+                "path": str(root / rel), "exists": False, "ok": False, "error": unsafe
+            })
             continue
         archives.append(path)
         archive_results.append(validate_tar_gzip(path))
     result["archives"] = archive_results
     result["artifacts"] = find_artifacts(root)
+    result["warnings"].extend(result["artifacts"].get("warnings", []))
     result["manifest"] = verify_manifest(root) if verify_md5 else {
         "skipped": True, "ok": False, "partial": True
     }
@@ -473,9 +496,9 @@ def inspect_recovery(root: Path, verify_md5: bool, include_hashes: bool) -> dict
     hashes_ok = True
     if include_hashes:
         hash_paths = list(archives)
-        selected = result["artifacts"].get("selected_uboot")
-        if selected and selected.get("path"):
-            hash_paths.append(Path(selected["path"]))
+        for item in result["artifacts"].get("files", {}).get("uboot_candidates", []):
+            if item.get("ok") and item.get("path"):
+                hash_paths.append(Path(item["path"]))
         kernel = result["artifacts"].get("files", {}).get("kernel", {})
         if kernel.get("path"):
             hash_paths.append(Path(kernel["path"]))
@@ -540,25 +563,28 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
             print(
                 f"  {name}: {lang['ok']} — {item.get('members', 0)} entries, "
                 f"{human_size(item.get('compressed_bytes'))} compressed, "
-                f"{human_size(item.get('payload_bytes'))} file payload"
+                f"{human_size(item.get('uncompressed_bytes'))} uncompressed, "
+                f"{human_size(item.get('payload_bytes'))} regular-file payload"
             )
         else:
             state = lang["missing"] if item.get("error") == "missing" else lang["bad"]
             print(f"  {name}: {state} {item.get('error', '')}")
 
     print(f"{lang['artifacts']}:")
-    for item in result["artifacts"].get("files", {}).get("uboot_candidates", []):
+    uboot_items = result["artifacts"].get("files", {}).get("uboot_candidates", [])
+    for item in uboot_items:
         name = Path(item["path"]).name
         state = lang["ok"] if item.get("ok") else lang["bad"]
         print(f"  uboot: {state} — {name} ({item.get('size', '?')} bytes)")
-    if not result["artifacts"].get("files", {}).get("uboot_candidates"):
+    if not uboot_items:
         print(f"  uboot: {lang['missing']}")
     kernel = result["artifacts"].get("files", {}).get("kernel", {})
     if kernel:
         name = Path(kernel["path"]).name
         state = lang["ok"] if kernel.get("ok") else lang["bad"]
         suffix = f" — {kernel.get('error')}" if kernel.get("error") else ""
-        print(f"  kernel: {state} — {name} ({kernel.get('size', '?')} bytes){suffix}")
+        padding = f", padding={kernel.get('padding_bytes')}" if kernel.get("ok") else ""
+        print(f"  kernel: {state} — {name} ({kernel.get('size', '?')} bytes{padding}){suffix}")
 
     if show_hashes and result.get("sha256"):
         print(f"{lang['hashes']}:")
@@ -568,8 +594,11 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
             else:
                 print(f"  {lang['bad']}  {item['path']}  {item.get('error', '')}")
 
+    for warning in result.get("warnings", []):
+        print(f"{lang['partial']}: {warning}")
+
     print()
-    if result.get("partial"):
+    if result.get("partial") and result.get("checks_ok"):
         print(lang["summary_partial"])
     elif result.get("ok"):
         print(lang["summary_ok"])
@@ -586,7 +615,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
         "--hash-files", action="store_true",
-        help="Also compute SHA-256 for fs.tgz, db.tgz, selected E606C0 U-Boot and kernel.",
+        help="Also compute SHA-256 for fs.tgz, db.tgz, all valid E606C0 U-Boot candidates and kernel.",
     )
     parser.add_argument(
         "--skip-md5", action="store_true",
@@ -602,8 +631,6 @@ def main() -> int:
 
     if result.get("ok"):
         return 0
-    if result.get("partial"):
-        return 1
     if result.get("error") == "not_a_directory":
         return 2
     return 1
