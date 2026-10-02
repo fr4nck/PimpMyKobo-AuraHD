@@ -60,6 +60,19 @@ Exemple :
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
 ```
 
+## `backup-aura-hd.py`
+
+Sauvegarde d'une Aura HD **E606C0 confirmée** : zone pré-P1, P1 `rootfs`, P2 `recoveryfs`, et P3 uniquement avec `--include-userdata`. La source est ouverte en `rb` uniquement ; seul le dossier de destination fourni est écrit. Chaque fichier est vérifié par SHA-256 (source, seconde lecture, relecture destination) et décrit dans `backup-manifest.json` avec une empreinte cible.
+
+Documentation :
+
+- [Français](../docs/backup-aura-hd-fr.md)
+- [English](../docs/backup-aura-hd-en.md)
+
+```bash
+sudo python3 ./tools/backup-aura-hd.py /dev/sdX ~/Aura-backup --dry-run
+```
+
 ## Tests
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
@@ -74,6 +87,5 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 
 ## À venir
 
-- `backup-aura-hd` : produire des sauvegardes locales avec empreintes ;
 - `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
 - `restore-rootfs` : restauration encadrée avec garde-fous et vérification après écriture.

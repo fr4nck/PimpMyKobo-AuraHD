@@ -12,7 +12,8 @@ For an Aura HD that no longer boots or whose factory reset failed:
 2. [Recover files from your own Aura HD](recover-files-en.md)
 3. [Inspect the microSD read-only](inspect-aura-hd-en.md)
 4. [Verify `recoveryfs`](verify-recovery-en.md)
-5. [Understand the observed rescue procedure](rescue-en.md)
+5. [Back up the microSD (pre-P1, P1, P2, optional P3)](backup-aura-hd-en.md)
+6. [Understand the observed rescue procedure](rescue-en.md)
 
 ## Hardware reference
 
@@ -25,9 +26,10 @@ For an Aura HD that no longer boots or whose factory reset failed:
 Scripts live in [`../tools/`](../tools/).
 
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
-- `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files.
+- `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files;
+- `backup-aura-hd.py`: SHA-256-verified backup of a confirmed E606C0 Aura HD into an explicitly given directory.
 
-Both current tools are designed so they never write to the microSD source.
+These tools never open the source microSD for writing. `backup-aura-hd.py` only writes into the backup directory.
 
 ## Data intentionally not published
 

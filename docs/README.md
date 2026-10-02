@@ -12,7 +12,8 @@ Pour une Aura HD qui ne démarre plus ou dont le reset usine a échoué :
 2. [Retrouver les fichiers sur sa propre Aura HD](retrouver-fichiers-fr.md)
 3. [Inspecter la microSD en lecture seule](inspect-aura-hd-fr.md)
 4. [Vérifier `recoveryfs`](verify-recovery-fr.md)
-5. [Comprendre la procédure de sauvetage observée](rescue-fr.md)
+5. [Sauvegarder la microSD (pré-P1, P1, P2, P3 en option)](backup-aura-hd-fr.md)
+6. [Comprendre la procédure de sauvetage observée](rescue-fr.md)
 
 ## Référence matérielle
 
@@ -25,9 +26,10 @@ Pour une Aura HD qui ne démarre plus ou dont le reset usine a échoué :
 Les scripts sont dans [`../tools/`](../tools/).
 
 - `inspect-aura-hd.py` : identification et cartographie d'une microSD complète ;
-- `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0.
+- `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0 ;
+- `backup-aura-hd.py` : sauvegarde vérifiée par SHA-256 d'une Aura HD E606C0 confirmée, vers un dossier explicitement fourni.
 
-Les deux outils actuels sont conçus pour ne jamais écrire sur la microSD.
+Ces outils n'ouvrent jamais la microSD source en écriture. `backup-aura-hd.py` n'écrit que dans le dossier de sauvegarde.
 
 ## Données non publiées
 
