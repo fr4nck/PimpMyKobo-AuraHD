@@ -2,7 +2,7 @@
 
 **Français** | [English](inspect-aura-hd-en.md)
 
-`tools/inspect-aura-hd.py` est le premier outil du projet destiné à éviter les manipulations manuelles de numéros de disques, d'offsets et de structures binaires.
+`tools/inspect-aura-hd.py` évite les manipulations manuelles de numéros de disques, d'offsets et de structures binaires.
 
 Il fonctionne **strictement en lecture seule** : les sources sont toujours ouvertes avec le mode Python `rb` et aucun chemin d'écriture vers un disque physique n'existe dans l'outil.
 
@@ -66,31 +66,9 @@ Le scan utilise `/sys/block` et ne dépend pas d'un nom de périphérique préd�
 
 ## WSL
 
-WSL ne voit pas nécessairement un lecteur de cartes USB Windows comme périphérique bloc Linux.
+WSL ne voit pas nécessairement un lecteur de cartes USB Windows comme périphérique bloc Linux. Dans ce cas, lancer l'outil avec le Python Windows depuis PowerShell est la méthode recommandée.
 
-Dans ce cas, le plus simple est de lancer l'outil avec le Python Windows depuis PowerShell :
-
-```powershell
-python .\tools\inspect-aura-hd.py
-```
-
-L'outil peut aussi analyser une image disque enregistrée dans un fichier.
-
-## Analyser explicitement une image ou un périphérique
-
-Une image complète de microSD :
-
-```powershell
-python .\tools\inspect-aura-hd.py C:\Users\Ordi\AuraHD-full.img
-```
-
-Sous Linux :
-
-```bash
-sudo python3 ./tools/inspect-aura-hd.py /dev/sdb
-```
-
-Dans le second exemple, `/dev/sdb` n'est qu'un exemple de documentation : lorsqu'on utilise le scan automatique sans argument, aucun nom de périphérique n'a à être saisi.
+L'outil accepte aussi, comme argument positionnel, le chemin d'une image disque complète ou d'un périphérique brut explicitement choisi. Lorsqu'un chemin est fourni, la détection automatique est désactivée pour cette exécution.
 
 ## Sortie attendue sur une E606C0
 
@@ -130,14 +108,7 @@ Pour réutiliser le résultat dans de futurs scripts :
 python .\tools\inspect-aura-hd.py --json
 ```
 
-La sortie contient notamment :
-
-- la source inspectée ;
-- les métadonnées du disque ;
-- le MBR et les partitions ;
-- le HWCONFIG brut décodé ;
-- l'identification `E606C0` ;
-- les labels de systèmes de fichiers détectés.
+La sortie contient notamment la source inspectée, les métadonnées du disque, le MBR, les partitions, le HWCONFIG décodé, l'identification E606C0 et les labels de systèmes de fichiers.
 
 ## Langue anglaise
 
@@ -150,11 +121,11 @@ python .\tools\inspect-aura-hd.py --lang en
 - `0` : une Aura HD E606C0 a été identifiée ;
 - `1` : aucune Aura HD E606C0 n'a été identifiée.
 
-## Limite actuelle : contenu de recoveryfs
+## Contrôler ensuite le contenu de `recoveryfs`
 
-L'inspecteur détecte P2 et son label `recoveryfs` directement depuis les structures du système de fichiers, mais il **ne parcourt pas encore son arborescence ext4** depuis Windows.
+L'inspecteur détecte P2 et son label `recoveryfs` directement depuis les structures du système de fichiers, mais il ne parcourt volontairement pas l'arborescence ext4 depuis le disque brut.
 
-Il ne confirme donc pas encore automatiquement la présence de :
+Le contrôle des fichiers suivants est réalisé par l'outil séparé [`verify-recovery.py`](verify-recovery-fr.md), à partir d'un montage ou d'une copie de P2 en lecture seule :
 
 ```text
 /upgrade/fs.tgz
@@ -163,7 +134,7 @@ Il ne confirme donc pas encore automatiquement la présence de :
 /upgrade/ntx508/uImage-E606C0
 ```
 
-Cette vérification sera prise en charge par un outil séparé `verify-recovery`, travaillant sur une image ou un montage en lecture seule.
+Cette séparation garde l'inspection du support physique minimale et limite la surface de risque.
 
 ## Sécurité
 
