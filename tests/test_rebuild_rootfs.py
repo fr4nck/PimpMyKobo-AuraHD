@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -25,21 +26,32 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
         self.assertFalse(mod.looks_like_device("C:/Users/Test/recovery.img"))
 
     def _fixture(self, root: Path):
-        recovery = root / "récovery image.bin"
+        recovery = root / "p2-récupération.img"
         recovery.write_bytes(b"recovery-test-data")
-        sha = mod.sha256_file(recovery)
+        digest = hashlib.sha256(recovery.read_bytes()).hexdigest()
         manifest = root / "backup manifest.json"
         manifest.write_text(json.dumps({
             "schema_version": 1,
+            "tool": "backup-aura-hd",
+            "status": "complete",
             "complete": True,
-            "device": "E606C0",
-            "source_fingerprint": "synthetic-test-fingerprint",
-            "partitions": [{"number": 1, "size": 1024}, {"number": 2, "size": len(recovery.read_bytes())}],
-            "recovery": {"size": len(recovery.read_bytes()), "sha256": sha},
+            "identification": {
+                "aura_hd_e606c0": True,
+                "hwconfig": {"pcb": {"raw": 28, "decoded": "E606C0"}},
+            },
+            "mbr": {"partitions": [
+                {"number": 1, "size": 1024},
+                {"number": 2, "size": len(recovery.read_bytes())},
+            ]},
+            "components": [
+                {"name": "p1_rootfs", "file": "p1-rootfs.img", "size": 1024, "status": "verified", "sha256_destination": "1" * 64},
+                {"name": "p2_recoveryfs", "file": "p2-recoveryfs.img", "size": len(recovery.read_bytes()), "status": "verified", "sha256_destination": digest},
+            ],
+            "target_fingerprint": {"algorithm": "pmkb-target-v1", "sha256": "2" * 64},
         }), encoding="utf-8")
         return manifest, recovery
 
-    def test_valid_synthetic_inputs_reach_ready_without_creating_output(self):
+    def test_backup_v1_manifest_reaches_ready_without_creating_output(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             manifest, recovery = self._fixture(root)
@@ -47,7 +59,31 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
             result = mod.preflight(manifest, recovery, output)
             self.assertEqual("ready", result["status"])
             self.assertFalse(result["ok"])
+            self.assertEqual("pmkb-target-v1", result["target_fingerprint"]["algorithm"])
             self.assertFalse(output.exists())
+
+    def test_incomplete_backup_is_refused(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            manifest, recovery = self._fixture(root)
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["complete"] = False
+            data["status"] = "failed"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = mod.preflight(manifest, recovery, root / "out.img")
+            self.assertEqual("failed", result["status"])
+            self.assertTrue(any("not complete" in e for e in result["errors"]))
+
+    def test_unverified_recovery_component_is_refused(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            manifest, recovery = self._fixture(root)
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["components"][1]["status"] = "failed"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = mod.preflight(manifest, recovery, root / "out.img")
+            self.assertEqual("failed", result["status"])
+            self.assertTrue(any("verified P2" in e for e in result["errors"]))
 
     def test_bad_recovery_hash_is_refused(self):
         with tempfile.TemporaryDirectory() as td:
@@ -58,7 +94,7 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
             self.assertEqual("failed", result["status"])
             self.assertTrue(any("SHA-256" in e or "size" in e for e in result["errors"]))
 
-    def test_existing_output_is_refused(self):
+    def test_existing_output_is_refused_without_overwrite(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             manifest, recovery = self._fixture(root)
@@ -73,12 +109,10 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
             root = Path(td)
             manifest, recovery = self._fixture(root)
             real_open = Path.open
-
             def guarded_open(path, mode="r", *args, **kwargs):
                 if Path(path) in (manifest, recovery) and any(flag in mode for flag in ("w", "a", "+")):
                     raise AssertionError("input opened for writing")
                 return real_open(path, mode, *args, **kwargs)
-
             with mock.patch.object(Path, "open", guarded_open):
                 result = mod.preflight(manifest, recovery, root / "out.img")
             self.assertEqual("ready", result["status"])
