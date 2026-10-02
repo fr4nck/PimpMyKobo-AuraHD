@@ -12,16 +12,24 @@ By default it verifies:
 
 - the presence and consistency of `fs.md5sum`;
 - complete reading of `upgrade/fs.tgz` and `upgrade/db.tgz`;
-- tar structure validity;
-- complete gzip consumption so CRC32, final size and truncation errors are observed;
-- rejection of non-zero data after the logical tar end marker;
+- complete gzip consumption through the footer so CRC32, ISIZE and truncation errors are observed;
+- the two 512-byte zero blocks marking a correct tar end-of-archive;
+- every tar entry and all regular-file payload data;
+- rejection of empty archives or archives containing no regular files;
 - at least one non-empty `u-boot_mddr_512-E606C0-*.bin` candidate;
-- `uImage-E606C0` as a legacy U-Boot image: magic `0x27051956`, header CRC, declared size and data CRC;
-- rejection of critical paths that escape the recovery tree through traversal or symlinks.
+- `uImage-E606C0` as a legacy U-Boot image: magic `0x27051956`, header CRC, declared data size and data CRC;
+- optional zero padding after the declared `uImage` payload while rejecting non-zero trailing bytes;
+- rejection of critical paths escaping the recovery tree through traversal or symlinks.
 
 No file is extracted to disk during those checks.
 
-With `--hash-files`, the tool also computes SHA-256 hashes for the two archives and the selected E606C0 artifacts.
+With `--hash-files`, the tool computes SHA-256 for the two archives, every valid E606C0 U-Boot candidate, and the kernel.
+
+## Why tar end markers are checked
+
+A gzip stream can be perfectly valid while containing a truncated tar, for example when a `tar | gzip` pipeline is interrupted but gzip itself closes cleanly. A gzip-only check, or a tar reader that stops silently, can therefore produce a false positive.
+
+The verifier explicitly requires the **1024 zero bytes at the tar end** before considering an archive coherent.
 
 ## Recommended preparation
 
@@ -56,23 +64,23 @@ The manifest check can be skipped for diagnostics:
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --skip-md5 --lang en
 ```
 
-In that mode the result contains `partial: true`, `ok: false`, and the program does not report a global success. Future reconstruction tooling must therefore never interpret this mode as a validated recovery.
+In that mode the result contains `partial: true` and `ok: false`. If another check also fails, the human summary remains **INCOMPLETE OR INCONSISTENT** rather than hiding that failure behind the partial status.
 
 ## U-Boot variants
 
-The RAM type is encoded in the U-Boot filename. The verifier no longer requires only `K4X2G323PC`; it accepts E606C0 candidates matching:
+The verifier accepts files matching:
 
 ```text
 u-boot_mddr_512-E606C0-*.bin
 ```
 
-The actual selected filename is preserved in JSON output.
+Empty files are rejected. If exactly one valid candidate exists, it can be reported as the unique candidate. If several variants are present, none is automatically selected: a future restoration tool should choose from HWCONFIG / RAM type rather than alphabetical ordering.
 
 ## `fs.md5sum` manifests
 
 Absolute paths, `../` traversal and symlinks escaping the recovery tree are rejected.
 
-GNU `md5sum` escaped filenames are decoded only when the manifest line is actually prefixed with `\`, preventing accidental transformation of literal backslash sequences.
+GNU `md5sum` escaped filenames are decoded only for records actually prefixed with `\`. `\n`, `\r` and `\\` escapes are supported.
 
 The verifier distinguishes missing files, unreadable files, mismatches and invalid manifest entries.
 
@@ -84,20 +92,22 @@ The verifier distinguishes missing files, unreadable files, mismatches and inval
 
 ## Synthetic tests
 
-Repository tests now cover, among other cases:
+The test suite covers, among other cases:
 
-- truncated archives;
-- corrupt gzip CRC;
+- truncated gzip and corrupt gzip CRC;
+- valid gzip containing a truncated tar;
+- directory-only archives;
 - trailing garbage;
 - traversal and escaping symlinks;
-- empty U-Boot files;
-- alternate E606C0 U-Boot RAM variants;
-- invalid `uImage` magic and CRC;
-- escaped manifest names;
-- partial `--skip-md5` mode.
+- empty U-Boot, alternate RAM variants and multiple variants;
+- invalid `uImage` magic/CRC;
+- zero-padded `uImage` files;
+- GNU escaped manifest names;
+- partial `--skip-md5` with and without another failure;
+- absence of write-mode source opens during verification.
 
-The tests use synthetic files only and contain no Kobo firmware blobs.
+GitHub CI runs the tests on Linux and Windows across several Python versions. No Kobo firmware blob is included in the tests.
 
 ## Safety
 
-The verifier repairs nothing and writes nothing. Its only purpose is to establish whether a copied `recoveryfs` is coherent enough to be used as the source of a later local reconstruction.
+The verifier repairs nothing and writes nothing. Its only purpose is to determine whether a copied `recoveryfs` is coherent enough to be used as the source of a later local reconstruction.
