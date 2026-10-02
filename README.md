@@ -214,6 +214,8 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 
 ## Documentation
 
+- [Démonter l'Aura HD et accéder à la microSD interne](docs/disassembly-fr.md) — avec photos originales, sources iFixit/MobileRead et version texte pour Lynx.
+- [Version texte / Lynx du guide de démontage](docs/disassembly-lynx-fr.txt)
 - [Index de la documentation](docs/README.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
 - [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
