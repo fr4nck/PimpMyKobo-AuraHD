@@ -1,10 +1,21 @@
 # Outils / Tools
 
+Les outils publics du projet privilégient la **lecture seule**. Toute opération future d'écriture sur une microSD devra être séparée, explicite et protégée par des garde-fous supplémentaires.
+
 ## `inspect-aura-hd.py`
 
-Premier outil de diagnostic du projet.
+Inspecteur bas niveau d'une microSD complète ou d'une image disque Aura HD.
 
-Il scanne les disques accessibles **strictement en lecture seule**, cherche le HWCONFIG Netronix à `0x80000`, identifie une Aura HD `E606C0 / Dragon`, lit le MBR et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
+Il :
+
+- scanne les disques accessibles strictement en lecture seule ;
+- cherche le HWCONFIG Netronix à `0x80000` ;
+- identifie `E606C0 / Dragon / Kobo Aura HD` ;
+- décode les principaux champs HWCONFIG connus ;
+- lit le MBR ;
+- détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions ;
+- peut calculer le SHA-256 de toute la zone brute située avant P1 ;
+- peut produire une sortie JSON.
 
 Documentation :
 
@@ -14,20 +25,55 @@ Documentation :
 Sous Windows, depuis la racine du dépôt :
 
 ```powershell
-python .\tools\inspect-aura-hd.py
+python .\tools\inspect-aura-hd.py --hash-boot
 ```
 
 Sous Linux :
 
 ```bash
-sudo python3 ./tools/inspect-aura-hd.py
+sudo python3 ./tools/inspect-aura-hd.py --hash-boot
 ```
 
 Aucun numéro de disque n'est codé en dur et aucun chemin d'écriture vers un périphérique physique n'existe dans cet outil.
 
+## `verify-recovery.py`
+
+Vérificateur d'une partition `recoveryfs` déjà montée ou copiée localement.
+
+Il contrôle :
+
+- `fs.md5sum` et les fichiers qu'il couvre ;
+- l'intégrité gzip de `upgrade/fs.tgz` ;
+- l'intégrité gzip de `upgrade/db.tgz` ;
+- la présence de l'U-Boot `E606C0` ;
+- la présence du kernel `uImage-E606C0` ;
+- en option, les SHA-256 des quatre fichiers critiques.
+
+Documentation :
+
+- [Français](../docs/verify-recovery-fr.md)
+- [English](../docs/verify-recovery-en.md)
+
+Exemple :
+
+```bash
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
+```
+
+## Tests
+
+Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
+
+Ils peuvent être exécutés avec la bibliothèque standard Python uniquement :
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les structures minimales nécessaires : MBR, HWCONFIG, superblocs, archives gzip et manifeste MD5. Aucun blob Kobo n'est inclus dans les tests.
+
 ## À venir
 
-- `verify-recovery` : vérifier `recoveryfs`, `fs.tgz`, `db.tgz` et les fichiers E606C0 ;
 - `backup-aura-hd` : produire des sauvegardes locales avec empreintes ;
 - `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
 - `restore-rootfs` : restauration encadrée avec garde-fous et vérification après écriture.
