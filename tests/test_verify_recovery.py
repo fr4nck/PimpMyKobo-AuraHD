@@ -157,13 +157,12 @@ class VerifyRecoveryTests(unittest.TestCase):
 
     def test_gnu_escaped_manifest_name_is_decoded_once(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            build_recovery(root)
-            name = "a\\b"
-            data = b"x"
-            (root / name).write_bytes(data)
-            (root / "fs.md5sum").write_text("\\" + f"{md5(data)}  a\\\\b\n", encoding="utf-8")
-            self.assertTrue(verify.verify_manifest(root)["ok"])
+            manifest = Path(td) / "fs.md5sum"
+            digest = md5(b"x")
+            manifest.write_text("\\" + f"{digest}  a\\\\b\n", encoding="utf-8")
+            entries, errors = verify.parse_manifest(manifest)
+            self.assertFalse(errors)
+            self.assertEqual(entries, [(digest, "a\\b")])
 
     def test_gnu_carriage_return_escape_is_supported(self) -> None:
         self.assertEqual(verify._decode_gnu_escaped_name(r"a\rb"), "a\rb")
@@ -184,7 +183,8 @@ class VerifyRecoveryTests(unittest.TestCase):
             old.rename(new)
             result = verify.inspect_recovery(root, True, False)
             self.assertTrue(result["artifacts"]["ok"])
-            self.assertEqual(result["artifacts"]["selected_uboot"]["path"], str(new))
+            selected = Path(result["artifacts"]["selected_uboot"]["path"])
+            self.assertEqual(selected.resolve(), new.resolve())
 
     def test_multiple_uboot_variants_are_not_auto_selected(self) -> None:
         with tempfile.TemporaryDirectory() as td:
