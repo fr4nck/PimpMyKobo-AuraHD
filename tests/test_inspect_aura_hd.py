@@ -55,7 +55,7 @@ def build_image(path: Path) -> tuple[int, int, int]:
             f.write(sb)
 
         fat = bytearray(512)
-        fat[71:82] = b"KOBOeReader "
+        fat[71:82] = b"KOBOeReader"
         fat[82:90] = b"FAT32   "
         f.seek(p3_lba * 512)
         f.write(fat)
