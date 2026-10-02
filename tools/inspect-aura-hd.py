@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-inspect-aura-hd.py - read-only inspector for Kobo Aura HD / Dragon microSD cards.
-
-This tool NEVER opens a source for writing.
-It can inspect a full-disk image or raw physical device and can auto-scan
-locally attached disks on Windows and Linux.
-"""
+"""Read-only inspector for Kobo Aura HD / Dragon microSD cards."""
 
 from __future__ import annotations
 
@@ -27,14 +21,14 @@ MAX_BOOT_HASH_SIZE = 64 * 1024 * 1024
 JSON_SCHEMA_VERSION = 1
 
 HW_FIELDS = [
-    "bPCB","bKeyPad","bAudioCodec","bAudioAmp","bWifi","bBT","bMobile",
-    "bTouchCtrl","bTouchType","bDisplayCtrl","bDisplayPanel","bRSensor",
-    "bMicroP","bCustomer","bBattery","bLed","bRamSize","bIFlash",
-    "bExternalMem","bRootFsType","bSysPartType","bProgressXHiByte",
-    "bProgressXLoByte","bProgressYHiByte","bProgressYLoByte","bProgressCnts",
-    "bContentType","bCPU","bUIStyle","bRamType","bUIConfig",
-    "bDisplayResolution","bFrontLight","bCPUFreq","bHallSensor",
-    "bDisplayBusWidth","bFrontLight_Flags","bPCB_Flags","bFrontLight_LED_Driver",
+    "bPCB", "bKeyPad", "bAudioCodec", "bAudioAmp", "bWifi", "bBT", "bMobile",
+    "bTouchCtrl", "bTouchType", "bDisplayCtrl", "bDisplayPanel", "bRSensor",
+    "bMicroP", "bCustomer", "bBattery", "bLed", "bRamSize", "bIFlash",
+    "bExternalMem", "bRootFsType", "bSysPartType", "bProgressXHiByte",
+    "bProgressXLoByte", "bProgressYHiByte", "bProgressYLoByte", "bProgressCnts",
+    "bContentType", "bCPU", "bUIStyle", "bRamType", "bUIConfig",
+    "bDisplayResolution", "bFrontLight", "bCPUFreq", "bHallSensor",
+    "bDisplayBusWidth", "bFrontLight_Flags", "bPCB_Flags", "bFrontLight_LED_Driver",
 ]
 
 KNOWN_VALUES = {
@@ -72,17 +66,21 @@ FR = {
     "found": "KOBO AURA HD IDENTIFIÉE",
     "probable": "PCB E606C0 DÉTECTÉ, MAIS FORMAT HWCONFIG NON CONFIRMÉ",
     "no_found": "Aucune Kobo Aura HD E606C0 confirmée n'a été identifiée.",
-    "source": "Source","model": "Matériel","size": "Taille","hw": "HWCONFIG",
-    "pcb": "PCB","identity": "Identification","partitions": "Partitions MBR",
-    "boot_hash": "SHA-256 zone avant P1","access": "inaccessible en lecture",
-    "not_kobo": "pas de HWCONFIG Aura HD confirmé","error": "ERREUR","warning": "AVERTISSEMENT",
-    "unreadable_summary": "{count} disque(s) n'ont pas pu être lus ; relancer avec les droits administrateur/root si nécessaire.",
+    "source": "Source", "model": "Matériel", "size": "Taille", "hw": "HWCONFIG",
+    "pcb": "PCB", "identity": "Identification", "partitions": "Partitions MBR",
+    "boot_hash": "SHA-256 zone avant P1", "access": "inaccessible en lecture",
+    "not_kobo": "pas de HWCONFIG Aura HD confirmé", "error": "ERREUR",
+    "warning": "AVERTISSEMENT",
+    "unreadable_summary": "{count} disque(s) n'ont pas pu être ouverts ; relancer avec les droits administrateur/root si nécessaire.",
+    "read_error_summary": "{count} disque(s) ont produit une erreur de lecture ou de diagnostic.",
+    "discovery_error": "Impossible d'énumérer correctement les disques : {error}",
     "wsl": (
         "WSL détecté : un lecteur USB Windows peut ne pas apparaître comme périphérique bloc Linux. "
         "Si aucun disque n'est trouvé, lancez ce script avec Python Windows dans PowerShell, "
         "ou fournissez le chemin d'une image disque."
     ),
 }
+
 EN = {
     "title": "PimpMyKobo-AuraHD — read-only inspection",
     "readonly": "NO WRITES: sources are opened strictly read-only.",
@@ -90,11 +88,14 @@ EN = {
     "found": "KOBO AURA HD IDENTIFIED",
     "probable": "E606C0 PCB DETECTED, BUT HWCONFIG FORMAT IS NOT CONFIRMED",
     "no_found": "No confirmed Kobo Aura HD E606C0 was identified.",
-    "source": "Source","model": "Device","size": "Size","hw": "HWCONFIG",
-    "pcb": "PCB","identity": "Identification","partitions": "MBR partitions",
-    "boot_hash": "SHA-256 pre-P1 area","access": "not readable",
-    "not_kobo": "no confirmed Aura HD HWCONFIG","error": "ERROR","warning": "WARNING",
-    "unreadable_summary": "{count} disk(s) could not be read; re-run with administrator/root privileges if needed.",
+    "source": "Source", "model": "Device", "size": "Size", "hw": "HWCONFIG",
+    "pcb": "PCB", "identity": "Identification", "partitions": "MBR partitions",
+    "boot_hash": "SHA-256 pre-P1 area", "access": "not readable",
+    "not_kobo": "no confirmed Aura HD HWCONFIG", "error": "ERROR",
+    "warning": "WARNING",
+    "unreadable_summary": "{count} disk(s) could not be opened; re-run with administrator/root privileges if needed.",
+    "read_error_summary": "{count} disk(s) produced a read or diagnostic error.",
+    "discovery_error": "Disk enumeration failed or was incomplete: {error}",
     "wsl": (
         "WSL detected: a Windows USB reader may not appear as a Linux block device. "
         "If no disk is found, run this script with Windows Python from PowerShell, "
@@ -116,7 +117,7 @@ def human_size(value: int | None) -> str:
 
 
 def read_at(handle: BinaryIO, offset: int, size: int, alignment: int = SECTOR_SIZE) -> bytes:
-    """Read arbitrary bytes using aligned low-level reads (required by Windows raw disks)."""
+    """Read arbitrary bytes using aligned low-level reads, including Windows raw disks."""
     if offset < 0 or size < 0:
         raise ValueError("negative offset/size")
     if size == 0:
@@ -132,14 +133,25 @@ def read_at(handle: BinaryIO, offset: int, size: int, alignment: int = SECTOR_SI
 
 def source_size_for(source: str, metadata: dict[str, Any], handle: BinaryIO) -> int | None:
     value = metadata.get("size")
-    if isinstance(value, int) and value >= 0:
+    if isinstance(value, int) and value > 0:
         return value
+
     try:
         st = os.fstat(handle.fileno())
         if st.st_size > 0:
             return st.st_size
     except (OSError, AttributeError):
         pass
+
+    try:
+        current = handle.tell()
+        end = handle.seek(0, os.SEEK_END)
+        handle.seek(current, os.SEEK_SET)
+        if isinstance(end, int) and end > 0:
+            return end
+    except (OSError, AttributeError):
+        pass
+
     try:
         p = Path(source)
         if p.is_file():
@@ -159,7 +171,7 @@ def parse_mbr(handle: BinaryIO, source_size: int | None = None) -> dict[str, Any
         result["errors"].append("missing MBR signature 0x55AA")
         return result
 
-    partitions = []
+    partitions: list[dict[str, Any]] = []
     for index in range(4):
         entry = sector[446 + 16 * index : 446 + 16 * (index + 1)]
         boot_indicator = entry[0]
@@ -173,22 +185,25 @@ def parse_mbr(handle: BinaryIO, source_size: int | None = None) -> dict[str, Any
         offset = start_lba * SECTOR_SIZE
         size = sectors * SECTOR_SIZE
         end = offset + size
-        p = {
-            "number": index + 1, "boot_indicator": boot_indicator, "type": ptype,
-            "start_lba": start_lba, "sectors": sectors, "offset": offset,
-            "size": size, "end": end,
+        part = {
+            "number": index + 1,
+            "boot_indicator": boot_indicator,
+            "type": ptype,
+            "start_lba": start_lba,
+            "sectors": sectors,
+            "offset": offset,
+            "size": size,
+            "end": end,
+            "beyond_end": False,
         }
         if start_lba < 1:
-            p["beyond_end"] = False
             result["errors"].append(f"P{index+1}: partition starts before sector 1")
         if source_size is not None and end > source_size:
-            p["beyond_end"] = True
+            part["beyond_end"] = True
             result["errors"].append(
                 f"P{index+1}: partition ends at {end}, beyond source size {source_size}"
             )
-        else:
-            p["beyond_end"] = False
-        partitions.append(p)
+        partitions.append(part)
 
     by_start = sorted(partitions, key=lambda p: p["offset"])
     for left, right in zip(by_start, by_start[1:]):
@@ -240,12 +255,12 @@ def parse_hwconfig(handle: BinaryIO) -> dict[str, Any] | None:
             f"short read while reading HWCONFIG payload: expected {payload_size}, got {len(payload)}"
         )
 
-    fields = {}
+    fields: dict[str, int] = {}
     for index, value in enumerate(payload):
         name = HW_FIELDS[index] if index < len(HW_FIELDS) else f"unknown_{index}"
         fields[name] = value
 
-    decoded = {}
+    decoded: dict[str, Any] = {}
     for name, value in fields.items():
         text = KNOWN_VALUES.get(name, {}).get(value)
         if text is not None:
@@ -263,8 +278,7 @@ def parse_hwconfig(handle: BinaryIO) -> dict[str, Any] | None:
     pcb_match = pcb == 28
     format_confirmed = version == "v1.7" and payload_size == HWCONFIG_V17_PAYLOAD_SIZE
     confirmed = pcb_match and format_confirmed
-
-    warnings = []
+    warnings: list[str] = []
     if pcb_match and not format_confirmed:
         warnings.append(
             f"PCB 28 / E606C0 detected but HWCONFIG format is {version!r}/{payload_size} bytes, "
@@ -314,117 +328,156 @@ def inspect_source(source: str, metadata: dict[str, Any] | None, hash_boot: bool
     try:
         with open(source, "rb", buffering=0) as handle:
             result["opened"] = True
-            size = source_size_for(source, result["metadata"], handle)
-            result["source_size"] = size
+            source_size = source_size_for(source, result["metadata"], handle)
+            result["source_size"] = source_size
 
             try:
-                mbr = parse_mbr(handle, size)
-                result["mbr"] = mbr
-                result["errors"].extend(mbr.get("errors", []))
-                result["warnings"].extend(mbr.get("warnings", []))
+                mbr = parse_mbr(handle, source_size)
             except (OSError, ValueError) as exc:
-                result["mbr"] = {"valid": False, "partitions": [], "errors": [str(exc)]}
-                result["errors"].append(f"MBR: {exc}")
+                mbr = {"valid": False, "partitions": [], "errors": [str(exc)], "warnings": []}
+                result["errors"].append(f"MBR read: {exc}")
+            result["mbr"] = mbr
 
             try:
                 hw = parse_hwconfig(handle)
-                result["hwconfig"] = hw
-                if hw:
-                    result["warnings"].extend(hw.get("warnings", []))
-                    result["aura_hd"] = bool(hw.get("is_aura_hd_e606c0"))
             except (OSError, ValueError) as exc:
-                result["hwconfig"] = None
+                hw = None
                 result["errors"].append(f"HWCONFIG: {exc}")
+            result["hwconfig"] = hw
 
-            result["readable"] = True
+            if hw:
+                result["warnings"].extend(hw.get("warnings", []))
+                result["aura_hd"] = bool(hw.get("is_aura_hd_e606c0"))
 
-            mbr = result.get("mbr", {})
+            mbr_validation_errors = mbr.get("errors", [])
+            if result["aura_hd"]:
+                result["errors"].extend(f"MBR: {message}" for message in mbr_validation_errors)
+            elif mbr_validation_errors:
+                result["warnings"].extend(f"MBR: {message}" for message in mbr_validation_errors)
+
+            result["readable"] = not any(
+                message.startswith("MBR read:") or message.startswith("HWCONFIG:")
+                for message in result["errors"]
+            )
+
             for partition in mbr.get("partitions", []):
                 if partition.get("beyond_end"):
-                    partition["filesystem"] = "unknown"
-                    partition["label"] = ""
-                    partition["filesystem_error"] = "partition extends beyond source"
+                    partition.update({
+                        "filesystem": "unknown",
+                        "label": "",
+                        "filesystem_error": "partition extends beyond source",
+                    })
                     continue
                 try:
                     partition.update(detect_filesystem(handle, partition["offset"]))
                 except OSError as exc:
-                    partition["filesystem"] = "unknown"
-                    partition["label"] = ""
-                    partition["filesystem_error"] = str(exc)
+                    partition.update({"filesystem": "unknown", "label": "", "filesystem_error": str(exc)})
                     result["warnings"].append(
                         f"P{partition['number']} filesystem read failed: {exc}"
                     )
 
-            if hash_boot and result.get("aura_hd") and mbr.get("valid") and mbr.get("partitions"):
-                first_offset = min(p["offset"] for p in mbr["partitions"])
-                if first_offset <= 0:
-                    result["warnings"].append("boot hash skipped: invalid first partition offset")
-                elif first_offset > MAX_BOOT_HASH_SIZE:
-                    result["warnings"].append(
-                        f"boot hash skipped: first partition starts beyond {MAX_BOOT_HASH_SIZE} bytes"
-                    )
-                elif size is not None and first_offset > size:
-                    result["warnings"].append("boot hash skipped: first partition starts beyond source")
+            if hash_boot and result.get("aura_hd"):
+                if not mbr.get("valid"):
+                    result["warnings"].append("boot hash skipped: MBR is not valid")
+                elif not mbr.get("partitions"):
+                    result["warnings"].append("boot hash skipped: no MBR partitions")
                 else:
-                    try:
-                        result["pre_p1_sha256"] = sha256_region(handle, 0, first_offset)
-                        result["pre_p1_size"] = first_offset
-                    except OSError as exc:
-                        result["errors"].append(f"boot hash: {exc}")
+                    first_offset = min(p["offset"] for p in mbr["partitions"])
+                    if first_offset <= 0:
+                        result["warnings"].append("boot hash skipped: invalid first partition offset")
+                    elif first_offset > MAX_BOOT_HASH_SIZE:
+                        result["warnings"].append(
+                            f"boot hash skipped: first partition starts beyond {MAX_BOOT_HASH_SIZE} bytes"
+                        )
+                    elif source_size is not None and first_offset > source_size:
+                        result["warnings"].append("boot hash skipped: first partition starts beyond source")
+                    else:
+                        try:
+                            result["pre_p1_sha256"] = sha256_region(handle, 0, first_offset)
+                            result["pre_p1_size"] = first_offset
+                        except OSError as exc:
+                            result["errors"].append(f"boot hash: {exc}")
     except (OSError, PermissionError) as exc:
         result["errors"].append(str(exc))
         result["error"] = str(exc)
     return result
 
 
-def windows_candidates() -> list[dict[str, Any]]:
+def windows_candidates(diagnostics: list[str] | None = None) -> list[dict[str, Any]]:
     command = [
         "powershell", "-NoProfile", "-Command",
         "$ErrorActionPreference='Stop'; "
         "Get-Disk | Select-Object Number,FriendlyName,BusType,Size,PartitionStyle | "
         "ConvertTo-Json -Compress",
     ]
-    completed = subprocess.run(command, capture_output=True, text=True, timeout=15)
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=15)
+    except FileNotFoundError as exc:
+        if diagnostics is not None:
+            diagnostics.append(f"PowerShell not found: {exc}")
+        return []
+    except subprocess.TimeoutExpired as exc:
+        if diagnostics is not None:
+            diagnostics.append(f"Get-Disk timed out after {exc.timeout} seconds")
+        return []
+    except OSError as exc:
+        if diagnostics is not None:
+            diagnostics.append(f"cannot start PowerShell/Get-Disk: {exc}")
+        return []
+
     if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "unknown Get-Disk error").strip()
+        if diagnostics is not None:
+            diagnostics.append(f"Get-Disk failed: {detail}")
         return []
     try:
         data = json.loads(completed.stdout)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        if diagnostics is not None:
+            diagnostics.append(f"Get-Disk returned invalid JSON: {exc}")
         return []
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list):
+        if diagnostics is not None:
+            diagnostics.append("Get-Disk returned an unexpected JSON shape")
         return []
-    candidates = []
+
+    candidates: list[dict[str, Any]] = []
     for item in data:
         try:
             number = int(item["Number"])
         except (KeyError, TypeError, ValueError):
+            if diagnostics is not None:
+                diagnostics.append("Get-Disk returned an entry without a valid disk number")
             continue
+        try:
+            size = int(item["Size"]) if item.get("Size") is not None else None
+        except (TypeError, ValueError):
+            size = None
         candidates.append({
             "source": rf"\\.\PhysicalDrive{number}",
             "metadata": {
                 "number": number,
                 "name": item.get("FriendlyName"),
                 "bus": item.get("BusType"),
-                "size": int(item["Size"]) if item.get("Size") is not None else None,
+                "size": size,
                 "partition_style": item.get("PartitionStyle"),
             },
         })
     return sorted(candidates, key=lambda x: x["metadata"]["number"])
 
 
-def linux_candidates() -> list[dict[str, Any]]:
+def linux_candidates(diagnostics: list[str] | None = None) -> list[dict[str, Any]]:
+    del diagnostics
     sys_block = Path("/sys/block")
     if not sys_block.exists():
         return []
-    skip_prefixes = (
-        "loop", "ram", "zram", "dm-", "md", "sr", "fd", "nbd", "rpmb"
-    )
-    candidates = []
+    skip_prefixes = ("loop", "ram", "zram", "dm-", "md", "sr", "fd", "nbd")
+    candidates: list[dict[str, Any]] = []
     for entry in sorted(sys_block.iterdir()):
         name = entry.name
-        if name.startswith(skip_prefixes) or "boot" in name:
+        if name.startswith(skip_prefixes) or "boot" in name or name.endswith("rpmb"):
             continue
         device = Path("/dev") / name
         if not device.exists():
@@ -442,17 +495,13 @@ def linux_candidates() -> list[dict[str, Any]]:
         removable = read_text(entry / "removable")
         candidates.append({
             "source": str(device),
-            "metadata": {
-                "name": model or name,
-                "size": size,
-                "removable": removable == "1",
-            },
+            "metadata": {"name": model or name, "size": size, "removable": removable == "1"},
         })
     return candidates
 
 
-def get_candidates() -> list[dict[str, Any]]:
-    return windows_candidates() if os.name == "nt" else linux_candidates()
+def get_candidates(diagnostics: list[str] | None = None) -> list[dict[str, Any]]:
+    return windows_candidates(diagnostics) if os.name == "nt" else linux_candidates(diagnostics)
 
 
 def print_human_result(
@@ -464,7 +513,7 @@ def print_human_result(
     warnings = result.get("warnings", [])
 
     if not result.get("opened"):
-        if explicit or verbose:
+        if explicit or verbose or errors:
             print(f"- {source}: {lang['access']}")
             for err in errors:
                 print(f"  {lang['error']}: {err}")
@@ -476,9 +525,11 @@ def print_human_result(
             print()
             print(lang["probable"])
             print(f"{lang['source']}: {source}")
+        elif errors:
+            print(f"- {source}: {lang['not_kobo']}")
         elif verbose or explicit:
             print(f"- {source}: {lang['not_kobo']}")
-        if (verbose or explicit) and errors:
+        if errors:
             for err in errors:
                 print(f"  {lang['error']}: {err}")
         if (verbose or explicit) and warnings:
@@ -526,14 +577,14 @@ def print_human_result(
     print(f"{lang['partitions']}:")
     if not mbr.get("valid"):
         print("  MBR: invalid / not fully validated")
-    for p in mbr.get("partitions", []):
-        fs = p.get("filesystem", "?")
-        label = p.get("label", "")
+    for part in mbr.get("partitions", []):
+        fs = part.get("filesystem", "?")
+        label = part.get("label", "")
         label_text = f' label="{label}"' if label else ""
-        extra = " beyond_end" if p.get("beyond_end") else ""
+        extra = " beyond_end" if part.get("beyond_end") else ""
         print(
-            f"  P{p['number']}: offset={p['offset']:,}  size={p['size']:,}  "
-            f"type=0x{p['type']:02X}  {fs}{label_text}{extra}"
+            f"  P{part['number']}: offset={part['offset']:,}  size={part['size']:,}  "
+            f"type=0x{part['type']:02X}  {fs}{label_text}{extra}"
         )
 
     if result.get("pre_p1_sha256"):
@@ -570,14 +621,17 @@ def main() -> int:
         print(lang["readonly"])
 
     explicit = bool(args.source)
+    discovery_errors: list[str] = []
     if explicit:
         candidates = [{"source": args.source, "metadata": {}}]
     else:
-        candidates = get_candidates()
+        candidates = get_candidates(discovery_errors)
         if not args.json_output:
             print(lang["scanning"].format(count=len(candidates)))
             if os.name != "nt" and "microsoft" in platform.release().lower():
                 print(lang["wsl"])
+            for error in discovery_errors:
+                print(lang["discovery_error"].format(error=error))
 
     results = [
         inspect_source(item["source"], item.get("metadata"), args.hash_boot)
@@ -586,27 +640,38 @@ def main() -> int:
 
     if args.json_output:
         print(json.dumps(
-            {"schema_version": JSON_SCHEMA_VERSION, "results": results},
-            ensure_ascii=False, indent=2
+            {
+                "schema_version": JSON_SCHEMA_VERSION,
+                "discovery_errors": discovery_errors,
+                "results": results,
+            },
+            ensure_ascii=False,
+            indent=2,
         ))
     else:
         for result in results:
             print_human_result(result, lang, args.verbose, explicit)
-        unreadable = sum(1 for r in results if not r.get("opened"))
+        unreadable = sum(1 for result in results if not result.get("opened"))
+        read_errors = sum(1 for result in results if result.get("opened") and result.get("errors"))
         if not explicit and unreadable:
             print(lang["unreadable_summary"].format(count=unreadable))
+        if not explicit and read_errors:
+            print(lang["read_error_summary"].format(count=read_errors))
 
-    found = any(result.get("aura_hd") for result in results)
-    has_errors = any(result.get("errors") for result in results)
-    if not found and not args.json_output:
+    good_matches = [r for r in results if r.get("aura_hd") and not r.get("errors")]
+    any_matches = [r for r in results if r.get("aura_hd")]
+    fatal_read_errors = any(r.get("errors") and not r.get("aura_hd") for r in results)
+
+    if good_matches:
+        return 0
+    if any_matches:
+        return 2
+    if not args.json_output:
         print()
         print(lang["no_found"])
-
-    if found:
-        return 0
-    if explicit and has_errors:
+    if explicit and fatal_read_errors:
         return 2
-    if not explicit and candidates and all(not r.get("opened") for r in results):
+    if not explicit and (discovery_errors or (candidates and all(not r.get("opened") for r in results))):
         return 2
     return 1
 
