@@ -1,0 +1,194 @@
+PIMPMYKOBO-AURAHD — DEMONTAGE KOBO AURA HD
+============================================
+
+Version texte pur pour Lynx, consoles, SSH et terminaux sans images.
+Guide principal : docs/disassembly-fr.md
+
+OBJECTIF
+--------
+Acceder a la microSD systeme interne d'une Kobo Aura HD / N204 sans
+separer inutilement l'ecran de la carte mere.
+
+IMPORTANT
+---------
+- Eteindre completement la liseuse.
+- Debrancher l'USB.
+- Utiliser de preference un outil plastique.
+- L'ecran E-Ink est fragile : ne pas le tordre.
+- Avant toute ecriture sur la microSD : inspection + sauvegarde.
+
+CARTE RAPIDE
+------------
+
+      KOBO AURA HD
+           |
+           v
+  +-------------------+
+  | cadre avant       |
+  +-------------------+
+           |
+      declipser
+           v
+  +-------------------+
+  | 4 vis internes    |
+  +-------------------+
+           |
+      les retirer
+           v
+  +-------------------+
+  | ecran + carte mere|
+  +-------------------+
+           |
+     sortir du fond
+           v
+  +-------------------+
+  | dos carte mere    |
+  |                   |
+  | [microSD systeme] | <--- cible
+  +-------------------+
+
+ETAPE 1 — CADRE AVANT
+---------------------
+Commencer dans un coin avec un spudger, un mediator ou une carte plastique
+fine. Liberer les clips un par un en progressant autour de la liseuse.
+
+       cadre avant
+   __________________
+  /                  \
+ /____________________\
+   ^  ^  ^  ^  ^  ^
+      clips plastique
+
+   +------------------+
+   | coque arriere    |
+   +------------------+
+
+MobileRead indique au moins six clips sur chaque grand cote, avec du
+ruban adhesif double-face entre cadre et ecran. iFixit recommande de
+commencer au coin inferieur droit et de progresser lentement.
+
+ETAPE 2 — QUATRE VIS
+--------------------
+Une fois le cadre retire, enlever les quatre vis proches des coins.
+
+   o----------------------o
+   |                      |
+   |        ecran         |
+   |                      |
+   o----------------------o
+
+   o = vis a retirer
+
+iFixit parle de Phillips #000 ; MobileRead de PH00. Utiliser l'embout
+qui remplit correctement l'empreinte sans forcer.
+
+ETAPE 3 — SORTIR L'ENSEMBLE
+---------------------------
+Retirer l'ensemble ecran + carte mere de la coque arriere.
+Il n'est PAS necessaire de separer l'ecran de la carte mere pour
+atteindre la microSD systeme.
+
+          AVANT
+     +-------------+
+     | ecran E-Ink |
+     +-------------+
+           ||
+           \/
+     +-------------+
+     | carte mere  |
+     +-------------+
+          ARRIERE
+
+ETAPE 4 — BATTERIE
+------------------
+Deconnecter la batterie avant de manipuler la microSD.
+Soulever le connecteur perpendiculairement a la carte mere.
+Ne pas tirer sur les fils.
+
+          fils batterie
+             ||
+          [connecteur]
+              ^
+              |
+       soulever verticalement
+
+  ============================  carte mere
+
+ETAPE 5 — MICROSD SYSTEME
+-------------------------
+La microSD systeme se trouve au dos de la carte mere, cote oppose a
+l'ecran.
+
++------------------------------------------------+
+|                                                |
+|  [ microSD SYSTEME ]                           |
+|       ^                                        |
+|       +---- boot / rootfs / recovery           |
+|                                                |
+|                         [ batterie ]            |
+|                                                |
+|        electronique / CPU / RAM / controleurs  |
+|                                                |
+|                               [USB] [SD externe]|
++------------------------------------------------+
+
+NE PAS CONFONDRE :
+
+MICROSD SYSTEME INTERNE
+  -> contient le systeme Kobo
+  -> rootfs / recoveryfs / KOBOeReader
+  -> doit etre sauvegardee avant modification
+
+MICROSD D'EXTENSION UTILISATEUR
+  -> accessible depuis le bord de la liseuse
+  -> proche du connecteur USB
+  -> n'est pas la carte systeme
+
+ETAPE 6 — RETRAIT ET SAUVEGARDE
+-------------------------------
+Retirer la microSD sans la tordre et sans forcer son logement.
+Ne rien ecrire dessus immediatement.
+
+Ordre recommande :
+  1. inspect-aura-hd-fr.md
+  2. retrouver-fichiers-fr.md
+  3. verify-recovery-fr.md
+  4. rescue-fr.md
+
+ETAPE 7 — REMONTAGE
+-------------------
+Remonter dans l'ordre inverse.
+
+ATTENTION : le tactile peut ne pas fonctionner tant que le cadre avant
+n'est pas remis en place. iFixit et MobileRead documentent ce comportement.
+Ne pas conclure trop vite a une panne du tactile en testant la liseuse
+ouverte.
+
+SOURCES
+-------
+
+iFixit — Kobo Aura HD Screen Replacement
+https://www.ifixit.com/Guide/Kobo+Aura+HD+Screen+Replacement/96135
+
+MobileRead Wiki — Aura HD
+https://wiki.mobileread.com/wiki/Aura_HD
+
+MobileRead Forum — Aura HD Replacing internal SD card?
+https://www.mobileread.com/forums/showthread.php?t=214272
+
+MobileRead Forum — Aura HD Accessible Internal uSD card
+https://www.mobileread.com/forums/showthread.php?t=217702
+
+MobileRead Forum — how to recover aura hd internal sd data on a broken screen?
+https://www.mobileread.com/forums/showthread.php?t=266182
+
+CREDITS
+-------
+Cette documentation ne revendique pas la decouverte de la methode de
+demontage. Elle croise notre propre demontage avec les sources ci-dessus.
+
+Les photographies originales du guide proviennent de l'exemplaire reel
+etudie par PimpMyKobo-AuraHD et ne reproduisent pas les images d'iFixit ou
+de MobileRead.
+
+Photos : (c) Franck, 2026 — PimpMyKobo-AuraHD.

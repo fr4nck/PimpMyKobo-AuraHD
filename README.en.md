@@ -216,6 +216,8 @@ A read-only tool does not make the host operating system unable to write to the 
 
 ## Documentation
 
+- [Disassemble the Aura HD and access the internal microSD](docs/disassembly-en.md) — with original photos, iFixit/MobileRead sources and a Lynx-friendly text edition.
+- [Text / Lynx disassembly guide](docs/disassembly-lynx-en.txt)
 - [Documentation index](docs/README.en.md)
 - [Aura HD rescue](docs/rescue-en.md)
 - [Recover the recovery files](docs/recover-files-en.md)
