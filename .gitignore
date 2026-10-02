@@ -3,17 +3,29 @@ aurahd-src/
 kobolabs/
 okreader/
 
-# Dumps originaux et images disque
+# Dumps originaux, images disque et sauvegardes privées
 *.bin
 *.img
 *.img.gz
 *.raw
+AuraHD-private-backup/
+private/
+backups/
+fs.tgz
+db.tgz
+uImage-*
 
 # Builds
 build/
 output/
 *.o
 *.ko
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
 
 # Temporaires
 *.log
