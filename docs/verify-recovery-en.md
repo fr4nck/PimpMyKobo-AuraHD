@@ -12,12 +12,15 @@ By default it verifies:
 
 - the presence of `fs.md5sum`;
 - every file covered by that manifest;
-- the complete gzip stream of `upgrade/fs.tgz`;
-- the complete gzip stream of `upgrade/db.tgz`;
+- the complete **tar+gzip** structure and data stream of `upgrade/fs.tgz`;
+- the complete **tar+gzip** structure and data stream of `upgrade/db.tgz`;
+- the number of readable archive entries;
 - the Aura HD E606C0 U-Boot file:
   `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin`;
 - the Aura HD E606C0 kernel:
   `upgrade/ntx508/uImage-E606C0`.
+
+The `.tgz` check therefore goes beyond checking the gzip header: the archive is streamed to the end and its tar structure is read as well, without extracting anything to disk.
 
 With `--hash-files`, it also computes SHA-256 hashes for the two archives and the two E606C0 files so users can document their own private backups.
 
@@ -63,12 +66,22 @@ The tool distinguishes between:
 - missing files;
 - unreadable files;
 - MD5 mismatches;
-- invalid manifest entries.
+- invalid manifest entries;
+- corrupt gzip or tar archives;
+- missing E606C0-specific files.
 
 ## Exit codes
 
 - `0`: every requested check passed;
 - `1`: at least one requested check is missing, unreadable or inconsistent.
+
+## Synthetic tests
+
+The repository contains tests that build tiny tar+gzip archives and a temporary fake recovery tree, without embedding any Kobo firmware:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## Safety
 
