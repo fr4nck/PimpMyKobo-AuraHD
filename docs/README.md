@@ -8,10 +8,11 @@ Cette documentation est organisée autour de deux objectifs : **sauver** une Aur
 
 Pour une Aura HD qui ne démarre plus ou dont le reset usine a échoué :
 
-1. [Retrouver les fichiers sur sa propre Aura HD](retrouver-fichiers-fr.md)
-2. [Inspecter la microSD en lecture seule](inspect-aura-hd-fr.md)
-3. [Vérifier `recoveryfs`](verify-recovery-fr.md)
-4. [Comprendre la procédure de sauvetage observée](rescue-fr.md)
+1. [Protéger la microSD sous Windows avant inspection](windows-preservation-fr.md)
+2. [Retrouver les fichiers sur sa propre Aura HD](retrouver-fichiers-fr.md)
+3. [Inspecter la microSD en lecture seule](inspect-aura-hd-fr.md)
+4. [Vérifier `recoveryfs`](verify-recovery-fr.md)
+5. [Comprendre la procédure de sauvetage observée](rescue-fr.md)
 
 ## Référence matérielle
 
