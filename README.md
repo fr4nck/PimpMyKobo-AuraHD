@@ -2,81 +2,199 @@
 
 **Français** | [English](README.en.md)
 
-Résurrection et modernisation de la Kobo Aura HD.
+Résurrection, libération et modernisation de la Kobo Aura HD.
+
+## Objectif
+
+Construire un système de lecture léger et indépendant pour la Kobo Aura HD, sans dépendance aux services Kobo, en conservant le support complet du matériel d'origine et en utilisant KOReader comme environnement de lecture.
 
 ## Matériel cible
 
 - Kobo Aura HD / N204
-- SoC Freescale i.MX507
+- Freescale i.MX507 / famille i.MX50
+- ARM Cortex-A8
 - 512 Mio de RAM
-- Plateforme matérielle Netronix
-- Écran E-Ink 6,8 pouces
-- Résolution 1440 × 1080
+- écran E-Ink 6,8 pouces
+- résolution 1440 × 1080
+- plateforme matérielle Netronix
+- stockage système sur microSD interne
 
-## Objectif
+## Sources Kobo retrouvées
 
-Construire un système de lecture léger, libre et indépendant pour la Kobo Aura HD, sans dépendance aux services Kobo.
+Kobo publie les sources spécifiques à l'Aura HD dans :
 
-L'objectif envisagé est notamment :
-
-- démarrage Linux adapté au matériel de l'Aura HD ;
-- système utilisateur minimal ;
-- KOReader comme interface de lecture ;
-- conservation du support de l'écran E-Ink, du tactile et de l'éclairage ;
-- possibilité de reconstruire une carte microSD système ;
-- documentation reproductible de l'ensemble de la procédure.
-
-## Sources matérielles
-
-Les sources officielles Kobo spécifiques à l'Aura HD ont été retrouvées dans :
-
-`Kobo-Reader/hw/imx507-aurahd`
+    Kobo-Reader/hw/imx507-aurahd/
 
 Elles contiennent notamment :
 
-- U-Boot 2009.08 modifié pour la plateforme Netronix ;
-- Linux 2.6.35.3 modifié pour l'i.MX507 et le matériel Kobo/Netronix.
+    linux-2.6.35.3.tar.gz
+    u-boot-2009.08.tar.gz
 
-Ces sources amont ne sont pas incluses directement dans ce dépôt.
+U-Boot contient les adaptations Netronix, notamment `NTX_HWCONFIG`, les paramètres RAM, la gestion de l'écran E-Ink et le chargement des données matérielles.
 
-## Carte microSD originale
+## Architecture de démarrage
 
-La microSD système originale de la liseuse a été retrouvée et doit rester intacte.
+    Boot ROM i.MX507
+            |
+            v
+    U-Boot 2009.08 / Netronix
+            |
+            +-- HWCONFIG
+            +-- paramètres matériels
+            +-- waveform E-Ink
+            |
+            v
+    Linux 2.6.35.3 / Kobo-Netronix
+            |
+            v
+         rootfs
+            |
+            v
+         KOReader
 
-Géométrie observée :
+L'objectif est de conserver les couches nécessaires au matériel tout en remplaçant le système utilisateur Kobo.
 
-- partition 1 : offset 9 961 472 octets, taille 256 Mio ;
-- partition 2 : offset 278 397 440 octets, taille 256 Mio ;
-- partition 3 : offset 546 833 408 octets, partition utilisateur `KOBOeReader`.
+## MicroSD originale
 
-La zone précédant la première partition a été sauvegardée séparément.
+La microSD système originale a été retrouvée et est désormais conservée comme référence en lecture seule.
 
-### Sauvegarde de la zone de démarrage
+Taille physique observée :
 
-- taille : 9 961 472 octets ;
-- SHA-256 : `4b0c72f9d38a2d81d4d5ffb316b1b0d1efcb8e4bf0fa8610025e75fef837c2b6`
+    31 914 983 424 octets
 
-Cette sauvegarde binaire n'est volontairement pas publiée dans le dépôt.
+Table de partitions : MBR.
 
-Elle contient notamment les données de bas niveau nécessaires à l'étude du démarrage et de la configuration matérielle de la liseuse.
+Disposition relevée :
+
+| Zone | Offset | Taille |
+|---|---:|---:|
+| Zone brute de démarrage | 0 | 9 961 472 octets |
+| Partition 1 | 9 961 472 | 268 435 968 octets |
+| Partition 2 | 278 397 440 | 268 435 968 octets |
+| Partition 3 / KOBOeReader | 546 833 408 | 31 368 150 016 octets |
+
+La première partition commence donc à 9,5 Mio, soit 19 456 secteurs de 512 octets.
+
+## Sauvegarde de la zone de démarrage
+
+Les 9 961 472 premiers octets de la carte originale ont été copiés en lecture seule.
+
+SHA-256 :
+
+    4b0c72f9d38a2d81d4d5ffb316b1b0d1efcb8e4bf0fa8610025e75fef837c2b6
+
+Le dump binaire n'est volontairement pas publié dans ce dépôt.
+
+## HWCONFIG Netronix
+
+U-Boot et le kernel utilisent une structure `NTX_HWCONFIG` décrivant le matériel réel de la liseuse.
+
+Les sources permettent notamment d'identifier :
+
+- le PCBA ;
+- la quantité et le type de RAM ;
+- le processeur ;
+- le contrôleur tactile ;
+- le type de tactile ;
+- le contrôleur d'affichage ;
+- le panneau E-Ink ;
+- la résolution ;
+- le frontlight ;
+- la fréquence CPU ;
+- la largeur du bus d'affichage ;
+- différents indicateurs matériels.
+
+La table Netronix contient notamment :
+
+    bPCB 15 = E60620
+    bPCB 16 = E60630
+    bPCB 17 = E60640
+    bPCB 18 = E50600
+    bPCB 19 = E60680
+
+Le PCBA exact de cette Aura HD sera déterminé à partir du HWCONFIG extrait de sa propre microSD, et non supposé à partir du modèle commercial.
+
+## Waveform E-Ink
+
+La waveform fait partie des données matérielles chargées au démarrage par la plateforme Netronix.
+
+Elle sera extraite et conservée depuis la carte originale avant toute expérimentation.
+
+## Environnement de développement
+
+    Windows
+      └── WSL2
+          └── Debian
+              ├── arm-linux-gnueabihf-gcc
+              ├── sources Kobo
+              ├── okreader (référence)
+              └── PimpMyKobo-AuraHD
+
+Cross-compilateur actuellement installé :
+
+    arm-linux-gnueabihf-gcc 14.2.0
+
+Les sources Kobo datant de 2009–2013, une toolchain ARM historique pourra être utilisée si le GCC moderne s'avère incompatible.
+
+## Organisation du travail
+
+Les gros arbres amont et les dumps sont exclus de Git :
+
+    aurahd-src/
+    kobolabs/
+    okreader/
+    *.bin
+    *.img
+    *.raw
+
+Le dépôt accueillera les éléments permettant de reproduire le projet :
+
+    docs/
+    scripts/
+    configs/
+    patches/
+
+## Règle de sécurité
+
+    SD originale
+         |
+         +--> lecture uniquement
+                 |
+                 v
+            sauvegardes
+                 |
+                 v
+             analyses
+                 |
+                 v
+          reconstruction
+                 |
+                 v
+       SD de remplacement
+                 |
+                 v
+               tests
+
+Aucune expérimentation nécessitant une écriture ne doit être réalisée sur la microSD originale.
 
 ## État du projet
 
-Travail en cours.
+- [x] Sources officielles Aura HD retrouvées
+- [x] Sources U-Boot et kernel extraites
+- [x] MicroSD originale retrouvée
+- [x] Géométrie originale relevée
+- [x] Zone pré-partition sauvegardée et vérifiée par SHA-256
+- [ ] Décoder le HWCONFIG original
+- [ ] Identifier le PCBA exact
+- [ ] Extraire la waveform E-Ink
+- [ ] Cartographier précisément la zone de boot
+- [ ] Compiler U-Boot
+- [ ] Compiler le kernel
+- [ ] Construire le rootfs minimal
+- [ ] Intégrer KOReader
+- [ ] Générer la microSD de remplacement
+- [ ] Premier boot
 
-Prochaines étapes :
+## Licence
 
-1. analyser le HWCONFIG original ;
-2. identifier précisément le PCBA Netronix ;
-3. extraire et préserver la waveform E-Ink ;
-4. documenter la disposition de la zone de démarrage ;
-5. construire et tester U-Boot et le kernel ;
-6. préparer une microSD de remplacement ;
-7. construire un environnement Linux minimal ;
-8. intégrer KOReader.
-
-## Précaution
-
-La microSD originale sert de référence et ne doit pas être modifiée.
-
-Les expérimentations doivent être réalisées sur une carte de remplacement.
+Voir [LICENSE](LICENSE).
