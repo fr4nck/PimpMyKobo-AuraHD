@@ -43,8 +43,8 @@ Vérificateur d'une partition `recoveryfs` déjà montée ou copiée localement.
 Il contrôle :
 
 - `fs.md5sum` et les fichiers qu'il couvre ;
-- l'intégrité gzip de `upgrade/fs.tgz` ;
-- l'intégrité gzip de `upgrade/db.tgz` ;
+- la lecture intégrale tar+gzip de `upgrade/fs.tgz` ;
+- la lecture intégrale tar+gzip de `upgrade/db.tgz` ;
 - la présence de l'U-Boot `E606C0` ;
 - la présence du kernel `uImage-E606C0` ;
 - en option, les SHA-256 des quatre fichiers critiques.
@@ -70,7 +70,7 @@ Ils peuvent être exécutés avec la bibliothèque standard Python uniquement :
 python3 -m unittest discover -s tests -v
 ```
 
-Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les structures minimales nécessaires : MBR, HWCONFIG, superblocs, archives gzip et manifeste MD5. Aucun blob Kobo n'est inclus dans les tests.
+Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les structures minimales nécessaires : MBR, HWCONFIG, superblocs, archives tar+gzip et manifeste MD5. Aucun blob Kobo n'est inclus dans les tests.
 
 ## À venir
 
