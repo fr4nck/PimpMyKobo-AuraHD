@@ -4,145 +4,97 @@
 
 `tools/inspect-aura-hd.py` évite les manipulations manuelles de numéros de disques, d'offsets et de structures binaires.
 
-Il fonctionne **strictement en lecture seule** : les sources sont toujours ouvertes avec le mode Python `rb` et aucun chemin d'écriture vers un disque physique n'existe dans l'outil.
+L'outil est **strictement en lecture seule** : la source est ouverte en `rb` et aucun chemin d'écriture vers un périphérique physique n'existe dans le script.
 
-## Ce que l'outil fait
+## Ce que l'outil vérifie
 
 Sans argument, il recherche les disques accessibles puis :
 
 1. lit le MBR ;
-2. cherche la signature `HW CONFIG ` à l'offset Netronix `0x80000` ;
-3. lit la version et la taille du HWCONFIG ;
-4. décode les champs connus de la structure v1.7 ;
-5. reconnaît l'Aura HD étudiée si `bPCB = 28`, soit `E606C0 / Dragon` ;
-6. lit les quatre entrées de partition du MBR ;
-7. détecte directement les signatures ext et FAT sans monter les partitions ;
-8. affiche les labels `rootfs`, `recoveryfs` et `KOBOeReader` lorsqu'ils sont présents ;
-9. peut calculer, sur demande, le SHA-256 de toute la zone brute située avant P1.
+2. valide la signature, les indicateurs de boot, les limites des partitions et les chevauchements ;
+3. cherche `HW CONFIG ` à l'offset Netronix `0x80000` ;
+4. lit le HWCONFIG avec des lectures alignées sur 512 octets, nécessaires pour les disques bruts Windows ;
+5. ne confirme `E606C0 / Dragon / Aura HD` que pour le format observé `v1.7` de 39 octets ;
+6. détecte les signatures ext et FAT directement, sans monter les partitions ;
+7. signale les lectures incomplètes et les partitions situées au-delà de la taille réelle du support ;
+8. peut calculer le SHA-256 de la zone avant P1, uniquement après identification positive et validation du MBR.
 
-L'outil **ne suppose pas** que la Kobo est `PhysicalDrive2`, `/dev/sdb` ou un autre nom particulier.
+Un HWCONFIG contenant `PCB = 28` mais une version ou une taille différente est signalé comme **E606C0 probable**, pas comme identification confirmée.
 
-## Prérequis
+## Windows
 
-- Python 3.10 ou plus récent recommandé ;
-- aucun module Python externe ;
-- Windows ou Linux.
-
-Sous Windows, l'accès brut à `\\.\PhysicalDriveN` peut nécessiter un PowerShell lancé en administrateur.
-
-Sous Linux, la lecture d'un périphérique bloc brut peut nécessiter `sudo`.
-
-## Windows : détection automatique
+Pour lire `\\.\PhysicalDriveN`, lancer PowerShell **en administrateur**.
 
 Depuis la racine du dépôt :
 
 ```powershell
-python .\tools\inspect-aura-hd.py
-```
-
-L'outil appelle `Get-Disk` pour obtenir la liste actuelle des disques, puis tente uniquement des ouvertures en lecture.
-
-Pour afficher également les disques ignorés ou inaccessibles :
-
-```powershell
-python .\tools\inspect-aura-hd.py --verbose
-```
-
-Pour calculer en plus le SHA-256 de la zone située entre l'octet 0 et le début réel de P1 :
-
-```powershell
 python .\tools\inspect-aura-hd.py --hash-boot
 ```
+
+Le script utilise `Get-Disk` pour obtenir les numéros réellement présents. Aucun `PhysicalDriveN` n'est codé en dur.
+
+Les erreurs d'accès ne sont plus assimilées à « pas une Kobo » : elles sont affichées explicitement. Lorsqu'une source fournie manuellement est inaccessible, le programme renvoie le code `2`.
 
 ## Linux
 
 Depuis la racine du dépôt :
 
 ```bash
-sudo python3 ./tools/inspect-aura-hd.py
+sudo python3 ./tools/inspect-aura-hd.py --hash-boot
 ```
 
-Le scan utilise `/sys/block` et ne dépend pas d'un nom de périphérique prédéfini.
+Le scan s'appuie sur `/sys/block` et ignore les périphériques virtuels courants (`loop`, `nbd`, `rpmb`, etc.).
 
 ## WSL
 
-WSL ne voit pas nécessairement un lecteur de cartes USB Windows comme périphérique bloc Linux. Dans ce cas, lancer l'outil avec le Python Windows depuis PowerShell est la méthode recommandée.
+WSL ne voit pas nécessairement un lecteur de cartes USB Windows comme périphérique bloc Linux. Pour un lecteur USB Windows, utiliser de préférence **Python Windows dans PowerShell administrateur**.
 
-L'outil accepte aussi, comme argument positionnel, le chemin d'une image disque complète ou d'un périphérique brut explicitement choisi. Lorsqu'un chemin est fourni, la détection automatique est désactivée pour cette exécution.
+## Important : les outils sont en lecture seule, pas nécessairement le système d'exploitation
 
-## Sortie attendue sur une E606C0
+Brancher une carte peut provoquer des écritures extérieures au script.
 
-L'outil doit notamment retrouver :
+- **Windows** : ne jamais accepter une proposition de formatage des partitions ext4. Éviter également d'ouvrir la partition FAT32 inutilement pendant les opérations de sauvegarde.
+- **Linux de bureau** : désactiver l'automontage avant de manipuler la carte. Un montage ext4 en lecture-écriture peut rejouer le journal.
+
+Pour travailler de façon particulièrement conservatrice sous Linux, le support peut être placé en lecture seule côté noyau avant inspection. Vérifier d'abord le vrai nom du périphérique avec `lsblk` ; les noms comme `/dev/sdX` utilisés dans la documentation sont des exemples et ne doivent jamais être copiés littéralement.
+
+## Sortie attendue sur l'exemplaire E606C0 étudié
 
 ```text
 KOBO AURA HD IDENTIFIÉE
 HWCONFIG: v1.7 @ 0x80000, 39 bytes
 PCB: 28 -> E606C0
 Identification: Kobo Aura HD / Dragon / E606C0
-  RAM: 3 -> 512MB
-  RAM type: 2 -> K4X2G323PC
-  CPU: 2 -> mx50
-  CPU frequency: 2 -> 1G
-  Display: 3 -> 1440x1080
-  Frontlight: 6 -> TABLE3+
-  Hall sensor: 1 -> TLE4913
-  Display bus: 3 -> 16Bits_mirror
-  Frontlight LED driver: 0 -> SY7201
 ```
 
-Puis le partitionnement réellement lu dans le MBR, par exemple sur la machine étudiée :
-
-```text
-P1: offset=9,961,472    size=268,435,968  ext label="rootfs"
-P2: offset=278,397,440  size=268,435,968  ext label="recoveryfs"
-P3: offset=546,833,408  ...              FAT32 label="KOBOeReader"
-```
-
-Ces offsets ne servent pas à identifier arbitrairement le disque : ils sont affichés après lecture de sa propre table de partitions.
+Le script affiche ensuite les partitions réellement lues, avec leur type MBR, leur offset, leur taille, le système de fichiers détecté et le label lorsqu'il est disponible.
 
 ## Sortie JSON
-
-Pour réutiliser le résultat dans de futurs scripts :
 
 ```powershell
 python .\tools\inspect-aura-hd.py --json
 ```
 
-La sortie contient notamment la source inspectée, les métadonnées du disque, le MBR, les partitions, le HWCONFIG décodé, l'identification E606C0 et les labels de systèmes de fichiers.
-
-## Langue anglaise
-
-```powershell
-python .\tools\inspect-aura-hd.py --lang en
-```
+Le document JSON contient `schema_version`, les résultats par source, `source_size`, `errors[]`, `warnings[]`, le MBR, le HWCONFIG décodé et les labels détectés.
 
 ## Codes de retour
 
-- `0` : une Aura HD E606C0 a été identifiée ;
-- `1` : aucune Aura HD E606C0 n'a été identifiée.
+- `0` : Aura HD E606C0 confirmée ;
+- `1` : aucune Aura HD confirmée, sans erreur d'accès déterminante ;
+- `2` : erreur d'accès ou de lecture empêchant le diagnostic demandé.
 
-## Contrôler ensuite le contenu de `recoveryfs`
+## Contrôler ensuite `recoveryfs`
 
-L'inspecteur détecte P2 et son label `recoveryfs` directement depuis les structures du système de fichiers, mais il ne parcourt volontairement pas l'arborescence ext4 depuis le disque brut.
-
-Le contrôle des fichiers suivants est réalisé par l'outil séparé [`verify-recovery.py`](verify-recovery-fr.md), à partir d'un montage ou d'une copie de P2 en lecture seule :
-
-```text
-/upgrade/fs.tgz
-/upgrade/db.tgz
-/upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin
-/upgrade/ntx508/uImage-E606C0
-```
-
-Cette séparation garde l'inspection du support physique minimale et limite la surface de risque.
+`inspect-aura-hd.py` ne parcourt volontairement pas l'arborescence ext4 du recovery depuis le disque brut. Utiliser ensuite [`verify-recovery.py`](verify-recovery-fr.md) sur une copie ou un montage explicitement en lecture seule.
 
 ## Sécurité
 
-La conception suit quatre règles :
+Les garde-fous actuels comprennent :
 
-- aucune ouverture `r+b`, `wb` ou équivalente ;
+- ouverture source en `rb` uniquement ;
+- lectures bas niveau alignées sur 512 octets ;
 - aucun numéro de disque codé en dur ;
-- identification par données réellement lues sur le support ;
-- aucune écriture même après identification positive.
-
-L'objectif est qu'une commande de diagnostic puisse être lancée sans transformer une erreur d'identification en destruction de données.
+- validation de la taille et de la géométrie MBR ;
+- identification stricte `v1.7 / 39 octets / PCB 28` ;
+- empreinte de boot limitée à 64 Mio et seulement après identification positive ;
+- erreurs de lecture visibles au lieu d'être transformées en faux négatifs silencieux.
