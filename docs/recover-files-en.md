@@ -8,9 +8,17 @@ That does not necessarily prevent recovery: an Aura HD that still has its microS
 
 This page explains where those files are located and how to recover them from **your own device**.
 
+## Before anything else: prevent unintended writes
+
+Project tools are read-only, but the operating system can still write to an inserted card.
+
+- **Windows**: always cancel format prompts for the ext4 partitions. Avoid opening the FAT32 `KOBOeReader` volume unnecessarily while preserving the card.
+- **Desktop Linux**: disable automount. A read-write ext4 mount may replay the journal.
+- For detailed analysis, create a local image first and work from that copy.
+
 ## Where are the useful files?
 
-On the E606C0 Aura HD studied here, the microSD contains three partitions plus a raw area before P1.
+On the studied E606C0 Aura HD, the microSD contains three partitions plus a raw area before P1.
 
 | Area | Main role |
 |---|---|
@@ -19,7 +27,7 @@ On the E606C0 Aura HD studied here, the microSD contains three partitions plus a
 | P2 `recoveryfs` | recovery system and factory archives |
 | P3 `KOBOeReader` | user data and Kobo database |
 
-The most useful recovery files were found in P2:
+Useful recovery files observed in P2 include:
 
 ```text
 /upgrade/fs.tgz
@@ -29,27 +37,33 @@ The most useful recovery files were found in P2:
 /fs.md5sum
 ```
 
-`fs.tgz` can rebuild P1. `db.tgz` contains initial data intended for P3. The two `E606C0` files match the Aura HD / Dragon hardware studied here.
+`fs.tgz` can rebuild P1. `db.tgz` contains initial data intended for P3. The `E606C0` files match the Aura HD / Dragon hardware studied here.
 
-## 1. Identify the correct microSD first
+## 1. Identify the card without assuming its disk number
 
-Never assume a physical disk number remains the same after reconnecting hardware.
+The recommended method is now the project's inspector:
 
-On Windows, these read-only commands list disks and partitions:
+```powershell
+python .\tools\inspect-aura-hd.py --verbose --hash-boot
+```
+
+On Windows, run it from an Administrator PowerShell. It uses `Get-Disk`, hard-codes no disk number, and only confirms an Aura HD when HWCONFIG matches the expected `v1.7 / 39-byte / PCB 28` format.
+
+To simply list Windows disks without raw access:
 
 ```powershell
 Get-Disk | Format-Table Number,FriendlyName,BusType,Size,PartitionStyle -AutoSize
 ```
 
-After visually identifying the microSD, list its partitions using the disk number actually reported:
+On Linux:
 
-```powershell
-Get-Partition -DiskNumber N | Format-Table PartitionNumber,DriveLetter,Type,Size,Offset -AutoSize
+```bash
+lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS
 ```
 
-Replace `N` with the number actually shown by `Get-Disk`.
+Never assume a physical disk number or device name remains stable after reconnecting hardware.
 
-The studied device had this layout:
+The studied card had this layout:
 
 ```text
 P1  offset 9,961,472     size 268,435,968
@@ -57,38 +71,28 @@ P2  offset 278,397,440   size 268,435,968
 P3  offset 546,833,408   FAT32, rest of the card
 ```
 
-These values document the studied card. A future tool must always read and validate the real partition table before acting.
+These values document only the studied card. Tooling must read the actual partition table of the current medium.
 
 ## 2. Back up P2 `recoveryfs` before exploring it
 
 The recommended method is to work on an **image of P2**, not directly on the original partition.
 
-On Linux, when the microSD is exposed as a normal block device, identify it first:
+On Linux, after positively identifying the real recovery partition, a raw read can be copied into a local file. This documentation intentionally does not publish a ready-to-paste generic command containing a fake device name: the device identifier must be established on the actual machine first.
 
-```bash
-lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS
-```
+On Windows, some USB card readers are not exposed as Linux block devices in WSL. During the real rescue, P2 was read from the positively identified `PhysicalDrive` using the **offset and size actually read from the card**, then saved into a local file.
 
-Then copy only the recovery partition to a local file. The device name depends on the host (`/dev/sdX2`, `/dev/mmcblkXp2`, etc.) and must be verified before the copy.
+That operation must always go **from the microSD to a file**, never the reverse.
 
-On Windows with WSL, some USB card readers are not exposed as Linux block devices. In that case, the method tested for this project is to read the P2 region from `\\.\PhysicalDriveN` using the offset and size reported by `Get-Partition`, then save that read into a local `AuraHD-p2-recovery.img` file.
-
-That operation must be a **read from the microSD into a file**, never the reverse.
-
-For the studied card:
+For the studied unit:
 
 ```text
 P2 offset: 278,397,440
 P2 size:   268,435,968 bytes
 ```
 
-The resulting image was exactly 268,435,968 bytes and was identified as:
+The resulting image was ext4 with label `recoveryfs`.
 
-```text
-Linux ext4, label "recoveryfs"
-```
-
-## 3. Check P2 without modifying it
+## 3. Check the P2 image without modifying it
 
 Before mounting:
 
@@ -98,24 +102,22 @@ e2fsck -f -n AuraHD-p2-recovery.img
 
 The `-n` option prevents repairs.
 
-Mount the image without replaying the ext4 journal:
+Mount without replaying the ext4 journal:
 
 ```bash
 sudo mkdir -p /mnt/aurahd-recovery
 sudo mount -o loop,ro,noload AuraHD-p2-recovery.img /mnt/aurahd-recovery
 ```
 
-`ro,noload` matters: the mount stays read-only and the journal is not replayed.
-
 ## 4. Find `fs.tgz`, `db.tgz`, U-Boot and the kernel
 
-Once P2 is mounted:
+Once the P2 image is mounted:
 
 ```bash
 find /mnt/aurahd-recovery/upgrade -maxdepth 3 -type f -printf '%p  %s bytes\n' | sort
 ```
 
-On the studied E606C0 unit, this found:
+On the studied unit this found, among other files:
 
 ```text
 /mnt/aurahd-recovery/upgrade/fs.tgz
@@ -124,7 +126,7 @@ On the studied E606C0 unit, this found:
 /mnt/aurahd-recovery/upgrade/ntx508/uImage-E606C0
 ```
 
-To keep a private local copy outside the repository:
+To keep private local copies outside the repository:
 
 ```bash
 mkdir -p ~/AuraHD-private-backup
@@ -136,28 +138,23 @@ cp -a /mnt/aurahd-recovery/upgrade/ntx508/uImage-E606C0 ~/AuraHD-private-backup/
 
 These copies should remain local and should not be added to the public repository.
 
-## 5. Verify recovered archives
+## 5. Verify the recovery properly
 
-The gzip archives can be tested without extracting them:
+The project verifier checks the manifest, complete gzip streams, tar end markers, archive contents and E606C0 artifacts:
+
+```bash
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files --lang en
+```
+
+The original rescue also used these independent checks:
 
 ```bash
 gzip -t /mnt/aurahd-recovery/upgrade/fs.tgz
 gzip -t /mnt/aurahd-recovery/upgrade/db.tgz
-```
-
-The recovery filesystem also contains its own `fs.md5sum` manifest:
-
-```bash
 sudo sh -c 'cd /mnt/aurahd-recovery && md5sum -c fs.md5sum'
 ```
 
-On the studied unit, checking as an unprivileged user failed on `bin/antiword` because of file permissions; running the verification as root completed successfully.
-
-It is also useful to store SHA-256 hashes for private backups:
-
-```bash
-sha256sum ~/AuraHD-private-backup/*
-```
+On the studied unit, `bin/antiword` required root privileges for a complete manifest verification.
 
 ## 6. Recover HWCONFIG
 
@@ -170,57 +167,35 @@ HWCONFIG offset: 524,288 bytes = 0x80000
 signature:       HW CONFIG v1.7
 ```
 
-After saving the raw area before P1 into a local file, locate the signature with:
+After saving the raw pre-P1 area into a local file:
 
 ```bash
 grep -aob 'HW CONFIG' AuraHD-original-boot.bin
 ```
 
-Then inspect the block:
+Then:
 
 ```bash
 dd if=AuraHD-original-boot.bin bs=1 skip=524288 count=110 status=none | od -Ax -tx1z
 ```
 
-The studied unit reported, among other values:
-
-```text
-PCB                    28 -> E606C0
-codename                dragon
-RAM                     512 MiB
-DisplayResolution       1440x1080
-FrontLight              TABLE3+
-CPUFreq                 1 GHz
-HallSensor              TLE4913
-DisplayBusWidth         16Bits_mirror
-FrontLight_LED_Driver   SY7201
-```
+The studied unit reported PCB 28 / E606C0, 512 MiB RAM, 1440×1080 resolution, `TABLE3+`, `TLE4913`, `16Bits_mirror` display bus and `SY7201` LED driver.
 
 ## 7. Back up the raw boot area
 
-The raw area extends from the beginning of the microSD to the beginning of P1.
+The raw area extends from the start of the microSD to the actual beginning of P1.
 
-On the studied unit, P1 started at offset 9,961,472, so the first 9,961,472 bytes were copied into a local backup file.
-
-That backup contains HWCONFIG and other critical low-level data.
+On the studied unit, P1 started at offset 9,961,472, so the first 9,961,472 bytes were preserved locally. This area includes HWCONFIG and other critical low-level data.
 
 It should not be published verbatim in this repository.
 
 ## 8. What about the E-Ink waveform?
 
-The Netronix sources show that U-Boot also loads an E-Ink waveform from the low-level data area.
-
-The project has **not yet documented its exact offset on the E606C0 Aura HD with enough confidence**.
-
-Therefore this page intentionally does not yet provide a waveform extraction command. The exact location and format should be verified before publishing a reproducible procedure.
+The Netronix sources show that U-Boot also loads an E-Ink waveform from the low-level data area. Its exact offset on the E606C0 Aura HD is **not yet documented with enough confidence** to publish an extraction command.
 
 ## 9. Rebuild P1 without distributing a Kobo image
 
-Once `fs.tgz` has been recovered from the user's own P2, a fresh ext4 `rootfs` image can be created locally, populated with `fs.tgz`, and fully verified before any write to the reader.
-
-That is the approach documented in [rescue-en.md](rescue-en.md).
-
-It allows the project to publish a reproducible rescue method without hosting a downloadable Kobo system image.
+Once `fs.tgz` has been recovered from the owner's own P2, a fresh ext4 `rootfs` image can be created locally, populated and fully verified before any write to the reader. This is the approach documented in [rescue-en.md](rescue-en.md).
 
 ## Keep these private
 
@@ -234,4 +209,4 @@ Keep local copies and hashes of:
 - extracted prebuilt U-Boot and kernel files;
 - any future waveform extraction.
 
-The public repository should provide documentation and tools that let owners **find and verify** these items, rather than necessarily distributing the items themselves.
+The public repository should provide tools that let owners **find and verify** these items rather than necessarily distributing the items themselves.
