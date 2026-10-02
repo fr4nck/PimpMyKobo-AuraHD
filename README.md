@@ -2,26 +2,55 @@
 
 **Français** | [English](README.en.md)
 
-Résurrection, libération et modernisation de la Kobo Aura HD.
+Résurrection, sauvetage, libération et modernisation de la Kobo Aura HD.
 
 ## Objectif
 
-Construire un système de lecture léger et indépendant pour la Kobo Aura HD, sans dépendance aux services Kobo, en conservant le support complet du matériel d'origine et en utilisant KOReader comme environnement de lecture.
+Construire un système de lecture léger, libre et indépendant pour la Kobo Aura HD, tout en documentant une procédure de sauvetage reproductible pour les machines abandonnées après une réinitialisation ou une corruption logicielle.
+
+Le projet poursuit deux buts complémentaires :
+
+1. **Sauver une Aura HD** à partir de sa propre microSD, sans redistribuer d'images Kobo propriétaires.
+2. **Libérer l'Aura HD** en conservant les couches matérielles nécessaires puis en remplaçant progressivement l'environnement utilisateur Kobo par une pile minimale centrée sur KOReader et des composants libres.
 
 ## Matériel cible
 
 - Kobo Aura HD / N204
+- Nom de code : `dragon`
+- PCBA Netronix : `E606C0`
 - Freescale i.MX507 / famille i.MX50
 - ARM Cortex-A8
 - 512 Mio de RAM
+- RAM : `K4X2G323PC`
 - écran E-Ink 6,8 pouces
 - résolution 1440 × 1080
-- plateforme matérielle Netronix
 - stockage système sur microSD interne
+
+## Découvertes confirmées
+
+L'exemplaire étudié contient un bloc `HW CONFIG v1.7` à l'offset `0x80000` (`524288`).
+
+Valeurs confirmées :
+
+| Champ | Valeur |
+|---|---|
+| PCB | `28` → `E606C0` |
+| Codename | `dragon` |
+| Modèle | Kobo Aura HD |
+| RAM | 512 Mio |
+| CPU | i.MX50 |
+| CPUFreq | 1 GHz |
+| DisplayResolution | 1440 × 1080 |
+| FrontLight | `TABLE3+` |
+| HallSensor | `TLE4913` |
+| DisplayBusWidth | `16Bits_mirror` |
+| FrontLight LED driver | `SY7201` |
+
+La version v1.7 contient 39 octets de configuration. Le champ ajouté après `PCB_Flags` est `FrontLight_LED_Driver`.
 
 ## Sources Kobo retrouvées
 
-Kobo publie les sources spécifiques à l'Aura HD dans :
+Les sources spécifiques à l'Aura HD se trouvent dans :
 
     Kobo-Reader/hw/imx507-aurahd/
 
@@ -50,13 +79,11 @@ U-Boot contient les adaptations Netronix, notamment `NTX_HWCONFIG`, les paramèt
          rootfs
             |
             v
-         KOReader
+       environnement utilisateur
 
-L'objectif est de conserver les couches nécessaires au matériel tout en remplaçant le système utilisateur Kobo.
+La cible finale est de conserver le strict nécessaire à l'initialisation matérielle tout en remplaçant l'environnement utilisateur Kobo.
 
 ## MicroSD originale
-
-La microSD système originale a été retrouvée et est désormais conservée comme référence en lecture seule.
 
 Taille physique observée :
 
@@ -64,136 +91,124 @@ Taille physique observée :
 
 Table de partitions : MBR.
 
-Disposition relevée :
+| Zone | Offset | Taille | Rôle |
+|---|---:|---:|---|
+| Zone brute de démarrage | 0 | 9 961 472 octets | U-Boot / kernel / HWCONFIG / données E-Ink |
+| Partition 1 | 9 961 472 | 268 435 968 octets | `rootfs` ext4 |
+| Partition 2 | 278 397 440 | 268 435 968 octets | `recoveryfs` ext4 |
+| Partition 3 | 546 833 408 | reste du support | `KOBOeReader` FAT32 |
 
-| Zone | Offset | Taille |
-|---|---:|---:|
-| Zone brute de démarrage | 0 | 9 961 472 octets |
-| Partition 1 | 9 961 472 | 268 435 968 octets |
-| Partition 2 | 278 397 440 | 268 435 968 octets |
-| Partition 3 / KOBOeReader | 546 833 408 | 31 368 150 016 octets |
-
-La première partition commence donc à 9,5 Mio, soit 19 456 secteurs de 512 octets.
+La première partition commence à 9,5 Mio, soit 19 456 secteurs de 512 octets.
 
 ## Sauvegarde de la zone de démarrage
 
-Les 9 961 472 premiers octets de la carte originale ont été copiés en lecture seule.
+Les 9 961 472 premiers octets ont été copiés en lecture seule.
 
 SHA-256 :
 
     4b0c72f9d38a2d81d4d5ffb316b1b0d1efcb8e4bf0fa8610025e75fef837c2b6
 
-Le dump binaire n'est volontairement pas publié dans ce dépôt.
+Cette sauvegarde binaire n'est volontairement pas publiée dans le dépôt.
 
-## HWCONFIG Netronix
+## Sauvetage d'une Aura HD après reset interrompu
 
-U-Boot et le kernel utilisent une structure `NTX_HWCONFIG` décrivant le matériel réel de la liseuse.
+Sur la machine étudiée, une réinitialisation usine avait commencé puis échoué.
 
-Les sources permettent notamment d'identifier :
+Conséquence observée :
 
-- le PCBA ;
-- la quantité et le type de RAM ;
-- le processeur ;
-- le contrôleur tactile ;
-- le type de tactile ;
-- le contrôleur d'affichage ;
-- le panneau E-Ink ;
-- la résolution ;
-- le frontlight ;
-- la fréquence CPU ;
-- la largeur du bus d'affichage ;
-- différents indicateurs matériels.
+- P1 `rootfs` : ext4 valide, mais pratiquement vide ;
+- P2 `recoveryfs` : intacte et cohérente ;
+- P3 `KOBOeReader` : recréée par la procédure de recovery.
 
-La table Netronix contient notamment :
+Le script de récupération Kobo présent dans `recoveryfs` :
 
-    bPCB 15 = E60620
-    bPCB 16 = E60630
-    bPCB 17 = E60640
-    bPCB 18 = E50600
-    bPCB 19 = E60680
+1. sélectionne U-Boot et le kernel adaptés au matériel ;
+2. reformate P1 en ext4 `rootfs` ;
+3. reformate P3 en FAT32 `KOBOeReader` ;
+4. extrait `upgrade/fs.tgz` dans P1 ;
+5. extrait `upgrade/db.tgz` dans P3.
 
-Le PCBA exact de cette Aura HD sera déterminé à partir du HWCONFIG extrait de sa propre microSD, et non supposé à partir du modèle commercial.
+La partition recovery de l'exemplaire étudié contient notamment :
 
-## Waveform E-Ink
+- `upgrade/fs.tgz`
+- `upgrade/db.tgz`
+- `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin`
+- `upgrade/ntx508/uImage-E606C0`
 
-La waveform fait partie des données matérielles chargées au démarrage par la plateforme Netronix.
+Les archives `fs.tgz` et `db.tgz` ont passé un contrôle `gzip -t`. Le recovery a également été contrôlé par son manifeste `fs.md5sum`.
 
-Elle sera extraite et conservée depuis la carte originale avant toute expérimentation.
+Une nouvelle image ext4 `rootfs` de 256 Mio a été construite localement, alimentée avec `fs.tgz`, vérifiée par `fs.md5sum`, puis contrôlée avec `e2fsck`.
 
-## Environnement de développement
+Après écriture ciblée dans P1, le SHA-256 relu directement depuis la microSD était strictement identique à celui de l'image source :
 
-    Windows
-      └── WSL2
-          └── Debian
-              ├── arm-linux-gnueabihf-gcc
-              ├── sources Kobo
-              ├── okreader (référence)
-              └── PimpMyKobo-AuraHD
+    ADC8995C3F0754CBCF80ABA1540A69CF043DE9823800A359EC75167354B2993C
 
-Cross-compilateur actuellement installé :
+Cette procédure montre qu'une Aura HD dont `rootfs` a été vidée peut parfois être reconstruite à partir de sa propre partition recovery, sans télécharger d'image système tierce.
 
-    arm-linux-gnueabihf-gcc 14.2.0
+## Philosophie de publication
 
-Les sources Kobo datant de 2009–2013, une toolchain ARM historique pourra être utilisée si le GCC moderne s'avère incompatible.
+Ce dépôt ne doit pas redistribuer :
 
-## Organisation du travail
+- les images complètes de microSD ;
+- les dumps personnels ;
+- `fs.tgz` ou `db.tgz` extraits d'une liseuse ;
+- les blobs Kobo précompilés lorsque leur redistribution n'est pas clairement autorisée.
 
-Les gros arbres amont et les dumps sont exclus de Git :
+Le dépôt doit en revanche fournir :
 
-    aurahd-src/
-    kobolabs/
-    okreader/
-    *.bin
-    *.img
-    *.raw
+- documentation ;
+- scripts d'inspection ;
+- scripts de sauvegarde ;
+- outils de validation ;
+- reconstruction locale depuis les données déjà présentes sur la liseuse de l'utilisateur ;
+- garde-fous avant toute écriture.
 
-Le dépôt accueillera les éléments permettant de reproduire le projet :
+## Arborescence prévue
 
     docs/
+    tools/
     scripts/
     configs/
     patches/
+    liberated/
 
-## Règle de sécurité
+La documentation française est la référence principale. Les traductions anglaises utilisent le suffixe `.en.md`.
 
-    SD originale
-         |
-         +--> lecture uniquement
-                 |
-                 v
-            sauvegardes
-                 |
-                 v
-             analyses
-                 |
-                 v
-          reconstruction
-                 |
-                 v
-       SD de remplacement
-                 |
-                 v
-               tests
+## Règles de sécurité
 
-Aucune expérimentation nécessitant une écriture ne doit être réalisée sur la microSD originale.
+- lecture seule par défaut ;
+- jamais de numéro de disque codé en dur dans un outil public ;
+- validation de la taille et des offsets avant toute écriture ;
+- identification du HWCONFIG et du PCBA ;
+- sauvegarde obligatoire avant modification ;
+- vérification cryptographique après écriture ;
+- conservation de `recoveryfs` et du HWCONFIG autant que possible.
 
 ## État du projet
 
 - [x] Sources officielles Aura HD retrouvées
-- [x] Sources U-Boot et kernel extraites
-- [x] MicroSD originale retrouvée
-- [x] Géométrie originale relevée
-- [x] Zone pré-partition sauvegardée et vérifiée par SHA-256
-- [ ] Décoder le HWCONFIG original
-- [ ] Identifier le PCBA exact
-- [ ] Extraire la waveform E-Ink
-- [ ] Cartographier précisément la zone de boot
-- [ ] Compiler U-Boot
-- [ ] Compiler le kernel
-- [ ] Construire le rootfs minimal
+- [x] MicroSD originale retrouvée et cartographiée
+- [x] Zone de boot sauvegardée
+- [x] HWCONFIG v1.7 décodé
+- [x] PCBA identifié : E606C0 / Dragon
+- [x] Recovery factory analysé
+- [x] Cas réel de `rootfs` vidée diagnostiqué
+- [x] `rootfs` reconstruite depuis `recoveryfs/upgrade/fs.tgz`
+- [x] Reconstruction vérifiée par MD5, e2fsck et SHA-256
+- [ ] Extraire et documenter précisément la waveform E-Ink
+- [ ] Écrire un outil `inspect-aura-hd` en lecture seule
+- [ ] Écrire les outils de sauvegarde et de reconstruction locale
+- [ ] Compiler U-Boot et le kernel de référence
+- [ ] Construire un userspace minimal moderne
 - [ ] Intégrer KOReader
-- [ ] Générer la microSD de remplacement
-- [ ] Premier boot
+- [ ] Tester une microSD totalement libérée
+
+## Documentation
+
+- [Sauvetage d'une Aura HD](docs/rescue-fr.md)
+- [Matériel Aura HD](docs/hardware-fr.md)
+- [HWCONFIG Netronix](docs/hwconfig-fr.md)
+- [Partitionnement](docs/partition-layout-fr.md)
 
 ## Licence
 
