@@ -12,14 +12,17 @@ Par défaut :
 
 - présence de `fs.md5sum` ;
 - vérification de chaque fichier couvert par ce manifeste ;
-- lecture complète de `upgrade/fs.tgz` pour vérifier le flux gzip ;
-- lecture complète de `upgrade/db.tgz` ;
+- lecture intégrale de `upgrade/fs.tgz` en tant qu'archive **tar+gzip** ;
+- lecture intégrale de `upgrade/db.tgz` en tant qu'archive **tar+gzip** ;
+- comptage des entrées réellement lisibles dans chaque archive ;
 - présence de l'U-Boot Aura HD E606C0 :
   `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin` ;
 - présence du kernel Aura HD E606C0 :
   `upgrade/ntx508/uImage-E606C0`.
 
-Avec `--hash-files`, il calcule aussi le SHA-256 des deux archives et des deux fichiers E606C0 afin de permettre à l'utilisateur de documenter sa propre sauvegarde privée.
+La validation des `.tgz` ne se contente donc pas de leur en-tête gzip : le flux est parcouru jusqu'au bout et la structure tar est également lue, sans extraction sur disque.
+
+Avec `--hash-files`, l'outil calcule aussi le SHA-256 des deux archives et des deux fichiers E606C0 afin de permettre à l'utilisateur de documenter sa propre sauvegarde privée.
 
 ## Préparation recommandée
 
@@ -58,17 +61,27 @@ Le contrôle du manifeste peut être ignoré ponctuellement avec `--skip-md5`, m
 
 Sur le recovery étudié, `bin/antiword` n'était pas lisible par un utilisateur ordinaire. Le manifeste paraissait donc en échec sans `sudo`, alors que les fichiers étaient conformes.
 
-L'outil distingue :
+L'outil distingue notamment :
 
 - fichier absent ;
 - fichier illisible ;
 - empreinte MD5 incorrecte ;
-- ligne de manifeste invalide.
+- ligne de manifeste invalide ;
+- archive gzip ou tar corrompue ;
+- fichier E606C0 attendu absent.
 
 ## Codes de sortie
 
 - `0` : tous les contrôles demandés sont conformes ;
 - `1` : au moins un contrôle demandé est absent, illisible ou incorrect.
+
+## Tests synthétiques
+
+Le dépôt contient des tests qui construisent de petites archives tar+gzip et un faux recovery temporaire, sans intégrer aucun firmware Kobo :
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## Sécurité
 
