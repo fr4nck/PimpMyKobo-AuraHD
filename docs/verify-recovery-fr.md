@@ -10,81 +10,94 @@ L'outil ne monte pas lui-même la microSD et n'écrit jamais dans le recovery.
 
 Par défaut :
 
-- présence de `fs.md5sum` ;
-- vérification de chaque fichier couvert par ce manifeste ;
-- lecture intégrale de `upgrade/fs.tgz` en tant qu'archive **tar+gzip** ;
-- lecture intégrale de `upgrade/db.tgz` en tant qu'archive **tar+gzip** ;
-- comptage des entrées réellement lisibles dans chaque archive ;
-- présence de l'U-Boot Aura HD E606C0 :
-  `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin` ;
-- présence du kernel Aura HD E606C0 :
-  `upgrade/ntx508/uImage-E606C0`.
+- présence et cohérence de `fs.md5sum` ;
+- lecture complète de `upgrade/fs.tgz` et `upgrade/db.tgz` ;
+- validation de la structure tar ;
+- consommation complète du flux gzip afin de vérifier CRC32, taille de fin et troncatures ;
+- rejet des données non nulles trouvées après la fin logique du tar ;
+- présence d'au moins un U-Boot `u-boot_mddr_512-E606C0-*.bin` non vide ;
+- validation du kernel `uImage-E606C0` comme image U-Boot legacy : magic `0x27051956`, CRC d'en-tête, taille déclarée et CRC des données ;
+- refus des chemins critiques qui sortent de l'arborescence recovery via lien symbolique ou traversal.
 
-La validation des `.tgz` ne se contente donc pas de leur en-tête gzip : le flux est parcouru jusqu'au bout et la structure tar est également lue, sans extraction sur disque.
+Aucun fichier n'est extrait sur disque pendant ces contrôles.
 
-Avec `--hash-files`, l'outil calcule aussi le SHA-256 des deux archives et des deux fichiers E606C0 afin de permettre à l'utilisateur de documenter sa propre sauvegarde privée.
+Avec `--hash-files`, l'outil calcule également le SHA-256 des archives et des artefacts E606C0 sélectionnés.
 
 ## Préparation recommandée
 
-Il est préférable de travailler sur une image de P2 et de la monter explicitement en lecture seule sans rejouer le journal ext4 :
+Travailler de préférence sur une **copie de P2**, pas directement sur la carte originale.
+
+Montage d'une image P2 déjà copiée :
 
 ```bash
 sudo mkdir -p /mnt/aurahd-recovery
 sudo mount -o loop,ro,noload AuraHD-p2-recovery.img /mnt/aurahd-recovery
 ```
 
-La procédure permettant de retrouver et copier P2 est décrite dans [Retrouver les fichiers de recovery](retrouver-fichiers-fr.md).
+`ro,noload` évite le rejeu du journal ext4 de l'image montée.
 
 ## Utilisation
-
-Depuis la racine du dépôt :
-
-```bash
-sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery
-```
-
-Pour conserver aussi les empreintes SHA-256 :
 
 ```bash
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
 ```
 
-Sortie JSON exploitable par d'autres outils :
+Sortie JSON :
 
 ```bash
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --json
 ```
 
-Le contrôle du manifeste peut être ignoré ponctuellement avec `--skip-md5`, mais ce mode réduit fortement la valeur du diagnostic.
+## `--skip-md5` n'est pas un verdict vert
 
-## Pourquoi les droits root peuvent être nécessaires
+Le contrôle du manifeste peut être ignoré pour du diagnostic :
 
-Sur le recovery étudié, `bin/antiword` n'était pas lisible par un utilisateur ordinaire. Le manifeste paraissait donc en échec sans `sudo`, alors que les fichiers étaient conformes.
+```bash
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --skip-md5
+```
 
-L'outil distingue notamment :
+Dans ce cas, le résultat contient `partial: true`, `ok: false` et le programme ne renvoie pas un succès global. Un futur outil de reconstruction ne doit donc jamais interpréter ce mode comme un recovery validé.
 
-- fichier absent ;
-- fichier illisible ;
-- empreinte MD5 incorrecte ;
-- ligne de manifeste invalide ;
-- archive gzip ou tar corrompue ;
-- fichier E606C0 attendu absent.
+## Variantes U-Boot
+
+Le type de RAM est encodé dans le nom du fichier U-Boot. Le vérificateur n'impose plus uniquement `K4X2G323PC` : il accepte les variantes correspondant au motif :
+
+```text
+u-boot_mddr_512-E606C0-*.bin
+```
+
+Il conserve le nom réellement trouvé dans le résultat JSON.
+
+## Manifestes `fs.md5sum`
+
+Les chemins absolus, `../` et liens symboliques qui sortent du recovery sont refusés.
+
+Les noms de fichiers échappés au format GNU `md5sum` sont décodés uniquement lorsque la ligne est réellement préfixée par `\`, afin d'éviter de transformer des séquences littérales par erreur.
+
+L'outil distingue fichier absent, fichier illisible, empreinte incorrecte et entrée de manifeste invalide.
 
 ## Codes de sortie
 
-- `0` : tous les contrôles demandés sont conformes ;
-- `1` : au moins un contrôle demandé est absent, illisible ou incorrect.
+- `0` : tous les contrôles obligatoires sont conformes ;
+- `1` : recovery incomplet/incohérent, ou vérification volontairement partielle avec `--skip-md5` ;
+- `2` : chemin recovery invalide ou inaccessible au point d'empêcher le contrôle.
 
 ## Tests synthétiques
 
-Le dépôt contient des tests qui construisent de petites archives tar+gzip et un faux recovery temporaire, sans intégrer aucun firmware Kobo :
+Les tests du dépôt couvrent notamment :
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+- archive tronquée ;
+- CRC gzip corrompu ;
+- données parasites après l'archive ;
+- traversal et lien symbolique sortant ;
+- U-Boot vide ;
+- variante de nom U-Boot ;
+- magic et CRC `uImage` invalides ;
+- manifeste échappé ;
+- mode `--skip-md5` partiel.
+
+Ils utilisent uniquement des fichiers synthétiques et aucun blob Kobo.
 
 ## Sécurité
 
-Le chemin source est uniquement ouvert en lecture. L'outil n'a aucune fonction de réparation, d'extraction ou d'écriture vers la microSD.
-
-Le contrôle permet donc de décider si le recovery constitue une base crédible avant de lancer une reconstruction locale de P1.
+Le vérificateur ne répare rien et n'écrit rien. Il sert uniquement à décider si la copie de `recoveryfs` est suffisamment cohérente pour devenir une source de reconstruction locale.
