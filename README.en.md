@@ -26,9 +26,9 @@ The project has two complementary goals:
 - 1440 × 1080 resolution
 - Internal system storage on microSD
 
-## Confirmed findings
+## Values observed on the studied unit
 
-The device studied here contains a `HW CONFIG v1.7` block at offset `0x80000` (`524288`).
+The studied device contains a `HW CONFIG v1.7` block at offset `0x80000` (`524288`).
 
 | Field | Value |
 |---|---|
@@ -44,7 +44,7 @@ The device studied here contains a `HW CONFIG v1.7` block at offset `0x80000` (`
 | DisplayBusWidth | `16Bits_mirror` |
 | FrontLight LED driver | `SY7201` |
 
-HWCONFIG v1.7 contains 39 configuration bytes. The field added after `PCB_Flags` is `FrontLight_LED_Driver`.
+The observed v1.7 payload contains 39 configuration bytes. The field added after `PCB_Flags` is `FrontLight_LED_Driver`.
 
 ## Kobo sources found
 
@@ -57,7 +57,7 @@ They include:
     linux-2.6.35.3.tar.gz
     u-boot-2009.08.tar.gz
 
-U-Boot includes the Netronix adaptations, including `NTX_HWCONFIG`, RAM parameters, E-Ink handling and low-level hardware data loading.
+U-Boot includes Netronix adaptations such as `NTX_HWCONFIG`, RAM parameters, E-Ink handling and low-level hardware data loading.
 
 ## Boot architecture
 
@@ -110,7 +110,7 @@ This binary backup is intentionally not published in the repository.
 
 ## Rescuing an Aura HD after an interrupted factory reset
 
-On the device studied here, a factory reset had started and then failed.
+On the studied device, a factory reset had started and then failed.
 
 Observed result:
 
@@ -118,24 +118,18 @@ Observed result:
 - P2 `recoveryfs`: intact and consistent;
 - P3 `KOBOeReader`: recreated by the recovery procedure.
 
-The Kobo recovery script present in `recoveryfs`:
+The Kobo recovery script in `recoveryfs` reads HWCONFIG, chooses hardware-specific artifacts when available, reformats P1/P3, then extracts `upgrade/fs.tgz` into P1 and `upgrade/db.tgz` into P3.
 
-1. selects the U-Boot and kernel images matching the hardware;
-2. reformats P1 as ext4 `rootfs`;
-3. reformats P3 as FAT32 `KOBOeReader`;
-4. extracts `upgrade/fs.tgz` into P1;
-5. extracts `upgrade/db.tgz` into P3.
-
-The recovery partition on the studied unit contains, among other files:
+The studied recovery partition contains, among other files:
 
 - `upgrade/fs.tgz`
 - `upgrade/db.tgz`
 - `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin`
 - `upgrade/ntx508/uImage-E606C0`
 
-Both `fs.tgz` and `db.tgz` passed `gzip -t`. The recovery filesystem was also checked against its `fs.md5sum` manifest.
+Both factory archives passed `gzip -t`, and the recovery tree was verified against `fs.md5sum`.
 
-A fresh 256 MiB ext4 `rootfs` image was built locally, populated with `fs.tgz`, verified against `fs.md5sum`, then checked with `e2fsck`.
+A fresh 256 MiB ext4 `rootfs` image was built locally, populated with `fs.tgz`, checked against `fs.md5sum`, then checked with `e2fsck`.
 
 After writing only P1, the SHA-256 read back directly from the microSD matched the source image exactly:
 
@@ -147,7 +141,7 @@ This demonstrates that an Aura HD whose `rootfs` was wiped may sometimes be rebu
 
 ### `inspect-aura-hd.py`
 
-A standalone Python inspector with no external dependencies and strictly read-only behavior. It retrieves the current disk list, reads each candidate's MBR and HWCONFIG, recognizes `E606C0 / Dragon`, decodes key hardware parameters and detects the `rootfs`, `recoveryfs` and `KOBOeReader` labels without mounting partitions.
+A standalone Python inspector with no external dependencies and strictly read-only behavior. It discovers current disks, reads MBR/HWCONFIG, confirms `E606C0 / Dragon` only with the expected HWCONFIG format, and detects `rootfs`, `recoveryfs` and `KOBOeReader` labels without mounting partitions.
 
 On Windows:
 
@@ -159,15 +153,15 @@ See [the inspector documentation](docs/inspect-aura-hd-en.md).
 
 ### `verify-recovery.py`
 
-A read-only verifier for an already mounted or locally copied `recoveryfs`. It checks `fs.md5sum`, fully reads `fs.tgz` and `db.tgz`, verifies the E606C0 files are present, and can compute their SHA-256 hashes.
+A read-only verifier for an already mounted or locally copied `recoveryfs`. It checks `fs.md5sum`, the complete gzip stream, tar end markers, archive members/payloads, E606C0 artifacts, and can compute SHA-256 hashes.
 
 ```bash
-sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files --lang en
 ```
 
 See [the `verify-recovery` documentation](docs/verify-recovery-en.md).
 
-Synthetic tests containing no Kobo firmware are present in `tests/` and use only the Python standard library.
+Synthetic tests containing no Kobo firmware are present in `tests/`. CI runs them on Linux and Windows with Python 3.10 through 3.13.
 
 ## Publication philosophy
 
@@ -190,6 +184,13 @@ Instead, it should provide documentation, inspection, validation, backup and loc
 - cryptographically verify writes;
 - preserve `recoveryfs` and HWCONFIG whenever possible.
 
+### Operating-system writes still matter
+
+A read-only tool does not make the host operating system unable to write to the card.
+
+- On Windows, always **cancel** format prompts for the ext4 partitions and avoid unnecessarily opening FAT32 P3 while making preservation copies.
+- On desktop Linux, disable automount: a read-write ext4 mount may replay the journal. For sensitive work, prefer a local image or mark the positively identified block device read-only in the kernel before analysis.
+
 ## Project status
 
 - [x] Official Aura HD sources found
@@ -204,6 +205,7 @@ Instead, it should provide documentation, inspection, validation, backup and loc
 - [x] Read-only `inspect-aura-hd` tool
 - [x] Read-only `verify-recovery` tool
 - [x] Synthetic tests without Kobo blobs
+- [x] Linux/Windows CI on Python 3.10–3.13
 - [ ] Validate `inspect-aura-hd` against the physical microSD through the Windows card reader
 - [ ] Extract and document the E-Ink waveform precisely
 - [ ] Write backup and local reconstruction tools
