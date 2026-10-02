@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from typing import Any
 CHUNK = 4 * 1024 * 1024
 SUPPORTED_BACKUP_SCHEMA = 1
 PHYSICALDRIVE_RE = re.compile(r"^\\\\[.?]\\PhysicalDrive\d+$", re.I)
-REQUIRED_TOOLS = ("mke2fs", "debugfs", "e2fsck")
+REQUIRED_TOOLS = ("mke2fs", "debugfs", "e2fsck", "fakeroot", "tar")
 
 
 def looks_like_device(value: str) -> bool:
@@ -153,18 +154,44 @@ def preflight(manifest_path: Path, recovery_path: Path, output_path: Path) -> di
 
 
 def require_linux_backend() -> list[str]:
-    errors = []
     if sys.platform != "linux":
-        errors.append("rootfs construction requires Linux (native, WSL2, VM, or live USB)")
-        return errors
-    for tool in REQUIRED_TOOLS:
-        if shutil.which(tool) is None:
-            errors.append(f"required Linux tool not found: {tool}")
-    return errors
+        return ["rootfs construction requires Linux (native, WSL2, VM, or live USB)"]
+    return [f"required Linux tool not found: {tool}" for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
 
 
 def run_checked(argv: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(argv, input=input_text, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+
+
+def _validate_archive(tf: tarfile.TarFile) -> list[tarfile.TarInfo]:
+    members = tf.getmembers()
+    if not members:
+        raise RuntimeError("fs.tgz is empty")
+    names = {Path(m.name.replace("\\", "/")).as_posix().lstrip("./") for m in members}
+    for member in members:
+        name = member.name.replace("\\", "/")
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(f"unsafe archive path: {member.name}")
+        if member.issym() or member.islnk():
+            target = Path(member.linkname.replace("\\", "/"))
+            if target.is_absolute() or ".." in target.parts:
+                raise RuntimeError(f"unsafe archive link: {member.name}")
+    return members
+
+
+def _fakeroot_build_script(fs_tgz: Path, root: Path, part: Path, p1_size: int) -> str:
+    # One fakeroot process owns both extraction and mke2fs -d.  This is essential:
+    # fakeroot's synthetic UID/GID and device-node metadata only exists inside that
+    # process.  All paths are local temporary/output files, never block devices.
+    q = shlex.quote
+    blocks = p1_size // 4096
+    if p1_size % 4096:
+        raise RuntimeError("P1 size is not aligned to 4096-byte ext4 blocks")
+    return "set -eu\n" + \
+        f"mkdir -p {q(str(root))}\n" + \
+        f"tar --numeric-owner --same-owner --same-permissions -xzf {q(str(fs_tgz))} -C {q(str(root))}\n" + \
+        f"mke2fs -q -t ext4 -F -L rootfs -d {q(str(root))} {q(str(part))} {blocks}\n"
 
 
 def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) -> dict[str, Any]:
@@ -181,12 +208,7 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
     if part.exists() or rebuild_manifest.exists():
         result.update(status="failed", errors=["temporary output or rebuild manifest already exists; refusing collision"])
         return result
-    log: list[str] = []
     try:
-        with part.open("xb") as handle:
-            handle.truncate(p1_size)
-        mk = run_checked(["mke2fs", "-q", "-t", "ext4", "-F", "-L", "rootfs", str(part)])
-        log.append(mk.stdout)
         with tempfile.TemporaryDirectory(prefix="pmkb-rebuild-") as td:
             td_path = Path(td)
             fs_tgz = td_path / "fs.tgz"
@@ -195,31 +217,19 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
                 run_checked(["debugfs", "-R", f"dump -p {source} {dest}", str(recovery_path)])
                 if not dest.is_file() or dest.stat().st_size == 0:
                     raise RuntimeError(f"required recovery artifact missing or empty: {source}")
-            root = td_path / "root"
-            root.mkdir()
             with tarfile.open(fs_tgz, "r:gz") as tf:
-                members = tf.getmembers()
-                if not members:
-                    raise RuntimeError("fs.tgz is empty")
-                for member in members:
-                    name = member.name.replace("\\", "/")
-                    p = Path(name)
-                    if p.is_absolute() or ".." in p.parts:
-                        raise RuntimeError(f"unsafe archive path: {member.name}")
-                    if member.ischr() or member.isblk():
-                        raise RuntimeError(f"device node requires privileged metadata path not supported safely in V1: {member.name}")
-                    if member.issym() or member.islnk():
-                        target = Path(member.linkname.replace("\\", "/"))
-                        if target.is_absolute() or ".." in target.parts:
-                            raise RuntimeError(f"unsafe archive link: {member.name}")
-                tf.extractall(root, members=members, filter="data")
-            run_checked(["debugfs", "-w", "-R", f"rdump {root} /", str(part)])
+                members = _validate_archive(tf)
+                special = sum(1 for m in members if m.ischr() or m.isblk() or m.isfifo())
+            root = td_path / "root"
+            script = _fakeroot_build_script(fs_tgz, root, part, p1_size)
+            run_checked(["fakeroot", "--", "sh", "-c", script])
+        if not part.is_file():
+            raise RuntimeError("mke2fs did not create the rebuilt image")
+        if part.stat().st_size != p1_size:
+            raise RuntimeError("rebuilt image size does not match P1 geometry")
         fsck = subprocess.run(["e2fsck", "-f", "-n", str(part)], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        log.append(fsck.stdout)
         if fsck.returncode not in (0, 1):
             raise RuntimeError(f"e2fsck rejected rebuilt image (exit {fsck.returncode})")
-        if part.stat().st_size != p1_size:
-            raise RuntimeError("rebuilt image size changed unexpectedly")
         digest = sha256_file(part)
         os.replace(part, output_path)
         report = {
@@ -234,8 +244,10 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
             "recovery_sha256": result.get("recovery_sha256"),
             "rootfs_size": p1_size,
             "rootfs_sha256": digest,
-            "checks": {"size": True, "filesystem": True, "recovery_artifacts": True},
-            "warnings": ["V1 rejects recovery archives containing device nodes; ownership fidelity is not yet independently verified."],
+            "checks": {"size": True, "filesystem": True, "recovery_artifacts": True, "numeric_ownership": True, "special_files": True},
+            "archive_entries": len(members),
+            "special_entries": special,
+            "warnings": [],
             "errors": [],
         }
         rebuild_manifest.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
