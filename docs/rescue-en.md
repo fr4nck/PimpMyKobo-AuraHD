@@ -29,7 +29,7 @@ After an interrupted factory reset:
 The `recoveryfs:/etc/init.d/rcS` script:
 
 1. reads HWCONFIG;
-2. selects hardware-matching U-Boot and kernel images when available;
+2. selects matching U-Boot and kernel images when corresponding files are available;
 3. reformats P1 as ext4 with the `rootfs` label;
 4. reformats P3 as FAT32 with the `KOBOeReader` label;
 5. mounts P1;
@@ -37,7 +37,7 @@ The `recoveryfs:/etc/init.d/rcS` script:
 7. mounts P3;
 8. extracts `/upgrade/db.tgz` into P3.
 
-A failure after formatting but before a successful `fs.tgz` extraction can therefore leave exactly the empty P1 observed here.
+A failure after formatting but before a successful `fs.tgz` extraction can therefore leave the kind of empty P1 observed here.
 
 ## Recovery files observed
 
@@ -61,7 +61,9 @@ Its `fs.md5sum` manifest was fully verified as root.
     gzip -t upgrade/fs.tgz
     gzip -t upgrade/db.tgz
 
-Both archives passed.
+Both archives passed during the original rescue.
+
+The project's current verifier goes further by checking tar end markers, every tar entry and every regular-file payload. See [Verify recoveryfs](verify-recovery-en.md).
 
 `fs.tgz` contained 2,529 entries and approximately 160.8 MB uncompressed.
 
@@ -122,3 +124,11 @@ The goal is to provide tooling that lets each owner use the data already present
 - reconstruct and validate images offline;
 - read back written bytes and compare cryptographic hashes;
 - never hard-code a physical disk number in distributed tooling.
+
+### The operating system may write even when the tool does not
+
+Before diagnosing the original card:
+
+- on Windows, **cancel every format prompt** for the ext4 partitions and avoid opening the FAT32 partition unnecessarily;
+- on desktop Linux, disable automount: a read-write ext4 mount may replay the journal;
+- for deeper checks, prefer a local image mounted with `ro,noload` rather than the original card.
