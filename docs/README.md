@@ -27,9 +27,13 @@ Pour un navigateur texte, une console ou une session SSH : [version texte / Lynx
 Les scripts sont dans [`../tools/`](../tools/).
 
 - `inspect-aura-hd.py` : identification et cartographie d'une microSD complète ;
-- `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0.
+- `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0 ;
+- [`backup-aura-hd.py`](backup-aura-hd-fr.md) : sauvegarde vérifiée par SHA-256 d'une Aura HD E606C0 confirmée, vers un dossier explicitement fourni ;
+- [`verify-backup-aura-hd.py`](verify-backup-aura-hd-fr.md) : vérification hors ligne, en lecture seule, d'une sauvegarde existante par rapport à son manifeste.
 
-Les deux outils actuels sont conçus pour ne jamais écrire sur la microSD.
+Ces outils n'ouvrent jamais la microSD source en écriture. `backup-aura-hd.py` n'écrit que dans le dossier de sauvegarde.
+
+Avant toute inspection sous Windows : [protéger la microSD](windows-preservation-fr.md).
 
 Avant toute inspection sous Windows : [protéger la microSD](windows-preservation-fr.md).
 
