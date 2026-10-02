@@ -145,6 +145,22 @@ After writing only P1, the SHA-256 read back directly from the microSD matched t
 
 This demonstrates that an Aura HD whose `rootfs` was wiped may sometimes be rebuilt from its own recovery partition without downloading a third-party system image.
 
+## First tool: `inspect-aura-hd`
+
+The repository now includes a standalone Python inspector with no external dependencies and **strictly read-only** behavior.
+
+On Windows, from the repository root:
+
+```powershell
+python .\tools\inspect-aura-hd.py
+```
+
+It retrieves the current disk list, reads each candidate's MBR and HWCONFIG, recognizes `E606C0 / Dragon`, decodes key hardware parameters, and detects the `rootfs`, `recoveryfs` and `KOBOeReader` labels without mounting partitions.
+
+No disk number is hard-coded. The `--hash-boot` option additionally computes SHA-256 for the raw area before P1.
+
+See [the inspector documentation](docs/inspect-aura-hd-en.md).
+
 ## Publication philosophy
 
 This repository should not redistribute:
@@ -195,8 +211,9 @@ French documentation is the primary reference. English translations use the `.en
 - [x] Real-world empty-`rootfs` failure diagnosed
 - [x] `rootfs` rebuilt from `recoveryfs/upgrade/fs.tgz`
 - [x] Reconstruction verified with MD5, e2fsck and SHA-256
+- [x] Read-only `inspect-aura-hd` tool
 - [ ] Extract and document the E-Ink waveform precisely
-- [ ] Write a read-only `inspect-aura-hd` tool
+- [ ] Write `verify-recovery`
 - [ ] Write backup and local reconstruction tools
 - [ ] Build the reference U-Boot and kernel
 - [ ] Build a modern minimal userspace
@@ -206,6 +223,8 @@ French documentation is the primary reference. English translations use the `.en
 ## Documentation
 
 - [Aura HD rescue](docs/rescue-en.md)
+- [Recover the recovery files](docs/recover-files-en.md)
+- [Aura HD inspector](docs/inspect-aura-hd-en.md)
 - [Aura HD hardware](docs/hardware-en.md)
 - [Netronix HWCONFIG](docs/hwconfig-en.md)
 - [Partition layout](docs/partition-layout-en.md)
