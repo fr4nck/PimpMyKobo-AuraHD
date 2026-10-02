@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import builtins
+import contextlib
 import gzip
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import tarfile
 import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +80,46 @@ def build_recovery(root: Path) -> None:
     make_tgz(root / "upgrade" / "db.tgz", 2)
     (ntx / "u-boot_mddr_512-E606C0-K4X2G323PC.bin").write_bytes(b"u-boot synthetic")
     make_uimage(ntx / "uImage-E606C0")
+
+
+@contextlib.contextmanager
+def deny_reading(target: Path):
+    """Raise PermissionError when *target* is opened, like an unreadable file.
+
+    Both Path.open and builtins.open (used by gzip/tarfile) are intercepted, so
+    the test is deterministic on Linux and Windows and needs no real permissions.
+    """
+    target_text = os.path.normcase(os.path.abspath(target))
+    original_path_open = Path.open
+    original_open = builtins.open
+
+    def denied(file: Any) -> bool:
+        try:
+            return os.path.normcase(os.path.abspath(os.fspath(file))) == target_text
+        except TypeError:
+            return False
+
+    def path_open(path_obj, mode="r", *args, **kwargs):
+        if denied(path_obj):
+            raise PermissionError(13, "Permission denied", str(path_obj))
+        return original_path_open(path_obj, mode, *args, **kwargs)
+
+    def builtin_open(file, mode="r", *args, **kwargs):
+        if denied(file):
+            raise PermissionError(13, "Permission denied", str(file))
+        return original_open(file, mode, *args, **kwargs)
+
+    with mock.patch.object(Path, "open", new=path_open), mock.patch(
+        "builtins.open", new=builtin_open
+    ):
+        yield
+
+
+def run_main(argv: list[str]) -> tuple[int, str]:
+    out = io.StringIO()
+    with mock.patch("sys.argv", ["verify-recovery.py", *argv]), contextlib.redirect_stdout(out):
+        code = verify.main()
+    return code, out.getvalue()
 
 
 class VerifyRecoveryTests(unittest.TestCase):
@@ -264,6 +308,163 @@ class VerifyRecoveryTests(unittest.TestCase):
             result = verify.inspect_recovery(root, True, False)
             self.assertFalse(result["ok"])
             self.assertFalse(result["archives"][0]["ok"])
+
+    def test_unreadable_manifest_file_is_incomplete_not_inconsistent(self) -> None:
+        # Reproduces the real Aura HD case (bin/antiword: Permission denied)
+        # without depending on chmod, root or Windows ACLs.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            with deny_reading(root / "sample.txt"):
+                result = verify.inspect_recovery(root, True, False)
+            manifest = result["manifest"]
+            self.assertEqual(len(manifest["unreadable"]), 1)
+            self.assertEqual(manifest["missing"], [])
+            self.assertEqual(manifest["mismatched"], [])
+            self.assertEqual(manifest["invalid_entries"], [])
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["partial"])
+            self.assertEqual(result["status"], "incomplete")
+            self.assertNotEqual(result["status"], "inconsistent")
+            self.assertEqual(result["inconsistencies"], [])
+            self.assertEqual(result["unreadable_count"], 1)
+
+    def test_unreadable_manifest_file_human_summary_and_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            for lang, expected, forbidden in (
+                ("fr", "VÉRIFICATION INCOMPLÈTE", "INCOHÉRENT"),
+                ("en", "VERIFICATION INCOMPLETE", "INCONSISTENT"),
+            ):
+                with deny_reading(root / "sample.txt"):
+                    code, output = run_main([str(root), "--lang", lang])
+                self.assertEqual(code, 1)
+                self.assertIn(expected, output)
+                self.assertNotIn(forbidden, output)
+            with deny_reading(root / "sample.txt"):
+                code, output = run_main([str(root), "--json"])
+            data = json.loads(output)
+            self.assertEqual(code, 1)
+            self.assertEqual(
+                (data["ok"], data["partial"], data["status"]), (False, True, "incomplete")
+            )
+
+    def test_unreadable_manifest_itself_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            with deny_reading(root / "fs.md5sum"):
+                result = verify.inspect_recovery(root, True, False)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["status"], "incomplete")
+
+    def test_unreadable_archive_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            with deny_reading(root / "upgrade" / "fs.tgz"):
+                result = verify.inspect_recovery(root, True, False)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["archives"][0]["unreadable"])
+            self.assertEqual(result["status"], "incomplete")
+
+    def test_complete_recovery_status_is_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            result = verify.inspect_recovery(root, True, True)
+            self.assertEqual(
+                (result["ok"], result["partial"], result["status"]), (True, False, "ok")
+            )
+            code, output = run_main([str(root), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(output)["status"], "ok")
+
+    def test_manifest_mismatch_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "sample.txt").write_bytes(b"modified\n")
+            result = verify.inspect_recovery(root, True, False)
+            self.assertEqual(
+                (result["ok"], result["partial"], result["status"]),
+                (False, False, "inconsistent"),
+            )
+
+    def test_missing_manifest_file_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "sample.txt").unlink()
+            result = verify.inspect_recovery(root, True, False)
+            self.assertEqual(result["manifest"]["missing"], ["sample.txt"])
+            self.assertEqual(
+                (result["ok"], result["partial"], result["status"]),
+                (False, False, "inconsistent"),
+            )
+
+    def test_missing_manifest_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "fs.md5sum").unlink()
+            result = verify.inspect_recovery(root, True, False)
+            self.assertEqual(result["status"], "inconsistent")
+
+    def test_corrupt_archive_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "upgrade" / "fs.tgz").write_bytes(b"broken")
+            result = verify.inspect_recovery(root, True, False)
+            self.assertEqual(
+                (result["ok"], result["partial"], result["status"]),
+                (False, False, "inconsistent"),
+            )
+
+    def test_invalid_uimage_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "upgrade" / "ntx508" / "uImage-E606C0").write_bytes(b"x" * 100)
+            self.assertEqual(verify.inspect_recovery(root, True, False)["status"], "inconsistent")
+
+    def test_unreadable_file_does_not_mask_corruption(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "upgrade" / "db.tgz").write_bytes(b"broken")
+            with deny_reading(root / "sample.txt"):
+                result = verify.inspect_recovery(root, True, False)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["status"], "inconsistent")
+            self.assertEqual(result["unreadable_count"], 1)
+
+    def test_skip_md5_status_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            result = verify.inspect_recovery(root, False, False)
+            self.assertEqual(
+                (result["ok"], result["partial"], result["status"]), (False, True, "incomplete")
+            )
+            code, output = run_main([str(root), "--skip-md5"])
+            self.assertEqual(code, 1)
+            self.assertIn("RECOVERY PARTIELLEMENT VÉRIFIÉ", output)
+
+    def test_skip_md5_with_corruption_is_inconsistent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            build_recovery(root)
+            (root / "upgrade" / "fs.tgz").write_bytes(b"broken")
+            result = verify.inspect_recovery(root, False, False)
+            self.assertFalse(result["ok"])
+            self.assertTrue(result["partial"])
+            self.assertEqual(result["status"], "inconsistent")
+            code, output = run_main([str(root), "--skip-md5"])
+            self.assertEqual(code, 1)
+            self.assertIn("RECOVERY INCOHÉRENT", output)
 
     def test_verifier_never_requests_write_mode(self) -> None:
         with tempfile.TemporaryDirectory() as td:

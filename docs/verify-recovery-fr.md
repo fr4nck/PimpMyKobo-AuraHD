@@ -64,7 +64,32 @@ Le contrôle du manifeste peut être ignoré pour du diagnostic :
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --skip-md5
 ```
 
-Dans ce cas, le résultat contient `partial: true` et `ok: false`. Si un autre contrôle échoue également, le résumé humain reste **INCOMPLET OU INCOHÉRENT** et ne masque pas cette erreur derrière le statut partiel.
+Dans ce cas, le résultat contient `ok: false`, `partial: true` et `status: "incomplete"`. Si un autre contrôle détecte une anomalie, le statut devient `inconsistent` et le résumé humain affiche **RECOVERY INCOHÉRENT** : `--skip-md5` ne masque jamais une corruption.
+
+## Les trois verdicts
+
+| Verdict affiché | `status` | `ok` | `partial` | Signification |
+|---|---|---|---|---|
+| **RECOVERY COHÉRENT POUR LES CONTRÔLES EFFECTUÉS** | `ok` | `true` | `false` | tous les contrôles obligatoires ont réussi |
+| **VÉRIFICATION INCOMPLÈTE** | `incomplete` | `false` | `true` | aucune incohérence trouvée, mais au moins un contrôle obligatoire n'a pas pu être effectué (fichier illisible, `--skip-md5`) |
+| **RECOVERY INCOHÉRENT** | `inconsistent` | `false` | `false`, ou `true` si un contrôle n'a pas non plus pu être effectué | au moins une anomalie positive : fichier absent, MD5 incorrect, entrée de manifeste invalide, archive corrompue ou tronquée, U-Boot absent ou vide, `uImage` invalide |
+
+Une **vérification incomplète n'est pas un recovery validé**. Elle signifie seulement qu'aucune corruption n'a été détectée parmi les fichiers effectivement lus.
+
+Cas réel : sur un recovery monté sans les droits suffisants, `bin/antiword` n'était pas lisible. Le résultat est alors :
+
+```text
+VÉRIFICATION INCOMPLÈTE
+
+1 fichier n'a pas pu être lu avec les droits actuels.
+Aucune corruption n'a été détectée parmi les fichiers vérifiés.
+
+Relancez avec les droits nécessaires pour obtenir un verdict complet.
+```
+
+Relancer avec `sudo` (ou en administrateur) est nécessaire pour obtenir un verdict `ok`.
+
+En JSON, `inconsistencies[]` liste les anomalies détectées, `incomplete_checks[]` les contrôles non effectués et `unreadable_count` le nombre de fichiers illisibles. `checks_ok` conserve sa signification antérieure.
 
 ## Variantes U-Boot
 
@@ -87,8 +112,8 @@ L'outil distingue fichier absent, fichier illisible, empreinte incorrecte et ent
 ## Codes de sortie
 
 - `0` : tous les contrôles obligatoires sont conformes ;
-- `1` : recovery incomplet/incohérent, ou vérification volontairement partielle avec `--skip-md5` ;
-- `2` : chemin recovery invalide ou inaccessible au point d'empêcher le contrôle.
+- `1` : vérification incomplète (`status: "incomplete"`, y compris `--skip-md5`) ou recovery incohérent (`status: "inconsistent"`) — consulter `status` pour les distinguer ;
+- `2` : chemin recovery invalide ou inaccessible au point d'empêcher le contrôle (`status: "error"`).
 
 ## Tests synthétiques
 
@@ -104,6 +129,8 @@ La suite de tests couvre notamment :
 - `uImage` complété par des zéros ;
 - manifeste GNU échappé ;
 - `--skip-md5` partiel avec et sans autre erreur ;
+- fichier illisible (`PermissionError` simulée, portable Linux/Windows) classé `incomplete` et jamais `ok` ;
+- MD5 incorrect, fichier absent, archive corrompue et `uImage` invalide classés `inconsistent`, y compris avec un fichier illisible ;
 - absence d'ouverture en écriture pendant la vérification.
 
 La CI GitHub exécute les tests sous Linux et Windows sur plusieurs versions de Python. Aucun blob Kobo n'est inclus dans les tests.

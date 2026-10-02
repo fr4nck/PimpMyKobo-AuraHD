@@ -33,8 +33,16 @@ FR = {
     "hashes": "SHA-256",
     "ok": "OK", "missing": "ABSENT", "bad": "ERREUR", "partial": "PARTIEL",
     "summary_ok": "RECOVERY COHÉRENT POUR LES CONTRÔLES EFFECTUÉS",
-    "summary_bad": "RECOVERY INCOMPLET OU INCOHÉRENT",
+    "summary_bad": "RECOVERY INCOHÉRENT — AU MOINS UNE ANOMALIE A ÉTÉ DÉTECTÉE",
     "summary_partial": "RECOVERY PARTIELLEMENT VÉRIFIÉ — NE PAS LE CONSIDÉRER VALIDÉ",
+    "summary_incomplete": "VÉRIFICATION INCOMPLÈTE",
+    "incomplete": "INCOMPLET",
+    "unreadable_one": "1 fichier n'a pas pu être lu avec les droits actuels.",
+    "unreadable_many": "{count} fichiers n'ont pas pu être lus avec les droits actuels.",
+    "no_corruption": "Aucune corruption n'a été détectée parmi les fichiers vérifiés.",
+    "rerun_hint": "Relancez avec les droits nécessaires pour obtenir un verdict complet.",
+    "skipped_md5": "fs.md5sum n'a pas été vérifié (--skip-md5).",
+    "also_incomplete": "La vérification est en outre incomplète :",
     "root_hint": "Certains fichiers sont illisibles. Relancez éventuellement avec les droits root/administrateur.",
 }
 
@@ -50,8 +58,16 @@ EN = {
     "hashes": "SHA-256",
     "ok": "OK", "missing": "MISSING", "bad": "ERROR", "partial": "PARTIAL",
     "summary_ok": "RECOVERY IS CONSISTENT FOR THE CHECKS PERFORMED",
-    "summary_bad": "RECOVERY IS INCOMPLETE OR INCONSISTENT",
+    "summary_bad": "RECOVERY IS INCONSISTENT — AT LEAST ONE ANOMALY WAS DETECTED",
     "summary_partial": "RECOVERY WAS ONLY PARTIALLY VERIFIED — DO NOT TREAT IT AS VALIDATED",
+    "summary_incomplete": "VERIFICATION INCOMPLETE",
+    "incomplete": "INCOMPLETE",
+    "unreadable_one": "1 file could not be read with the current privileges.",
+    "unreadable_many": "{count} files could not be read with the current privileges.",
+    "no_corruption": "No corruption was detected among the files that were verified.",
+    "rerun_hint": "Re-run with the required privileges to obtain a complete verdict.",
+    "skipped_md5": "fs.md5sum was not verified (--skip-md5).",
+    "also_incomplete": "Verification is also incomplete:",
     "root_hint": "Some files are unreadable. Re-run with root/administrator rights if appropriate.",
 }
 
@@ -98,6 +114,10 @@ def stat_regular_file(path: Path) -> tuple[bool, int | None, str | None]:
     return True, st.st_size, None
 
 
+def _is_permission_error(error: str | None) -> bool:
+    return bool(error) and str(error).startswith("permission denied")
+
+
 def safe_critical_path(root: Path, relative: str) -> tuple[Path | None, str | None]:
     path = safe_member(root, relative)
     if path is None:
@@ -133,6 +153,7 @@ def validate_tar_gzip(path: Path) -> dict[str, Any]:
     result["exists"] = exists
     if not exists:
         result["error"] = stat_error or "missing"
+        result["unreadable"] = _is_permission_error(stat_error)
         return result
     result["compressed_bytes"] = size
 
@@ -164,6 +185,7 @@ def validate_tar_gzip(path: Path) -> dict[str, Any]:
         result["ok"] = True
     except (OSError, EOFError, gzip.BadGzipFile, tarfile.TarError, zlib.error) as exc:
         result["error"] = str(exc)
+        result["unreadable"] = isinstance(exc, PermissionError)
     return result
 
 
@@ -196,6 +218,8 @@ def parse_manifest(path: Path) -> tuple[list[tuple[str, str]], list[str]]:
     errors: list[str] = []
     try:
         text = path.read_text(encoding="utf-8", errors="surrogateescape")
+    except PermissionError:
+        raise
     except OSError as exc:
         return entries, [str(exc)]
 
@@ -244,7 +268,12 @@ def verify_manifest(root: Path) -> dict[str, Any]:
         result["error"] = stat_error or "missing"
         return result
 
-    entries, parse_errors = parse_manifest(manifest)
+    try:
+        entries, parse_errors = parse_manifest(manifest)
+    except PermissionError as exc:
+        result["unreadable"].append({"path": "fs.md5sum", "error": str(exc)})
+        result["error"] = f"permission denied: {exc}"
+        return result
     result["invalid_entries"].extend(parse_errors)
     for expected, relative in entries:
         path = safe_member(root, relative)
@@ -284,6 +313,7 @@ def validate_legacy_uimage(path: Path) -> dict[str, Any]:
     result["size"] = size
     if not exists:
         result["error"] = error or "missing"
+        result["unreadable"] = _is_permission_error(error)
         return result
     if not size:
         result["error"] = "empty file"
@@ -342,6 +372,7 @@ def validate_legacy_uimage(path: Path) -> dict[str, Any]:
         })
     except (OSError, ValueError) as exc:
         result["error"] = str(exc)
+        result["unreadable"] = isinstance(exc, PermissionError)
     return result
 
 
@@ -388,6 +419,7 @@ def find_artifacts(root: Path) -> dict[str, Any]:
         }
         if error:
             item["error"] = error
+            item["unreadable"] = _is_permission_error(error)
         if exists and size == 0:
             item["error"] = "empty file"
         uboot_items.append(item)
@@ -445,12 +477,14 @@ def hash_selected(paths: list[Path], root: Path) -> list[dict[str, Any]]:
         item["size"] = size
         if not exists:
             item["error"] = error or "missing"
+            item["unreadable"] = _is_permission_error(error)
             output.append(item)
             continue
         try:
             item["sha256"] = digest_file(safe, "sha256")
         except OSError as exc:
             item["error"] = str(exc)
+            item["unreadable"] = isinstance(exc, PermissionError)
         output.append(item)
     return output
 
@@ -472,6 +506,7 @@ def inspect_recovery(root: Path, verify_md5: bool, include_hashes: bool) -> dict
         result["errors"].append(str(exc))
     if not result["is_directory"]:
         result["ok"] = False
+        result["status"] = "error"
         result["error"] = "not_a_directory"
         return result
 
@@ -513,10 +548,111 @@ def inspect_recovery(root: Path, verify_md5: bool, include_hashes: bool) -> dict
         and hashes_ok
     )
     result["checks_ok"] = checks_ok
-    result["ok"] = checks_ok and verify_md5
     if not verify_md5:
         result["warnings"].append("fs.md5sum verification was skipped; result is partial")
+    classify_recovery(result, verify_md5)
     return result
+
+
+def classify_recovery(result: dict[str, Any], verify_md5: bool) -> None:
+    """Split failures into positive inconsistencies and checks that could not run.
+
+    status "ok": every mandatory check passed.
+    status "incomplete": nothing inconsistent was found, but at least one mandatory
+    check could not be performed (unreadable file, --skip-md5). Never OK.
+    status "inconsistent": at least one check positively failed. It always wins
+    over "incomplete", so missing rights or --skip-md5 cannot mask a corruption.
+    """
+    inconsistencies: list[str] = []
+    incomplete: list[str] = []
+    unreadable: set[str] = set()
+
+    def unreadable_item(path: str, reason: str) -> None:
+        unreadable.add(path)
+        incomplete.append(f"{path}: {reason}")
+
+    for item in result["archives"]:
+        if item.get("ok"):
+            continue
+        if item.get("unreadable"):
+            unreadable_item(item["path"], item.get("error") or "unreadable")
+        else:
+            inconsistencies.append(f"{item['path']}: {item.get('error') or 'invalid archive'}")
+
+    artifacts = result["artifacts"]
+    if not artifacts.get("ok"):
+        files = artifacts.get("files", {})
+        directory_error = artifacts.get("error")
+        if directory_error:
+            if directory_error == "missing directory" or directory_error.startswith("unsafe path"):
+                inconsistencies.append(f"{artifacts['directory']}: {directory_error}")
+            else:
+                incomplete.append(f"{artifacts['directory']}: {directory_error}")
+        if artifacts.get("inventory_error"):
+            incomplete.append(f"{artifacts['directory']}: {artifacts['inventory_error']}")
+        if not directory_error:
+            uboots = files.get("uboot_candidates", [])
+            if not any(item.get("ok") for item in uboots):
+                unreadable_uboots = [item for item in uboots if item.get("unreadable")]
+                if unreadable_uboots:
+                    for item in unreadable_uboots:
+                        unreadable_item(item["path"], item.get("error") or "unreadable")
+                else:
+                    inconsistencies.append("no valid u-boot_mddr_512-E606C0-*.bin found")
+            kernel = files.get("kernel", {})
+            if kernel and not kernel.get("ok"):
+                if kernel.get("unreadable"):
+                    unreadable_item(kernel["path"], kernel.get("error") or "unreadable")
+                else:
+                    inconsistencies.append(f"{kernel['path']}: {kernel.get('error') or 'invalid uImage'}")
+
+    manifest = result["manifest"]
+    if not verify_md5:
+        incomplete.append("fs.md5sum verification skipped (--skip-md5)")
+    elif not manifest.get("ok"):
+        for relative in manifest.get("missing", []):
+            inconsistencies.append(f"fs.md5sum: missing {relative}")
+        for item in manifest.get("mismatched", []):
+            inconsistencies.append(f"fs.md5sum: MD5 mismatch {item['path']}")
+        for entry in manifest.get("invalid_entries", []):
+            inconsistencies.append(f"fs.md5sum: {entry}")
+        for item in manifest.get("unreadable", []):
+            unreadable_item(item["path"], item.get("error") or "unreadable")
+        if not manifest.get("exists") and not manifest.get("unreadable") and not manifest.get("invalid_entries"):
+            inconsistencies.append(f"fs.md5sum: {manifest.get('error') or 'missing'}")
+        elif (
+            manifest.get("exists")
+            and manifest.get("checked", 0) == 0
+            and not manifest.get("invalid_entries")
+            and not manifest.get("unreadable")
+        ):
+            inconsistencies.append("fs.md5sum: manifest contains no entries")
+
+    for item in result.get("sha256", []):
+        if item.get("sha256") and not item.get("error"):
+            continue
+        if item.get("unreadable"):
+            unreadable_item(item["path"], item.get("error") or "unreadable")
+        else:
+            inconsistencies.append(f"sha256 {item['path']}: {item.get('error') or 'not computed'}")
+
+    if not result.get("checks_ok") and not inconsistencies and not incomplete:
+        # Conservative fallback: an unclassified failure is never reported as OK.
+        inconsistencies.append("unclassified check failure")
+
+    if inconsistencies:
+        status = "inconsistent"
+    elif incomplete:
+        status = "incomplete"
+    else:
+        status = "ok"
+
+    result["status"] = status
+    result["ok"] = status == "ok"
+    result["partial"] = bool(incomplete)
+    result["inconsistencies"] = inconsistencies
+    result["incomplete_checks"] = incomplete
+    result["unreadable_count"] = len(unreadable)
 
 
 def human_size(value: int | None) -> str:
@@ -548,8 +684,12 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
     elif manifest.get("ok"):
         print(f"  {lang['ok']}: {manifest.get('matched', 0)}/{manifest.get('checked', 0)} {lang['manifest_ok']}")
     else:
+        only_unreadable = manifest.get("unreadable") and not (
+            manifest.get("missing") or manifest.get("mismatched") or manifest.get("invalid_entries")
+        )
+        label = lang["incomplete"] if only_unreadable else lang["bad"]
         print(
-            f"  {lang['bad']}: matched={manifest.get('matched', 0)} checked={manifest.get('checked', 0)} "
+            f"  {label}: matched={manifest.get('matched', 0)} checked={manifest.get('checked', 0)} "
             f"missing={len(manifest.get('missing', []))} mismatched={len(manifest.get('mismatched', []))} "
             f"unreadable={len(manifest.get('unreadable', []))} invalid={len(manifest.get('invalid_entries', []))}"
         )
@@ -598,12 +738,35 @@ def print_human(result: dict[str, Any], lang: dict[str, str], show_hashes: bool)
         print(f"{lang['partial']}: {warning}")
 
     print()
-    if result.get("partial") and result.get("checks_ok"):
-        print(lang["summary_partial"])
-    elif result.get("ok"):
+    status = result.get("status")
+    unreadable_count = result.get("unreadable_count", 0)
+    skipped = bool(result.get("manifest", {}).get("skipped"))
+    if status == "ok":
         print(lang["summary_ok"])
+    elif status == "incomplete":
+        print(lang["summary_incomplete"])
+        print()
+        if unreadable_count:
+            print(
+                lang["unreadable_one"] if unreadable_count == 1
+                else lang["unreadable_many"].format(count=unreadable_count)
+            )
+        if skipped:
+            print(lang["skipped_md5"])
+        print(lang["no_corruption"])
+        print()
+        if unreadable_count:
+            print(lang["rerun_hint"])
+        if skipped:
+            print(lang["summary_partial"])
     else:
         print(lang["summary_bad"])
+        for item in result.get("inconsistencies", []):
+            print(f"  - {item}")
+        if result.get("incomplete_checks"):
+            print(lang["also_incomplete"])
+            for item in result["incomplete_checks"]:
+                print(f"  - {item}")
 
 
 def main() -> int:

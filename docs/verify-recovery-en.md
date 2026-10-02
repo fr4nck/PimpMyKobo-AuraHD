@@ -64,7 +64,32 @@ The manifest check can be skipped for diagnostics:
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --skip-md5 --lang en
 ```
 
-In that mode the result contains `partial: true` and `ok: false`. If another check also fails, the human summary remains **INCOMPLETE OR INCONSISTENT** rather than hiding that failure behind the partial status.
+In that mode the result contains `ok: false`, `partial: true` and `status: "incomplete"`. If another check detects an anomaly, the status becomes `inconsistent` and the human summary shows **RECOVERY IS INCONSISTENT**: `--skip-md5` never hides a corruption.
+
+## The three verdicts
+
+| Displayed verdict | `status` | `ok` | `partial` | Meaning |
+|---|---|---|---|---|
+| **RECOVERY IS CONSISTENT FOR THE CHECKS PERFORMED** | `ok` | `true` | `false` | every mandatory check passed |
+| **VERIFICATION INCOMPLETE** | `incomplete` | `false` | `true` | no inconsistency was found, but at least one mandatory check could not be performed (unreadable file, `--skip-md5`) |
+| **RECOVERY IS INCONSISTENT** | `inconsistent` | `false` | `false`, or `true` if a check also could not be performed | at least one positive anomaly: missing file, MD5 mismatch, invalid manifest entry, corrupt or truncated archive, missing or empty U-Boot, invalid `uImage` |
+
+An **incomplete verification is not a validated recovery**. It only means that no corruption was detected among the files that could actually be read.
+
+Real-world case: on a recovery mounted without sufficient privileges, `bin/antiword` was not readable. The result is then:
+
+```text
+VERIFICATION INCOMPLETE
+
+1 file could not be read with the current privileges.
+No corruption was detected among the files that were verified.
+
+Re-run with the required privileges to obtain a complete verdict.
+```
+
+Re-running with `sudo` (or as administrator) is required to obtain an `ok` verdict.
+
+In JSON, `inconsistencies[]` lists the detected anomalies, `incomplete_checks[]` the checks that could not be performed, and `unreadable_count` the number of unreadable files. `checks_ok` keeps its previous meaning.
 
 ## U-Boot variants
 
@@ -87,8 +112,8 @@ The verifier distinguishes missing files, unreadable files, mismatches and inval
 ## Exit codes
 
 - `0`: all mandatory checks passed;
-- `1`: recovery is incomplete/inconsistent, or verification was deliberately partial with `--skip-md5`;
-- `2`: the recovery path is invalid or inaccessible enough to prevent verification.
+- `1`: verification incomplete (`status: "incomplete"`, including `--skip-md5`) or recovery inconsistent (`status: "inconsistent"`) — check `status` to tell them apart;
+- `2`: the recovery path is invalid or inaccessible enough to prevent verification (`status: "error"`).
 
 ## Synthetic tests
 
@@ -104,6 +129,8 @@ The test suite covers, among other cases:
 - zero-padded `uImage` files;
 - GNU escaped manifest names;
 - partial `--skip-md5` with and without another failure;
+- unreadable file (simulated `PermissionError`, portable across Linux/Windows) classified `incomplete` and never `ok`;
+- MD5 mismatch, missing file, corrupt archive and invalid `uImage` classified `inconsistent`, including alongside an unreadable file;
 - absence of write-mode source opens during verification.
 
 GitHub CI runs the tests on Linux and Windows across several Python versions. No Kobo firmware blob is included in the tests.
