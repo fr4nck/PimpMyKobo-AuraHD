@@ -8,11 +8,13 @@ The documentation is organized around two goals: **rescue** an Aura HD using dat
 
 For an Aura HD that no longer boots or whose factory reset failed:
 
-1. [Disassemble the Aura HD and access the internal microSD](disassembly-en.md) — with ASCII diagrams and sources;
+1. [Disassemble the Aura HD and access the internal microSD](disassembly-en.md) — original photos, ASCII diagrams and cited sources;
 2. [Recover files from your own Aura HD](recover-files-en.md);
 3. [Inspect the microSD read-only](inspect-aura-hd-en.md);
 4. [Verify `recoveryfs`](verify-recovery-en.md);
 5. [Understand the observed rescue procedure](rescue-en.md).
+
+For a text browser, console or SSH session: [plain-text / Lynx disassembly guide](disassembly-lynx-en.txt).
 
 ## Hardware reference
 
