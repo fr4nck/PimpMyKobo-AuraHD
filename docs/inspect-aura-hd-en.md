@@ -2,149 +2,115 @@
 
 [Français](inspect-aura-hd-fr.md) | **English**
 
-`tools/inspect-aura-hd.py` avoids manual handling of disk numbers, offsets and binary structures.
+`tools/inspect-aura-hd.py` inspects a complete microSD, a disk image, or local disks in order to identify a Kobo Aura HD / Dragon / E606C0.
 
-It works **strictly read-only**: sources are always opened using Python `rb` mode and the tool contains no write path to a physical disk.
+The tool is **strictly read-only**: no source is opened for writing and no filesystem is mounted.
 
-## What the tool does
+## What the tool checks
 
-With no argument, it scans accessible disks and then:
+It:
 
 1. reads the MBR;
-2. looks for the `HW CONFIG ` signature at Netronix offset `0x80000`;
+2. looks for `HW CONFIG ` at Netronix offset `0x80000`;
 3. reads the HWCONFIG version and payload size;
-4. decodes the known v1.7 fields;
-5. recognizes the studied Aura HD when `bPCB = 28`, i.e. `E606C0 / Dragon`;
-6. reads the four MBR partition entries;
-7. detects ext and FAT signatures directly without mounting partitions;
-8. reports `rootfs`, `recoveryfs` and `KOBOeReader` labels when present;
-9. can optionally compute SHA-256 of the entire raw area before P1.
+4. confirms an Aura HD only for `HW CONFIG v1.7`, a 39-byte payload and `bPCB = 28`;
+5. reports PCB 28 in any other format as probable but unconfirmed;
+6. validates MBR boot indicators, overlaps and, when source size is known, partitions extending beyond the medium;
+7. detects ext and FAT signatures and labels without mounting partitions;
+8. can compute SHA-256 of the raw pre-P1 area, only after positive identification and a valid MBR.
 
-The tool does **not** assume that the Kobo is `PhysicalDrive2`, `/dev/sdb`, or any other fixed device name.
+Low-level reads are aligned to 512 bytes, notably for Windows `\\.\PhysicalDriveN` handles.
 
-## Requirements
+## Important: a read-only tool does not make the medium physically read-only
 
-- Python 3.10 or newer recommended;
-- no external Python modules;
-- Windows or Linux.
+Even though the tool writes nothing, the operating system may write to an inserted card:
 
-On Windows, raw access to `\\.\PhysicalDriveN` may require an Administrator PowerShell.
+- **Windows** may assign a drive letter to FAT32 P3 and offer to format the ext4 partitions: always cancel format prompts and avoid opening the user partition during diagnosis;
+- **desktop Linux** may automount a partition and replay an ext4 journal: disable automount and, where practical, mark the block device read-only in the kernel after identifying it with certainty.
 
-On Linux, reading a raw block device may require `sudo`.
+For deeper analysis, working from a local image remains preferable.
 
-## Windows: automatic detection
+## Windows
+
+Raw access to `\\.\PhysicalDriveN` normally requires an Administrator PowerShell.
 
 From the repository root:
 
 ```powershell
-python .\tools\inspect-aura-hd.py
-```
-
-The tool calls `Get-Disk` to obtain the current disk list and then attempts read-only opens only.
-
-To also report skipped or inaccessible disks:
-
-```powershell
-python .\tools\inspect-aura-hd.py --verbose
-```
-
-To additionally hash the region from byte 0 to the actual beginning of P1:
-
-```powershell
 python .\tools\inspect-aura-hd.py --hash-boot
 ```
+
+The tool uses `Get-Disk` to obtain current disk numbers and sizes. If PowerShell is missing, `Get-Disk` fails, or the command times out, disk-enumeration diagnostics are shown instead of blindly scanning physical-drive numbers.
+
+To also display ordinary skipped devices:
+
+```powershell
+python .\tools\inspect-aura-hd.py --verbose --hash-boot
+```
+
+Actual read errors are reported even without `--verbose`.
 
 ## Linux
 
 From the repository root:
 
 ```bash
-sudo python3 ./tools/inspect-aura-hd.py
+sudo python3 ./tools/inspect-aura-hd.py --hash-boot
 ```
 
-The scan uses `/sys/block` and does not rely on a predefined device name.
+The scan uses `/sys/block`. `loop`, `nbd`, `rpmb` and boot pseudo-devices are skipped to reduce noise.
+
+For an explicitly supplied block device, the tool also attempts a seek-to-end size query when `fstat` does not expose a usable size.
 
 ## WSL
 
-WSL does not necessarily expose a Windows USB card reader as a Linux block device. In that case, running the tool with Windows Python from PowerShell is the recommended approach.
+WSL does not necessarily expose a Windows USB card reader as a Linux block device. In that case, running the inspector with Windows Python from PowerShell is recommended.
 
-The tool also accepts, as a positional argument, the path to a complete disk image or an explicitly selected raw device. Supplying a path disables automatic disk scanning for that run.
+## Explicit source
 
-## Expected output on an E606C0
+The tool also accepts a complete disk image or an explicitly chosen raw device as a positional argument. Supplying a path disables automatic scanning for that run.
 
-The tool should recover at least:
+Open/read errors are always shown for an explicit source.
+
+## Expected output on the studied E606C0 unit
 
 ```text
 KOBO AURA HD IDENTIFIED
 HWCONFIG: v1.7 @ 0x80000, 39 bytes
 PCB: 28 -> E606C0
 Identification: Kobo Aura HD / Dragon / E606C0
-  RAM: 3 -> 512MB
-  RAM type: 2 -> K4X2G323PC
-  CPU: 2 -> mx50
-  CPU frequency: 2 -> 1G
-  Display: 3 -> 1440x1080
-  Frontlight: 6 -> TABLE3+
-  Hall sensor: 1 -> TLE4913
-  Display bus: 3 -> 16Bits_mirror
-  Frontlight LED driver: 0 -> SY7201
 ```
 
-It then prints the partition layout actually read from the MBR. On the studied device, for example:
+Partition data is then read directly from the medium. On the studied unit:
 
 ```text
-P1: offset=9,961,472    size=268,435,968  ext label="rootfs"
-P2: offset=278,397,440  size=268,435,968  ext label="recoveryfs"
-P3: offset=546,833,408  ...              FAT32 label="KOBOeReader"
+P1: offset=9,961,472    size=268,435,968  type=0x83  ext label="rootfs"
+P2: offset=278,397,440  size=268,435,968  type=0x83  ext label="recoveryfs"
+P3: offset=546,833,408  ...              type=0x0C  FAT32 label="KOBOeReader"
 ```
 
-Those offsets are not used to arbitrarily identify the disk. They are displayed after reading that disk's own partition table.
+These values are never used to arbitrarily choose a disk.
 
 ## JSON output
 
-To reuse the result in future scripts:
-
 ```powershell
-python .\tools\inspect-aura-hd.py --json
+python .\tools\inspect-aura-hd.py --json --lang en
 ```
 
-The output includes the inspected source, disk metadata, MBR, partitions, decoded HWCONFIG fields, E606C0 identification and detected filesystem labels.
-
-## French output
-
-French is the default. It can be selected explicitly with:
-
-```powershell
-python .\tools\inspect-aura-hd.py --lang fr
-```
+The JSON document contains `schema_version`, `discovery_errors`, and `results`. Each result exposes fields including `source_size`, `errors[]`, `warnings[]`, MBR data and HWCONFIG data.
 
 ## Exit codes
 
-- `0`: an E606C0 Aura HD was identified;
-- `1`: no E606C0 Aura HD was identified.
+- `0`: confirmed E606C0 Aura HD with no blocking inconsistency detected;
+- `1`: no confirmed Aura HD and no access failure preventing diagnosis;
+- `2`: access/read error, blocking enumeration failure, or a confirmed Aura HD with a blocking inconsistency.
 
-## Check `recoveryfs` contents next
+A normal GPT disk or another simply unsupported medium is therefore not treated as an access error.
 
-The inspector detects P2 and its `recoveryfs` label directly from filesystem structures, but intentionally does not walk the ext4 directory tree from the raw physical disk.
+## Check `recoveryfs` next
 
-The following files are checked by the separate [`verify-recovery.py`](verify-recovery-en.md) tool from a read-only mount or copy of P2:
+The inspector intentionally does not walk the ext4 tree from the raw disk. To check `fs.tgz`, `db.tgz`, U-Boot and the kernel, use [`verify-recovery.py`](verify-recovery-en.md) on an image or an explicitly read-only mount.
 
-```text
-/upgrade/fs.tgz
-/upgrade/db.tgz
-/upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin
-/upgrade/ntx508/uImage-E606C0
-```
+## Tests
 
-Keeping these jobs separate minimizes the amount of code that ever touches the physical device.
-
-## Safety
-
-The design follows four rules:
-
-- no `r+b`, `wb` or equivalent opens;
-- no hard-coded disk number;
-- identification from data actually read from the medium;
-- no write operation even after a positive identification.
-
-The goal is to make a diagnostic command safe enough that a mistaken device assumption cannot turn into data destruction.
+Synthetic tests include the complete inspection path through a fake reader that rejects every unaligned low-level read. GitHub CI runs the suite on Linux and Windows across several Python versions.

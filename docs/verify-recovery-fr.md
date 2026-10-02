@@ -10,81 +10,131 @@ L'outil ne monte pas lui-même la microSD et n'écrit jamais dans le recovery.
 
 Par défaut :
 
-- présence de `fs.md5sum` ;
-- vérification de chaque fichier couvert par ce manifeste ;
-- lecture intégrale de `upgrade/fs.tgz` en tant qu'archive **tar+gzip** ;
-- lecture intégrale de `upgrade/db.tgz` en tant qu'archive **tar+gzip** ;
-- comptage des entrées réellement lisibles dans chaque archive ;
-- présence de l'U-Boot Aura HD E606C0 :
-  `upgrade/ntx508/u-boot_mddr_512-E606C0-K4X2G323PC.bin` ;
-- présence du kernel Aura HD E606C0 :
-  `upgrade/ntx508/uImage-E606C0`.
+- présence et cohérence de `fs.md5sum` ;
+- lecture complète de `upgrade/fs.tgz` et `upgrade/db.tgz` ;
+- validation du flux gzip jusqu'au footer afin de vérifier CRC32, ISIZE et troncatures ;
+- présence des deux blocs nuls de 512 octets qui marquent la fin correcte d'une archive tar ;
+- lecture de toutes les entrées tar et de tout le contenu des fichiers réguliers ;
+- refus d'une archive vide ou ne contenant aucun fichier régulier ;
+- présence d'au moins un U-Boot `u-boot_mddr_512-E606C0-*.bin` non vide ;
+- validation du kernel `uImage-E606C0` comme image U-Boot legacy : magic `0x27051956`, CRC d'en-tête, taille déclarée et CRC des données ;
+- acceptation d'un éventuel remplissage nul après les données déclarées du `uImage`, mais refus de tout octet non nul dans cette zone ;
+- refus des chemins critiques qui sortent de l'arborescence recovery via lien symbolique ou traversal.
 
-La validation des `.tgz` ne se contente donc pas de leur en-tête gzip : le flux est parcouru jusqu'au bout et la structure tar est également lue, sans extraction sur disque.
+Aucun fichier n'est extrait sur disque pendant ces contrôles.
 
-Avec `--hash-files`, l'outil calcule aussi le SHA-256 des deux archives et des deux fichiers E606C0 afin de permettre à l'utilisateur de documenter sa propre sauvegarde privée.
+Avec `--hash-files`, l'outil calcule aussi le SHA-256 des deux archives, de tous les candidats U-Boot E606C0 valides et du kernel.
+
+## Pourquoi le marqueur de fin tar est vérifié
+
+Un flux gzip peut être parfaitement valide alors qu'il contient un tar tronqué, par exemple si une production `tar | gzip` est interrompue mais que gzip termine proprement son flux. Une simple vérification gzip, ou une lecture tar qui s'arrête silencieusement, peut alors produire un faux positif.
+
+Le vérificateur exige donc explicitement les **1024 octets nuls de fin tar** avant de déclarer l'archive cohérente.
 
 ## Préparation recommandée
 
-Il est préférable de travailler sur une image de P2 et de la monter explicitement en lecture seule sans rejouer le journal ext4 :
+Travailler de préférence sur une **copie de P2**, pas directement sur la carte originale.
+
+Montage d'une image P2 déjà copiée :
 
 ```bash
 sudo mkdir -p /mnt/aurahd-recovery
 sudo mount -o loop,ro,noload AuraHD-p2-recovery.img /mnt/aurahd-recovery
 ```
 
-La procédure permettant de retrouver et copier P2 est décrite dans [Retrouver les fichiers de recovery](retrouver-fichiers-fr.md).
+`ro,noload` évite le rejeu du journal ext4 de l'image montée.
 
 ## Utilisation
-
-Depuis la racine du dépôt :
-
-```bash
-sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery
-```
-
-Pour conserver aussi les empreintes SHA-256 :
 
 ```bash
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
 ```
 
-Sortie JSON exploitable par d'autres outils :
+Sortie JSON :
 
 ```bash
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --json
 ```
 
-Le contrôle du manifeste peut être ignoré ponctuellement avec `--skip-md5`, mais ce mode réduit fortement la valeur du diagnostic.
+## `--skip-md5` n'est pas un verdict vert
 
-## Pourquoi les droits root peuvent être nécessaires
+Le contrôle du manifeste peut être ignoré pour du diagnostic :
 
-Sur le recovery étudié, `bin/antiword` n'était pas lisible par un utilisateur ordinaire. Le manifeste paraissait donc en échec sans `sudo`, alors que les fichiers étaient conformes.
+```bash
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --skip-md5
+```
 
-L'outil distingue notamment :
+Dans ce cas, le résultat contient `ok: false`, `partial: true` et `status: "incomplete"`. Si un autre contrôle détecte une anomalie, le statut devient `inconsistent` et le résumé humain affiche **RECOVERY INCOHÉRENT** : `--skip-md5` ne masque jamais une corruption.
 
-- fichier absent ;
-- fichier illisible ;
-- empreinte MD5 incorrecte ;
-- ligne de manifeste invalide ;
-- archive gzip ou tar corrompue ;
-- fichier E606C0 attendu absent.
+## Les trois verdicts
+
+| Verdict affiché | `status` | `ok` | `partial` | Signification |
+|---|---|---|---|---|
+| **RECOVERY COHÉRENT POUR LES CONTRÔLES EFFECTUÉS** | `ok` | `true` | `false` | tous les contrôles obligatoires ont réussi |
+| **VÉRIFICATION INCOMPLÈTE** | `incomplete` | `false` | `true` | aucune incohérence trouvée, mais au moins un contrôle obligatoire n'a pas pu être effectué (fichier illisible, `--skip-md5`) |
+| **RECOVERY INCOHÉRENT** | `inconsistent` | `false` | `false`, ou `true` si un contrôle n'a pas non plus pu être effectué | au moins une anomalie positive : fichier absent, MD5 incorrect, entrée de manifeste invalide, archive corrompue ou tronquée, U-Boot absent ou vide, `uImage` invalide |
+
+Une **vérification incomplète n'est pas un recovery validé**. Elle signifie seulement qu'aucune corruption n'a été détectée parmi les fichiers effectivement lus.
+
+Cas réel : sur un recovery monté sans les droits suffisants, `bin/antiword` n'était pas lisible. Le résultat est alors :
+
+```text
+VÉRIFICATION INCOMPLÈTE
+
+1 fichier n'a pas pu être lu avec les droits actuels.
+Aucune corruption n'a été détectée parmi les fichiers vérifiés.
+
+Relancez avec les droits nécessaires pour obtenir un verdict complet.
+```
+
+Relancer avec `sudo` (ou en administrateur) est nécessaire pour obtenir un verdict `ok`.
+
+En JSON, `inconsistencies[]` liste les anomalies détectées, `incomplete_checks[]` les contrôles non effectués et `unreadable_count` le nombre de fichiers illisibles. `checks_ok` conserve sa signification antérieure.
+
+## Variantes U-Boot
+
+Le vérificateur accepte les fichiers correspondant au motif :
+
+```text
+u-boot_mddr_512-E606C0-*.bin
+```
+
+Un fichier vide est refusé. Si un seul candidat valide est présent, il peut être retenu comme candidat unique. Si plusieurs variantes sont présentes, aucune n'est sélectionnée automatiquement : le résultat le signale afin qu'un futur outil de restauration choisisse à partir du HWCONFIG / type de RAM plutôt que d'une simple position alphabétique.
+
+## Manifestes `fs.md5sum`
+
+Les chemins absolus, `../` et liens symboliques qui sortent du recovery sont refusés.
+
+Les noms de fichiers échappés au format GNU `md5sum` sont décodés uniquement lorsque la ligne est réellement préfixée par `\`. Les séquences `\n`, `\r` et `\\` sont prises en charge.
+
+L'outil distingue fichier absent, fichier illisible, empreinte incorrecte et entrée de manifeste invalide.
 
 ## Codes de sortie
 
-- `0` : tous les contrôles demandés sont conformes ;
-- `1` : au moins un contrôle demandé est absent, illisible ou incorrect.
+- `0` : tous les contrôles obligatoires sont conformes ;
+- `1` : vérification incomplète (`status: "incomplete"`, y compris `--skip-md5`) ou recovery incohérent (`status: "inconsistent"`) — consulter `status` pour les distinguer ;
+- `2` : chemin recovery invalide ou inaccessible au point d'empêcher le contrôle (`status: "error"`).
 
 ## Tests synthétiques
 
-Le dépôt contient des tests qui construisent de petites archives tar+gzip et un faux recovery temporaire, sans intégrer aucun firmware Kobo :
+La suite de tests couvre notamment :
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+- gzip tronqué et CRC corrompu ;
+- gzip valide contenant un tar tronqué ;
+- archive ne contenant que des répertoires ;
+- données parasites ;
+- traversal et lien symbolique sortant ;
+- U-Boot vide, variante RAM et variantes multiples ;
+- magic/CRC `uImage` invalides ;
+- `uImage` complété par des zéros ;
+- manifeste GNU échappé ;
+- `--skip-md5` partiel avec et sans autre erreur ;
+- fichier illisible (`PermissionError` simulée, portable Linux/Windows) classé `incomplete` et jamais `ok` ;
+- MD5 incorrect, fichier absent, archive corrompue et `uImage` invalide classés `inconsistent`, y compris avec un fichier illisible ;
+- absence d'ouverture en écriture pendant la vérification.
+
+La CI GitHub exécute les tests sous Linux et Windows sur plusieurs versions de Python. Aucun blob Kobo n'est inclus dans les tests.
 
 ## Sécurité
 
-Le chemin source est uniquement ouvert en lecture. L'outil n'a aucune fonction de réparation, d'extraction ou d'écriture vers la microSD.
-
-Le contrôle permet donc de décider si le recovery constitue une base crédible avant de lancer une reconstruction locale de P1.
+Le vérificateur ne répare rien et n'écrit rien. Il sert uniquement à décider si une copie de `recoveryfs` constitue une base suffisamment cohérente pour une reconstruction locale ultérieure.

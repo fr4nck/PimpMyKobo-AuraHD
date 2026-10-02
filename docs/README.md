@@ -31,6 +31,8 @@ Les scripts sont dans [`../tools/`](../tools/).
 
 Les deux outils actuels sont conçus pour ne jamais écrire sur la microSD.
 
+Avant toute inspection sous Windows : [protéger la microSD](windows-preservation-fr.md).
+
 ## Données non publiées
 
 Le dépôt ne contient volontairement pas les dumps de microSD, `fs.tgz`, `db.tgz`, images P1/P2, U-Boot précompilés, kernels précompilés ni futures extractions de waveform provenant d'une liseuse.

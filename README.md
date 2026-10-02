@@ -26,7 +26,7 @@ Le projet poursuit deux buts complémentaires :
 - résolution 1440 × 1080
 - stockage système sur microSD interne
 
-## Découvertes confirmées
+## Valeurs observées sur l'exemplaire étudié
 
 L'exemplaire étudié contient un bloc `HW CONFIG v1.7` à l'offset `0x80000` (`524288`).
 
@@ -44,7 +44,7 @@ L'exemplaire étudié contient un bloc `HW CONFIG v1.7` à l'offset `0x80000` (`
 | DisplayBusWidth | `16Bits_mirror` |
 | FrontLight LED driver | `SY7201` |
 
-La version v1.7 contient 39 octets de configuration. Le champ ajouté après `PCB_Flags` est `FrontLight_LED_Driver`.
+La version v1.7 observée contient 39 octets de configuration. Le champ ajouté après `PCB_Flags` est `FrontLight_LED_Driver`.
 
 ## Sources Kobo retrouvées
 
@@ -118,13 +118,7 @@ Conséquence observée :
 - P2 `recoveryfs` : intacte et cohérente ;
 - P3 `KOBOeReader` : recréée par la procédure de recovery.
 
-Le script de récupération Kobo présent dans `recoveryfs` :
-
-1. sélectionne U-Boot et le kernel adaptés au matériel ;
-2. reformate P1 en ext4 `rootfs` ;
-3. reformate P3 en FAT32 `KOBOeReader` ;
-4. extrait `upgrade/fs.tgz` dans P1 ;
-5. extrait `upgrade/db.tgz` dans P3.
+Le script de récupération Kobo présent dans `recoveryfs` lit le HWCONFIG, sélectionne les artefacts matériels lorsqu'ils sont disponibles, reformate P1/P3 puis extrait `upgrade/fs.tgz` dans P1 et `upgrade/db.tgz` dans P3.
 
 La partition recovery de l'exemplaire étudié contient notamment :
 
@@ -147,7 +141,7 @@ Cette procédure montre qu'une Aura HD dont `rootfs` a été vidée peut parfois
 
 ### `inspect-aura-hd.py`
 
-Inspecteur Python sans dépendance externe et strictement en lecture seule. Il récupère la liste actuelle des disques, lit leur MBR et leur HWCONFIG, reconnaît `E606C0 / Dragon`, décode les principaux paramètres matériels et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
+Inspecteur Python sans dépendance externe et strictement en lecture seule. Il récupère la liste actuelle des disques, lit leur MBR et leur HWCONFIG, confirme `E606C0 / Dragon` uniquement avec le format HWCONFIG attendu et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
 
 Sous Windows :
 
@@ -159,7 +153,7 @@ Voir [la documentation de l'inspecteur](docs/inspect-aura-hd-fr.md).
 
 ### `verify-recovery.py`
 
-Vérificateur en lecture seule d'une partition `recoveryfs` déjà montée ou copiée localement. Il contrôle le manifeste `fs.md5sum`, lit intégralement `fs.tgz` et `db.tgz`, vérifie la présence des fichiers E606C0 et peut calculer leurs SHA-256.
+Vérificateur en lecture seule d'une partition `recoveryfs` déjà montée ou copiée localement. Il contrôle `fs.md5sum`, le flux gzip complet, les marqueurs de fin tar, le contenu des archives, les artefacts E606C0 et peut calculer leurs SHA-256.
 
 ```bash
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
@@ -167,7 +161,7 @@ sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
 
 Voir [la documentation de `verify-recovery`](docs/verify-recovery-fr.md).
 
-Des tests synthétiques sans firmware Kobo sont présents dans `tests/` et utilisent uniquement la bibliothèque standard Python.
+Des tests synthétiques sans firmware Kobo sont présents dans `tests/`. La CI les exécute sous Linux et Windows avec Python 3.10 à 3.13.
 
 ## Philosophie de publication
 
@@ -190,6 +184,13 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - vérification cryptographique après écriture ;
 - conservation de `recoveryfs` et du HWCONFIG autant que possible.
 
+### Attention aux écritures du système d'exploitation
+
+« Outil en lecture seule » ne signifie pas que le système hôte ne peut rien écrire sur la carte.
+
+- Sous Windows, toujours **annuler** les propositions de formatage des partitions ext4 et éviter d'ouvrir inutilement P3 FAT32 pendant une opération de préservation.
+- Sous Linux de bureau, désactiver l'automontage : un montage ext4 en lecture-écriture peut rejouer le journal. Pour les manipulations sensibles, préférer une image locale ou placer le périphérique identifié en lecture seule côté noyau avant analyse.
+
 ## État du projet
 
 - [x] Sources officielles Aura HD retrouvées
@@ -204,6 +205,7 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [x] Outil `inspect-aura-hd` en lecture seule
 - [x] Outil `verify-recovery` en lecture seule
 - [x] Tests synthétiques sans blobs Kobo
+- [x] CI Linux/Windows Python 3.10–3.13
 - [ ] Valider `inspect-aura-hd` sur la microSD physique via le lecteur Windows
 - [ ] Extraire et documenter précisément la waveform E-Ink
 - [ ] Écrire les outils de sauvegarde et de reconstruction locale

@@ -29,7 +29,7 @@ Un `e2fsck -f -n` sur P1 ne signalait pas d'erreur structurelle, car le système
 Le script `recoveryfs:/etc/init.d/rcS` :
 
 1. lit le HWCONFIG ;
-2. sélectionne éventuellement U-Boot et le kernel adaptés ;
+2. sélectionne éventuellement U-Boot et le kernel adaptés lorsqu'un fichier correspondant existe ;
 3. reformate P1 en ext4 avec le label `rootfs` ;
 4. reformate P3 en FAT32 avec le label `KOBOeReader` ;
 5. monte P1 ;
@@ -37,7 +37,7 @@ Le script `recoveryfs:/etc/init.d/rcS` :
 7. monte P3 ;
 8. extrait `/upgrade/db.tgz` dans P3.
 
-Une coupure ou une erreur entre le formatage et l'extraction de `fs.tgz` laisse donc exactement le type de P1 vide observé ici.
+Une coupure ou une erreur entre le formatage et l'extraction de `fs.tgz` peut donc laisser le type de P1 vide observé ici.
 
 ## Fichiers de recovery observés
 
@@ -61,7 +61,9 @@ Son manifeste `fs.md5sum` a été vérifié intégralement en root.
     gzip -t upgrade/fs.tgz
     gzip -t upgrade/db.tgz
 
-Les deux archives ont été validées.
+Les deux archives ont été validées lors du sauvetage initial.
+
+Le vérificateur actuel du projet va plus loin : il contrôle également les marqueurs de fin tar, chaque entrée et chaque contenu de fichier régulier. Voir [Vérifier recoveryfs](verify-recovery-fr.md).
 
 `fs.tgz` contenait 2529 entrées et environ 160,8 Mo décompressés.
 
@@ -122,3 +124,11 @@ L'objectif est de fournir les outils permettant à chaque propriétaire d'utilis
 - reconstruire et contrôler les images hors ligne ;
 - relire les octets écrits et comparer leur empreinte ;
 - ne jamais coder en dur un numéro de disque physique dans un outil distribué.
+
+### Le système d'exploitation peut écrire même si l'outil ne le fait pas
+
+Avant tout diagnostic sur la carte originale :
+
+- sous Windows, **annuler toute proposition de formatage** des partitions ext4 et éviter d'ouvrir inutilement la partition FAT32 ;
+- sous Linux de bureau, désactiver l'automontage : un montage ext4 en lecture-écriture peut rejouer le journal ;
+- pour les contrôles approfondis, privilégier une copie/image locale montée avec `ro,noload` plutôt que la carte originale.

@@ -31,6 +31,8 @@ Scripts live in [`../tools/`](../tools/).
 
 Both current tools are designed so they never write to the microSD source.
 
+Before any inspection on Windows: [protect the microSD](windows-preservation-en.md).
+
 ## Data intentionally not published
 
 The repository intentionally excludes complete microSD dumps, `fs.tgz`, `db.tgz`, P1/P2 images, prebuilt U-Boot images, prebuilt kernels and future waveform extractions originating from a reader.
