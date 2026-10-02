@@ -48,9 +48,9 @@ Si la taille du support ne peut pas être déterminée, l'outil vérifie que le 
 - Elle doit être donnée explicitement et ne pas exister, ou être un dossier vide. Toute collision est refusée.
 - L'espace libre est vérifié avant copie : composants demandés + 16 Mio de marge.
 - L'outil refuse une destination située **sur la carte source** lorsque cela peut être déterminé :
-  - sous Linux, via `/sys/dev/block` et `/proc/self/mountinfo` ;
+  - sous Linux, via `/sys/dev/block` et `/proc/self/mountinfo`, en suivant les empilements dm (LUKS, LVM), md et loop jusqu'au disque réel ;
   - sous Windows, via `Get-Partition -DriveLetter`, une requête en lecture seule.
-- Si ce n'est pas déterminable (chemin réseau, empilement LVM/dm, etc.), l'outil refuse, sauf avec `--allow-unverified-destination`. N'utilisez cette option que si vous êtes certain que la destination n'est pas sur la carte.
+- Si ce n'est pas déterminable (chemin réseau, volume Windows réparti sur plusieurs disques, périphérique virtuel d'origine inconnue, etc.), l'outil refuse, sauf avec `--allow-unverified-destination`. N'utilisez cette option que si vous êtes certain que la destination n'est pas sur la carte.
 
 ## Utilisation
 

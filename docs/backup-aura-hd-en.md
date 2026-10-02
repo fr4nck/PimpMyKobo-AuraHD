@@ -48,9 +48,9 @@ If the medium size cannot be determined, the tool checks that the last sector of
 - It must be given explicitly and must either not exist or be an empty directory. Any collision is refused.
 - Free space is checked before copying: requested components + 16 MiB margin.
 - The tool refuses a destination located **on the source card** when that can be determined:
-  - on Linux, via `/sys/dev/block` and `/proc/self/mountinfo`;
+  - on Linux, via `/sys/dev/block` and `/proc/self/mountinfo`, following dm (LUKS, LVM), md and loop stacking down to the real disk;
   - on Windows, via `Get-Partition -DriveLetter`, a read-only query.
-- When it cannot be determined (network path, LVM/dm stacking, …), the tool refuses unless `--allow-unverified-destination` is given. Only use that option if you are certain the destination is not on the card.
+- When it cannot be determined (network path, Windows volume spanning several disks, virtual device of unknown origin, …), the tool refuses unless `--allow-unverified-destination` is given. Only use that option if you are certain the destination is not on the card.
 
 ## Usage
 

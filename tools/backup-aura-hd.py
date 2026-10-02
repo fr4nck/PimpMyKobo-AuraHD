@@ -31,6 +31,9 @@ SUMS_NAME = "SHA256SUMS"
 CHUNK = 4 * 1024 * 1024  # multiple of 512: every source read stays sector-aligned
 SPACE_MARGIN = 16 * 1024 * 1024
 PROGRESS_STEP = 64 * 1024 * 1024
+SYSFS = "/sys"
+MOUNTINFO = "/proc/self/mountinfo"
+MOUNTINFO_ESCAPE_RE = re.compile(r"\\([0-7]{3})")
 WINDOWS_DRIVE_RE = re.compile(r"^\\\\[.?]\\PhysicalDrive(\d+)$", re.IGNORECASE)
 
 EXIT_COMPLETE = 0
@@ -239,14 +242,51 @@ def nearest_existing(path: Path) -> Path:
 
 
 def _sysfs_block(dev: int) -> str | None:
-    node = f"/sys/dev/block/{os.major(dev)}:{os.minor(dev)}"
+    node = os.path.join(SYSFS, "dev", "block", f"{os.major(dev)}:{os.minor(dev)}")
     return os.path.realpath(node) if os.path.exists(node) else None
+
+
+def _block_ancestry(sys_path: str, depth: int = 0) -> set[str] | None:
+    """sysfs paths of a block device and of every device it is built on.
+
+    Follows dm/md "slaves" and loop backing files, so that a destination on
+    LUKS/LVM/RAID/loop stacked over the card is still recognised. Returns None
+    when the stack cannot be resolved (the caller must then say "undetermined").
+    """
+    if depth > 16:
+        return None
+    found = {sys_path}
+    backing = os.path.join(sys_path, "loop", "backing_file")
+    if os.path.exists(backing):
+        try:
+            backing_path = Path(backing).read_text(encoding="utf-8").strip()
+            backing_dev = _sysfs_block(os.stat(backing_path).st_dev)
+        except OSError:
+            return None
+        if backing_dev is None:
+            return None
+        parents = _block_ancestry(backing_dev, depth + 1)
+        return None if parents is None else found | parents
+    slaves_dir = os.path.join(sys_path, "slaves")
+    slaves = os.listdir(slaves_dir) if os.path.isdir(slaves_dir) else []
+    if not slaves and os.sep + "virtual" + os.sep in sys_path + os.sep:
+        return None  # virtual device whose origin is unknown
+    for name in slaves:
+        parents = _block_ancestry(os.path.realpath(os.path.join(slaves_dir, name)), depth + 1)
+        if parents is None:
+            return None
+        found |= parents
+    return found
+
+
+def _unescape_mountinfo(value: str) -> str:
+    return MOUNTINFO_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 8)), value)
 
 
 def _mount_info(path: Path) -> tuple[str, str] | None:
     """(fstype, mount source) of the mount containing *path*, from /proc/self/mountinfo."""
     try:
-        lines = Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines()
+        lines = Path(MOUNTINFO).read_text(encoding="utf-8").splitlines()
     except OSError:
         return None
     target = str(path.resolve())
@@ -257,10 +297,10 @@ def _mount_info(path: Path) -> tuple[str, str] | None:
         tail = right.split()
         if len(fields) < 5 or len(tail) < 2:
             continue
-        mount_point = fields[4].replace("\\040", " ")
+        mount_point = _unescape_mountinfo(fields[4])
         if target == mount_point or target.startswith(mount_point.rstrip("/") + "/"):
             if best is None or len(mount_point) > best[0]:
-                best = (len(mount_point), tail[0], tail[1])
+                best = (len(mount_point), tail[0], _unescape_mountinfo(tail[1]))
     return (best[1], best[2]) if best else None
 
 
@@ -276,14 +316,23 @@ def _mount_source_device(path: Path) -> int | None:
     return st.st_rdev if stat.S_ISBLK(st.st_mode) else None
 
 
+def _device_numbers(source: str, existing: Path) -> tuple[int, int]:
+    """(st_rdev of the source block device, st_dev of the destination filesystem)."""
+    return os.stat(source).st_rdev, os.stat(existing).st_dev
+
+
+def _drive_letter(path: Path) -> str:
+    return os.path.splitdrive(str(path.resolve()))[0]
+
+
 def destination_on_source(source: str, kind: str, destination: Path) -> str:
     """Return not_applicable / not_on_source / on_source / undetermined."""
     existing = nearest_existing(destination)
     if kind == "image_file":
         return "not_applicable"
     if kind == "block_device" and hasattr(os, "major"):
-        source_sys = _sysfs_block(os.stat(source).st_rdev)
-        dev = os.stat(existing).st_dev
+        source_dev, dev = _device_numbers(source, existing)
+        source_sys = _sysfs_block(source_dev)
         dest_sys = _sysfs_block(dev) if os.major(dev) != 0 else None
         if dest_sys is None:
             info = _mount_info(existing)
@@ -293,12 +342,15 @@ def destination_on_source(source: str, kind: str, destination: Path) -> str:
             dest_sys = _sysfs_block(mount_dev) if mount_dev is not None else None
         if source_sys is None or dest_sys is None:
             return "undetermined"
-        if dest_sys == source_sys or dest_sys.startswith(source_sys + "/"):
+        ancestry = _block_ancestry(dest_sys)
+        if ancestry is None:
+            return "undetermined"
+        if any(p == source_sys or p.startswith(source_sys + os.sep) for p in ancestry):
             return "on_source"
         return "not_on_source"
     if kind == "windows_physical_drive":
         number = int(WINDOWS_DRIVE_RE.match(source).group(1))  # type: ignore[union-attr]
-        drive = os.path.splitdrive(str(existing.resolve()))[0]
+        drive = _drive_letter(existing)
         if not re.match(r"^[A-Za-z]:$", drive):
             return "undetermined"
         command = [

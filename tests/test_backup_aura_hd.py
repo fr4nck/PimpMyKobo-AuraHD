@@ -410,5 +410,132 @@ class SafetyTests(BackupTestCase):
         self.assertEqual((dest / "p2-recoveryfs.img").read_bytes(), self.data[P2 : P2 + P2_SIZE])
 
 
+
+@unittest.skipUnless(hasattr(os, "makedev") and os.name != "nt", "Linux sysfs semantics")
+class LinuxDestinationDetectionTests(unittest.TestCase):
+    """Fake /sys tree: the card is sdb (8:16), an unrelated disk is nvme0n1."""
+
+    def setUp(self) -> None:
+        self._td = tempfile.TemporaryDirectory()
+        self.root = Path(self._td.name)
+        self.sys = self.root / "sys"
+        dev_block = self.sys / "dev" / "block"
+        dev_block.mkdir(parents=True)
+        devices = {
+            (8, 16): "devices/pci/usb/block/sdb",
+            (8, 19): "devices/pci/usb/block/sdb/sdb3",
+            (259, 2): "devices/pci/nvme/block/nvme0n1/nvme0n1p2",
+            (253, 0): "devices/virtual/block/dm-0",
+            (253, 1): "devices/virtual/block/dm-1",
+            (253, 9): "devices/virtual/block/dm-9",
+            (7, 0): "devices/virtual/block/loop0",
+        }
+        for (major, minor), rel in devices.items():
+            (self.sys / rel).mkdir(parents=True, exist_ok=True)
+            (dev_block / f"{major}:{minor}").symlink_to(self.sys / rel)
+        for dm, slave in (("dm-0", "pci/usb/block/sdb/sdb3"), ("dm-1", "pci/nvme/block/nvme0n1/nvme0n1p2")):
+            slaves = self.sys / "devices" / "virtual" / "block" / dm / "slaves"
+            slaves.mkdir()
+            (slaves / slave.rsplit("/", 1)[1]).symlink_to(self.sys / "devices" / slave)
+        self.dest = self.root / "dest"
+        self.dest.mkdir()
+        self.patches = [mock.patch.object(backup, "SYSFS", str(self.sys))]
+        for patch in self.patches:
+            patch.start()
+
+    def tearDown(self) -> None:
+        for patch in self.patches:
+            patch.stop()
+        self._td.cleanup()
+
+    def check(self, dest_dev: tuple[int, int]) -> str:
+        numbers = (os.makedev(8, 16), os.makedev(*dest_dev))
+        with mock.patch.object(backup, "_device_numbers", return_value=numbers):
+            return backup.destination_on_source("/dev/sdb", "block_device", self.dest)
+
+    def test_partition_of_the_card_is_on_source(self) -> None:
+        self.assertEqual(self.check((8, 19)), "on_source")
+
+    def test_other_disk_is_not_on_source(self) -> None:
+        self.assertEqual(self.check((259, 2)), "not_on_source")
+
+    def test_dm_volume_stacked_on_the_card_is_on_source(self) -> None:
+        self.assertEqual(self.check((253, 0)), "on_source")
+
+    def test_dm_volume_on_other_disk_is_not_on_source(self) -> None:
+        self.assertEqual(self.check((253, 1)), "not_on_source")
+
+    def test_virtual_device_without_origin_is_undetermined(self) -> None:
+        self.assertEqual(self.check((253, 9)), "undetermined")
+
+    def test_loop_device_backed_by_a_file_on_the_card_is_on_source(self) -> None:
+        backing = self.root / "image on card.img"
+        backing.write_bytes(b"x")
+        st_dev = backing.stat().st_dev
+        alias = self.sys / "dev" / "block" / f"{os.major(st_dev)}:{os.minor(st_dev)}"
+        if not alias.exists():
+            alias.symlink_to(self.sys / "devices/pci/usb/block/sdb/sdb3")
+        loop = self.sys / "devices/virtual/block/loop0/loop"
+        loop.mkdir()
+        (loop / "backing_file").write_text(f"{backing}\n", encoding="utf-8")
+        self.assertEqual(self.check((7, 0)), "on_source")
+
+    def test_unknown_device_is_undetermined(self) -> None:
+        self.assertEqual(self.check((65, 1)), "undetermined")
+
+    def test_tmpfs_destination_is_not_on_source(self) -> None:
+        mountinfo = self.root / "mountinfo"
+        mountinfo.write_text(
+            f"22 1 0:21 / {self.dest} rw,nosuid shared:5 - tmpfs tmpfs rw\n", encoding="utf-8"
+        )
+        with mock.patch.object(backup, "MOUNTINFO", str(mountinfo)):
+            self.assertEqual(self.check((0, 21)), "not_on_source")
+
+    def test_mountinfo_escaped_paths_are_decoded(self) -> None:
+        spaced = self.root / "a b\\c"
+        spaced.mkdir()
+        escaped = str(spaced).replace("\\", "\\134").replace(" ", "\\040")
+        mountinfo = self.root / "mountinfo"
+        mountinfo.write_text(
+            "1 0 8:1 / / rw - ext4 /dev/nvme0n1p2 rw\n"
+            f"30 1 0:40 / {escaped} rw - btrfs /dev/disk\\040x rw\n",
+            encoding="utf-8",
+        )
+        with mock.patch.object(backup, "MOUNTINFO", str(mountinfo)):
+            self.assertEqual(backup._mount_info(spaced / "sub"), ("btrfs", "/dev/disk x"))
+
+
+class WindowsDestinationDetectionTests(unittest.TestCase):
+    SOURCE = r"\\.\PhysicalDrive2"
+
+    def check(self, drive: str, run: Any) -> str:
+        with tempfile.TemporaryDirectory() as td, \
+             mock.patch.object(backup, "_drive_letter", return_value=drive), \
+             mock.patch.object(backup.subprocess, "run", side_effect=run):
+            return backup.destination_on_source(self.SOURCE, "windows_physical_drive", Path(td))
+
+    @staticmethod
+    def disk(number: str) -> Any:
+        return lambda *a, **k: backup.subprocess.CompletedProcess(a, 0, number, "")
+
+    def test_destination_on_the_same_disk_is_on_source(self) -> None:
+        self.assertEqual(self.check("E:", self.disk("2\r\n")), "on_source")
+
+    def test_destination_on_another_disk_is_not_on_source(self) -> None:
+        self.assertEqual(self.check("D:", self.disk("0\r\n")), "not_on_source")
+
+    def test_get_partition_failure_is_undetermined(self) -> None:
+        failed = lambda *a, **k: backup.subprocess.CompletedProcess(a, 1, "", "Access denied")  # noqa: E731
+        self.assertEqual(self.check("D:", failed), "undetermined")
+
+    def test_missing_powershell_is_undetermined(self) -> None:
+        self.assertEqual(self.check("D:", FileNotFoundError("powershell")), "undetermined")
+
+    def test_volume_spanning_several_disks_is_undetermined(self) -> None:
+        self.assertEqual(self.check("D:", self.disk("1\r\n2\r\n")), "undetermined")
+
+    def test_network_path_is_undetermined(self) -> None:
+        self.assertEqual(self.check(r"\\server\share", self.disk("0")), "undetermined")
+
 if __name__ == "__main__":
     unittest.main()
