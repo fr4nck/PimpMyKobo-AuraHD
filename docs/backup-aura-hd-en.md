@@ -10,6 +10,84 @@
 
 This tool **does not restore anything**. No restore command is provided.
 
+## Quick path in 4 steps
+
+None of these commands writes to the card. Only step 3 writes, and only into the backup directory you specify.
+
+Before starting:
+
+- plug in the microSD **without opening** the drive letter Windows offers;
+- **refuse** any format prompt;
+- on Linux, disable automount;
+- plan a backup directory on **a disk other than the card**, with about 600 MiB free (plus about 30 GB with `--include-userdata`).
+
+> **The values `PhysicalDrive2`, `/dev/sdb`, `D:\Aura-backup` and `~/Aura-backup` below are examples.** Replace them with the disk actually shown in step 1 and with your own backup directory. If you pick the wrong disk, the tool refuses the backup, because it requires a confirmed E606C0 Aura HD. It never writes to the source.
+
+### Windows (Administrator PowerShell, from the repository root)
+
+1. Identify the card. Note the `Source:` line, for example `\\.\PhysicalDrive2`:
+
+   ```powershell
+   python .\tools\inspect-aura-hd.py --verbose --lang en
+   ```
+
+2. Dry run. No file is created:
+
+   ```powershell
+   python .\tools\backup-aura-hd.py \\.\PhysicalDrive2 D:\Aura-backup --dry-run --lang en
+   ```
+
+3. Back up. `D:\Aura-backup` must not exist or must be empty:
+
+   ```powershell
+   python .\tools\backup-aura-hd.py \\.\PhysicalDrive2 D:\Aura-backup --lang en
+   ```
+
+4. Verify the resulting directory. The card can be unplugged at this point:
+
+   ```powershell
+   python .\tools\verify-backup-aura-hd.py D:\Aura-backup --lang en
+   ```
+
+### Linux (from the repository root)
+
+1. Identify the card. Note the `Source:` line, for example `/dev/sdb`:
+
+   ```bash
+   sudo python3 ./tools/inspect-aura-hd.py --verbose --lang en
+   ```
+
+2. Dry run:
+
+   ```bash
+   sudo python3 ./tools/backup-aura-hd.py /dev/sdb ~/Aura-backup --dry-run --lang en
+   ```
+
+3. Back up:
+
+   ```bash
+   sudo python3 ./tools/backup-aura-hd.py /dev/sdb ~/Aura-backup --lang en
+   ```
+
+4. Verify, without `sudo` if you own the directory:
+
+   ```bash
+   python3 ./tools/verify-backup-aura-hd.py ~/Aura-backup --lang en
+   ```
+
+### Expected results
+
+| Step | Expected result | Otherwise |
+|---|---|---|
+| 1 | `KOBO AURA HD IDENTIFIED`, `PCB: 28 -> E606C0` | do not continue |
+| 2 | `Backup plan` then `Dry run (--dry-run): no file was created.` | `BACKUP REFUSED`: read the reasons, nothing was written |
+| 3 | `BACKUP COMPLETE AND VERIFIED` (exit code `0`) | `BACKUP FAILED`: keep the directory as evidence and run a new backup into a **new** directory |
+| 4 | `BACKUP VALID` (exit code `0`) | see [the verifier verdicts](verify-backup-aura-hd-en.md#the-four-verdicts) |
+
+To include P3 (books and user data), add `--include-userdata` to steps 2 and 3.
+
+Then keep the directory somewhere safe and **do not publish it**: it contains proprietary Kobo files and your personal data.
+
 ## What is backed up
 
 | File | Content | Mandatory |

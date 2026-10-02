@@ -276,7 +276,8 @@ class UnfinishedBackupTests(VerifyBackupTestCase):
         self.edit_manifest(lambda d: d.update(complete=True, status="complete"))
         self.assert_status("inconsistent")
 
-    def test_failed_backup_is_incomplete_and_failed_file_never_valid(self) -> None:
+    def failed_backup(self) -> None:
+        """Backup recorded as failed: P2 read-back diverged, pre-P1 and P1 verified."""
         original = backup.readback_sha256
 
         def corrupt(path: Path) -> tuple[str, int]:
@@ -286,14 +287,39 @@ class UnfinishedBackupTests(VerifyBackupTestCase):
             return original(path)
 
         with mock.patch.object(backup, "readback_sha256", side_effect=corrupt):
-            self.make_backup()
+            manifest = self.make_backup()
+        self.assertEqual(manifest["status"], "failed")
+
+    def test_failed_backup_is_incomplete_and_failed_file_never_valid(self) -> None:
+        self.failed_backup()
         report = self.assert_status("incomplete")
         self.assertIn("p2-recoveryfs.img.FAILED", report["leftovers"])
         self.assertNotEqual(report["components"][2]["result"], "valid")
         self.assertTrue(report["sha256sums"]["matches"], "SHA256SUMS lists only verified files")
 
+    def test_corruption_in_a_failed_backup_is_inconsistent(self) -> None:
+        # A recorded failure must never hide a corruption detected afterwards.
+        for name in ("pre-p1.bin", "p1-rootfs.img"):
+            with self.subTest(name=name):
+                self.tearDown()
+                self.setUp()
+                self.failed_backup()
+                path = self.dest / name
+                data = bytearray(path.read_bytes())
+                data[4096] ^= 0x01
+                path.write_bytes(bytes(data))
+                report = self.assert_status("inconsistent")
+                code, _ = run_main([str(self.dest)])
+                self.assertEqual(code, verifier.EXIT_INCONSISTENT)
+                self.assertTrue(report["incomplete_checks"], "the recorded failure is still reported")
+
+    def test_divergent_sha256sums_in_a_failed_backup_is_inconsistent(self) -> None:
+        self.failed_backup()
+        (self.dest / "SHA256SUMS").write_text("0" * 64 + " *pre-p1.bin\n", encoding="utf-8")
+        self.assert_status("inconsistent")
+
     def test_failed_file_promoted_to_verified_is_inconsistent(self) -> None:
-        self.test_failed_backup_is_incomplete_and_failed_file_never_valid()
+        self.failed_backup()
         self.edit_manifest(lambda d: self.component(d, "p2_recoveryfs").update(status="verified"))
         self.assert_status("inconsistent")
 

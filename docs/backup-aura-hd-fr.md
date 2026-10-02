@@ -10,6 +10,84 @@
 
 Cet outil **ne restaure rien**. Aucune commande de restauration n'est fournie.
 
+## Parcours rapide en 4 étapes
+
+Aucune de ces commandes n'écrit sur la carte. Seule l'étape 3 écrit, et uniquement dans le dossier de sauvegarde que vous indiquez.
+
+Avant de commencer :
+
+- branchez la microSD **sans ouvrir** la lettre de lecteur proposée par Windows ;
+- **refusez** toute proposition de formatage ;
+- sous Linux, désactivez l'automontage ;
+- prévoyez un dossier de sauvegarde sur **un autre disque que la carte**, avec environ 600 Mio libres (plus environ 30 Go avec `--include-userdata`).
+
+> **Les valeurs `PhysicalDrive2`, `/dev/sdb`, `D:\Aura-backup` et `~/Aura-backup` ci-dessous sont des exemples.** Remplacez-les par le disque réellement affiché à l'étape 1 et par votre propre dossier de sauvegarde. Si vous vous trompez de disque, l'outil refuse la sauvegarde, car il exige une Aura HD E606C0 confirmée. Il n'écrit jamais sur la source.
+
+### Windows (PowerShell lancé en administrateur, depuis la racine du dépôt)
+
+1. Identifier la carte. Notez la ligne `Source:`, par exemple `\\.\PhysicalDrive2` :
+
+   ```powershell
+   python .\tools\inspect-aura-hd.py --verbose
+   ```
+
+2. Simuler la sauvegarde. Aucun fichier n'est créé :
+
+   ```powershell
+   python .\tools\backup-aura-hd.py \\.\PhysicalDrive2 D:\Aura-backup --dry-run
+   ```
+
+3. Sauvegarder. Le dossier `D:\Aura-backup` ne doit pas exister ou doit être vide :
+
+   ```powershell
+   python .\tools\backup-aura-hd.py \\.\PhysicalDrive2 D:\Aura-backup
+   ```
+
+4. Vérifier le dossier obtenu. La carte peut alors être débranchée :
+
+   ```powershell
+   python .\tools\verify-backup-aura-hd.py D:\Aura-backup
+   ```
+
+### Linux (depuis la racine du dépôt)
+
+1. Identifier la carte. Notez la ligne `Source:`, par exemple `/dev/sdb` :
+
+   ```bash
+   sudo python3 ./tools/inspect-aura-hd.py --verbose
+   ```
+
+2. Simuler la sauvegarde :
+
+   ```bash
+   sudo python3 ./tools/backup-aura-hd.py /dev/sdb ~/Aura-backup --dry-run
+   ```
+
+3. Sauvegarder :
+
+   ```bash
+   sudo python3 ./tools/backup-aura-hd.py /dev/sdb ~/Aura-backup
+   ```
+
+4. Vérifier, sans `sudo` si le dossier vous appartient :
+
+   ```bash
+   python3 ./tools/verify-backup-aura-hd.py ~/Aura-backup
+   ```
+
+### Résultats attendus
+
+| Étape | Résultat attendu | Sinon |
+|---|---|---|
+| 1 | `KOBO AURA HD IDENTIFIÉE`, `PCB: 28 -> E606C0` | ne pas continuer |
+| 2 | `Plan de sauvegarde` puis `Simulation (--dry-run) : aucun fichier n'a été créé.` | `REFUS DE SAUVEGARDE` : lire les raisons, rien n'a été écrit |
+| 3 | `SAUVEGARDE COMPLÈTE ET VÉRIFIÉE` (code `0`) | `SAUVEGARDE ÉCHOUÉE` : garder le dossier comme preuve et refaire une sauvegarde dans un **nouveau** dossier |
+| 4 | `SAUVEGARDE VALIDE` (code `0`) | voir [les verdicts du vérificateur](verify-backup-aura-hd-fr.md#les-quatre-verdicts) |
+
+Pour inclure P3 (livres et données utilisateur), ajoutez `--include-userdata` aux étapes 2 et 3.
+
+Ensuite, conservez le dossier en lieu sûr et **ne le publiez pas** : il contient des fichiers Kobo propriétaires et vos données personnelles.
+
 ## Ce qui est sauvegardé
 
 | Fichier | Contenu | Obligatoire |

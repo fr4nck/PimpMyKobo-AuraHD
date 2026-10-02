@@ -34,7 +34,7 @@ Options :
 
 Si une incohérence est trouvée, le verdict est `inconsistent`, même si la sauvegarde était par ailleurs incomplète.
 
-Une sauvegarde **déclarée échouée** par l'outil de sauvegarde (par exemple une relecture de destination divergente, conservée en `.FAILED`) est classée `incomplete` : le défaut est déjà enregistré dans le manifeste, et le vérificateur confirme seulement que le reste est cohérent. Il faut refaire la sauvegarde.
+Une sauvegarde **déclarée échouée** par l'outil de sauvegarde (par exemple une relecture de destination divergente, conservée en `.FAILED`) est classée `incomplete` : le défaut est déjà enregistré dans le manifeste, et le vérificateur confirme seulement que le reste est cohérent. Il faut refaire la sauvegarde. Si le vérificateur détecte en plus une corruption (composant vérifié modifié, `SHA256SUMS` divergent…), le verdict devient `inconsistent` : un échec déclaré ne masque jamais une corruption.
 
 ## Ce qui est contrôlé
 

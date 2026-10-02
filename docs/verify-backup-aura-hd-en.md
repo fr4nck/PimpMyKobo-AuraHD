@@ -34,7 +34,7 @@ Options:
 
 If any inconsistency is found, the verdict is `inconsistent`, even if the backup was otherwise also incomplete.
 
-A backup **recorded as failed** by the backup tool (for example a divergent destination read-back, kept as `.FAILED`) is classified `incomplete`: the defect is already recorded in the manifest, and the verifier only confirms that the rest is consistent. The backup must be redone.
+A backup **recorded as failed** by the backup tool (for example a divergent destination read-back, kept as `.FAILED`) is classified `incomplete`: the defect is already recorded in the manifest, and the verifier only confirms that the rest is consistent. The backup must be redone. If the verifier also detects a corruption (modified verified component, divergent `SHA256SUMS`…), the verdict becomes `inconsistent`: a recorded failure never hides a corruption.
 
 ## What is checked
 
