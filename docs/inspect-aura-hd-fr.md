@@ -2,28 +2,37 @@
 
 **Français** | [English](inspect-aura-hd-en.md)
 
-`tools/inspect-aura-hd.py` évite les manipulations manuelles de numéros de disques, d'offsets et de structures binaires.
+`tools/inspect-aura-hd.py` inspecte une microSD complète, une image disque ou les disques locaux afin d'identifier une Kobo Aura HD / Dragon / E606C0.
 
-L'outil est **strictement en lecture seule** : la source est ouverte en `rb` et aucun chemin d'écriture vers un périphérique physique n'existe dans le script.
+L'outil est **strictement en lecture seule** : aucune source n'est ouverte en écriture et aucun montage n'est réalisé.
 
 ## Ce que l'outil vérifie
 
-Sans argument, il recherche les disques accessibles puis :
+Il :
 
 1. lit le MBR ;
-2. valide la signature, les indicateurs de boot, les limites des partitions et les chevauchements ;
-3. cherche `HW CONFIG ` à l'offset Netronix `0x80000` ;
-4. lit le HWCONFIG avec des lectures alignées sur 512 octets, nécessaires pour les disques bruts Windows ;
-5. ne confirme `E606C0 / Dragon / Aura HD` que pour le format observé `v1.7` de 39 octets ;
-6. détecte les signatures ext et FAT directement, sans monter les partitions ;
-7. signale les lectures incomplètes et les partitions situées au-delà de la taille réelle du support ;
-8. peut calculer le SHA-256 de la zone avant P1, uniquement après identification positive et validation du MBR.
+2. recherche `HW CONFIG ` à l'offset Netronix `0x80000` ;
+3. lit la version et la taille du HWCONFIG ;
+4. confirme l'Aura HD uniquement pour `HW CONFIG v1.7`, charge utile de 39 octets et `bPCB = 28` ;
+5. signale un PCB 28 dans un autre format comme probable mais non confirmé ;
+6. vérifie les indicateurs de démarrage MBR, les chevauchements et, lorsque la taille de la source est connue, les partitions qui dépassent la fin du support ;
+7. détecte les signatures ext et FAT et leurs labels sans monter les partitions ;
+8. peut calculer le SHA-256 de la zone brute avant P1, uniquement après identification positive et MBR valide.
 
-Un HWCONFIG contenant `PCB = 28` mais une version ou une taille différente est signalé comme **E606C0 probable**, pas comme identification confirmée.
+Les lectures bas niveau sont alignées sur 512 octets, notamment pour `\\.\PhysicalDriveN` sous Windows.
+
+## Important : lecture seule de l'outil ≠ support physiquement protégé
+
+Même si l'outil n'écrit rien, le système d'exploitation peut écrire sur une carte insérée :
+
+- **Windows** peut attribuer une lettre à P3 FAT32 et proposer de formater les partitions ext4 : toujours annuler une proposition de formatage et éviter d'ouvrir la partition utilisateur pendant le diagnostic ;
+- **Linux de bureau** peut automonter une partition et rejouer un journal ext4 : désactiver l'automontage et, si possible, placer le périphérique bloc en lecture seule côté noyau après l'avoir identifié avec certitude.
+
+Pour une analyse approfondie, travailler sur une image locale reste préférable.
 
 ## Windows
 
-Pour lire `\\.\PhysicalDriveN`, lancer PowerShell **en administrateur**.
+L'accès brut à `\\.\PhysicalDriveN` nécessite normalement un PowerShell lancé en administrateur.
 
 Depuis la racine du dépôt :
 
@@ -31,9 +40,15 @@ Depuis la racine du dépôt :
 python .\tools\inspect-aura-hd.py --hash-boot
 ```
 
-Le script utilise `Get-Disk` pour obtenir les numéros réellement présents. Aucun `PhysicalDriveN` n'est codé en dur.
+L'outil utilise `Get-Disk` pour récupérer les numéros et tailles actuels. Si PowerShell est absent, si `Get-Disk` échoue ou dépasse le délai, l'erreur d'énumération est affichée et la commande retourne un code d'erreur au lieu de scanner aveuglément des numéros de disques.
 
-Les erreurs d'accès ne sont plus assimilées à « pas une Kobo » : elles sont affichées explicitement. Lorsqu'une source fournie manuellement est inaccessible, le programme renvoie le code `2`.
+Pour afficher aussi les disques simplement ignorés :
+
+```powershell
+python .\tools\inspect-aura-hd.py --verbose --hash-boot
+```
+
+Les erreurs de lecture réellement rencontrées sont affichées même sans `--verbose`.
 
 ## Linux
 
@@ -43,20 +58,19 @@ Depuis la racine du dépôt :
 sudo python3 ./tools/inspect-aura-hd.py --hash-boot
 ```
 
-Le scan s'appuie sur `/sys/block` et ignore les périphériques virtuels courants (`loop`, `nbd`, `rpmb`, etc.).
+Le scan utilise `/sys/block`. Les périphériques `loop`, `nbd`, `rpmb` et les pseudo-partitions de boot sont ignorés afin de réduire le bruit.
+
+Pour un périphérique bloc fourni explicitement, l'outil tente aussi de déterminer sa taille par un seek jusqu'à la fin lorsque `fstat` ne fournit pas de taille exploitable.
 
 ## WSL
 
-WSL ne voit pas nécessairement un lecteur de cartes USB Windows comme périphérique bloc Linux. Pour un lecteur USB Windows, utiliser de préférence **Python Windows dans PowerShell administrateur**.
+WSL ne voit pas nécessairement un lecteur USB Windows comme périphérique bloc Linux. Dans ce cas, exécuter l'inspecteur avec le Python Windows depuis PowerShell est recommandé.
 
-## Important : les outils sont en lecture seule, pas nécessairement le système d'exploitation
+## Source explicite
 
-Brancher une carte peut provoquer des écritures extérieures au script.
+L'outil accepte aussi le chemin d'une image disque complète ou d'un périphérique brut explicitement choisi. Quand un chemin est fourni, le scan automatique est désactivé.
 
-- **Windows** : ne jamais accepter une proposition de formatage des partitions ext4. Éviter également d'ouvrir la partition FAT32 inutilement pendant les opérations de sauvegarde.
-- **Linux de bureau** : désactiver l'automontage avant de manipuler la carte. Un montage ext4 en lecture-écriture peut rejouer le journal.
-
-Pour travailler de façon particulièrement conservatrice sous Linux, le support peut être placé en lecture seule côté noyau avant inspection. Vérifier d'abord le vrai nom du périphérique avec `lsblk` ; les noms comme `/dev/sdX` utilisés dans la documentation sont des exemples et ne doivent jamais être copiés littéralement.
+Les erreurs d'ouverture ou de lecture sont alors toujours affichées explicitement.
 
 ## Sortie attendue sur l'exemplaire E606C0 étudié
 
@@ -67,7 +81,15 @@ PCB: 28 -> E606C0
 Identification: Kobo Aura HD / Dragon / E606C0
 ```
 
-Le script affiche ensuite les partitions réellement lues, avec leur type MBR, leur offset, leur taille, le système de fichiers détecté et le label lorsqu'il est disponible.
+Le partitionnement est ensuite lu directement depuis le support. Sur l'exemplaire étudié :
+
+```text
+P1: offset=9,961,472    size=268,435,968  type=0x83  ext label="rootfs"
+P2: offset=278,397,440  size=268,435,968  type=0x83  ext label="recoveryfs"
+P3: offset=546,833,408  ...              type=0x0C  FAT32 label="KOBOeReader"
+```
+
+Ces valeurs ne sont jamais utilisées pour choisir arbitrairement un disque.
 
 ## Sortie JSON
 
@@ -75,26 +97,20 @@ Le script affiche ensuite les partitions réellement lues, avec leur type MBR, l
 python .\tools\inspect-aura-hd.py --json
 ```
 
-Le document JSON contient `schema_version`, les résultats par source, `source_size`, `errors[]`, `warnings[]`, le MBR, le HWCONFIG décodé et les labels détectés.
+Le document JSON contient `schema_version`, `discovery_errors` et `results`. Chaque résultat expose notamment `source_size`, `errors[]`, `warnings[]`, le MBR et le HWCONFIG.
 
 ## Codes de retour
 
-- `0` : Aura HD E606C0 confirmée ;
-- `1` : aucune Aura HD confirmée, sans erreur d'accès déterminante ;
-- `2` : erreur d'accès ou de lecture empêchant le diagnostic demandé.
+- `0` : Aura HD E606C0 confirmée et aucun défaut bloquant détecté ;
+- `1` : aucune Aura HD confirmée, sans erreur d'accès empêchant le diagnostic ;
+- `2` : erreur d'accès/lecture, échec d'énumération bloquant, ou Aura confirmée avec incohérence bloquante.
+
+Un disque GPT ordinaire ou un autre support simplement non compatible n'est donc pas traité comme une erreur d'accès.
 
 ## Contrôler ensuite `recoveryfs`
 
-`inspect-aura-hd.py` ne parcourt volontairement pas l'arborescence ext4 du recovery depuis le disque brut. Utiliser ensuite [`verify-recovery.py`](verify-recovery-fr.md) sur une copie ou un montage explicitement en lecture seule.
+L'inspecteur ne parcourt pas l'arborescence ext4 depuis le disque brut. Pour contrôler `fs.tgz`, `db.tgz`, U-Boot et le kernel, utiliser [`verify-recovery.py`](verify-recovery-fr.md) sur une image ou un montage explicitement en lecture seule.
 
-## Sécurité
+## Tests
 
-Les garde-fous actuels comprennent :
-
-- ouverture source en `rb` uniquement ;
-- lectures bas niveau alignées sur 512 octets ;
-- aucun numéro de disque codé en dur ;
-- validation de la taille et de la géométrie MBR ;
-- identification stricte `v1.7 / 39 octets / PCB 28` ;
-- empreinte de boot limitée à 64 Mio et seulement après identification positive ;
-- erreurs de lecture visibles au lieu d'être transformées en faux négatifs silencieux.
+Les tests synthétiques couvrent notamment le parcours complet sur un faux lecteur qui refuse toute lecture bas niveau non alignée sur 512 octets. Une CI GitHub exécute la suite sous Linux et Windows sur plusieurs versions de Python.
