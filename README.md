@@ -30,8 +30,6 @@ Le projet poursuit deux buts complémentaires :
 
 L'exemplaire étudié contient un bloc `HW CONFIG v1.7` à l'offset `0x80000` (`524288`).
 
-Valeurs confirmées :
-
 | Champ | Valeur |
 |---|---|
 | PCB | `28` → `E606C0` |
@@ -145,21 +143,31 @@ Après écriture ciblée dans P1, le SHA-256 relu directement depuis la microSD 
 
 Cette procédure montre qu'une Aura HD dont `rootfs` a été vidée peut parfois être reconstruite à partir de sa propre partition recovery, sans télécharger d'image système tierce.
 
-## Premier outil : `inspect-aura-hd`
+## Outils actuels
 
-Le dépôt contient désormais un inspecteur autonome en Python, sans dépendance externe et **strictement en lecture seule**.
+### `inspect-aura-hd.py`
 
-Sous Windows, depuis la racine du dépôt :
+Inspecteur Python sans dépendance externe et strictement en lecture seule. Il récupère la liste actuelle des disques, lit leur MBR et leur HWCONFIG, reconnaît `E606C0 / Dragon`, décode les principaux paramètres matériels et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
+
+Sous Windows :
 
 ```powershell
-python .\tools\inspect-aura-hd.py
+python .\tools\inspect-aura-hd.py --hash-boot
 ```
 
-Il récupère la liste actuelle des disques, lit leur MBR et leur HWCONFIG, reconnaît `E606C0 / Dragon`, décode les principaux paramètres matériels et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
-
-Aucun numéro de disque n'est codé en dur. L'option `--hash-boot` calcule en plus le SHA-256 de la zone brute avant P1.
-
 Voir [la documentation de l'inspecteur](docs/inspect-aura-hd-fr.md).
+
+### `verify-recovery.py`
+
+Vérificateur en lecture seule d'une partition `recoveryfs` déjà montée ou copiée localement. Il contrôle le manifeste `fs.md5sum`, lit intégralement `fs.tgz` et `db.tgz`, vérifie la présence des fichiers E606C0 et peut calculer leurs SHA-256.
+
+```bash
+sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
+```
+
+Voir [la documentation de `verify-recovery`](docs/verify-recovery-fr.md).
+
+Des tests synthétiques sans firmware Kobo sont présents dans `tests/` et utilisent uniquement la bibliothèque standard Python.
 
 ## Philosophie de publication
 
@@ -170,25 +178,7 @@ Ce dépôt ne doit pas redistribuer :
 - `fs.tgz` ou `db.tgz` extraits d'une liseuse ;
 - les blobs Kobo précompilés lorsque leur redistribution n'est pas clairement autorisée.
 
-Le dépôt doit en revanche fournir :
-
-- documentation ;
-- scripts d'inspection ;
-- scripts de sauvegarde ;
-- outils de validation ;
-- reconstruction locale depuis les données déjà présentes sur la liseuse de l'utilisateur ;
-- garde-fous avant toute écriture.
-
-## Arborescence prévue
-
-    docs/
-    tools/
-    scripts/
-    configs/
-    patches/
-    liberated/
-
-La documentation française est la référence principale. Les traductions anglaises utilisent le suffixe `.en.md`.
+Le dépôt doit en revanche fournir documentation, inspection, validation, sauvegarde et reconstruction locale à partir des données déjà présentes sur l'appareil de l'utilisateur.
 
 ## Règles de sécurité
 
@@ -212,8 +202,10 @@ La documentation française est la référence principale. Les traductions angla
 - [x] `rootfs` reconstruite depuis `recoveryfs/upgrade/fs.tgz`
 - [x] Reconstruction vérifiée par MD5, e2fsck et SHA-256
 - [x] Outil `inspect-aura-hd` en lecture seule
+- [x] Outil `verify-recovery` en lecture seule
+- [x] Tests synthétiques sans blobs Kobo
+- [ ] Valider `inspect-aura-hd` sur la microSD physique via le lecteur Windows
 - [ ] Extraire et documenter précisément la waveform E-Ink
-- [ ] Écrire `verify-recovery`
 - [ ] Écrire les outils de sauvegarde et de reconstruction locale
 - [ ] Compiler U-Boot et le kernel de référence
 - [ ] Construire un userspace minimal moderne
@@ -222,13 +214,15 @@ La documentation française est la référence principale. Les traductions angla
 
 ## Documentation
 
+- [Index de la documentation](docs/README.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
 - [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
 - [Inspecteur Aura HD](docs/inspect-aura-hd-fr.md)
+- [Vérifier recoveryfs](docs/verify-recovery-fr.md)
 - [Matériel Aura HD](docs/hardware-fr.md)
 - [HWCONFIG Netronix](docs/hwconfig-fr.md)
 - [Partitionnement](docs/partition-layout-fr.md)
 
 ## Licence
 
-Voir [LICENSE](LICENSE).
+La licence du code propre au projet reste à choisir. Les composants et sources tiers conservent leurs licences respectives.
