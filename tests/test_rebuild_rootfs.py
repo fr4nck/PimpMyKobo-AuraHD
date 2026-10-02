@@ -14,6 +14,19 @@ SPEC.loader.exec_module(mod)
 
 
 class RebuildRootfsPreflightTests(unittest.TestCase):
+    def test_non_linux_backend_returns_without_tool_lookup(self):
+        for platform in ("win32", "darwin"):
+            with self.subTest(platform=platform):
+                with mock.patch.object(mod.sys, "platform", platform), mock.patch.object(
+                    mod.shutil, "which", side_effect=AssertionError("unexpected tool lookup")
+                ) as which:
+                    errors = mod.require_linux_backend()
+                self.assertEqual(
+                    ["rootfs construction requires Linux (native, WSL2, VM, or live USB)"],
+                    errors,
+                )
+                which.assert_not_called()
+
     def test_rejects_linux_devices(self):
         self.assertTrue(mod.looks_like_device("/dev/sdb"))
         self.assertTrue(mod.looks_like_device("/dev/mmcblk0p2"))

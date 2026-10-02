@@ -156,6 +156,7 @@ def require_linux_backend() -> list[str]:
     errors = []
     if sys.platform != "linux":
         errors.append("rootfs construction requires Linux (native, WSL2, VM, or live USB)")
+        return errors
     for tool in REQUIRED_TOOLS:
         if shutil.which(tool) is None:
             errors.append(f"required Linux tool not found: {tool}")
