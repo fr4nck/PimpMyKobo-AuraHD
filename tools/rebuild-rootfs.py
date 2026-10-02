@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -173,7 +174,6 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
     if backend_errors:
         result.update(status="failed", errors=backend_errors)
         return result
-    manifest = load_manifest(manifest_path)
     p1_size = int(result["rootfs_size"])
     part = output_path.with_name(output_path.name + ".part")
     rebuild_manifest = output_path.with_name(output_path.name + ".rebuild.json")
@@ -182,14 +182,10 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
         return result
     log: list[str] = []
     try:
-        # A regular sparse file only. Never a block device. mke2fs operates on this file.
         with part.open("xb") as handle:
             handle.truncate(p1_size)
         mk = run_checked(["mke2fs", "-q", "-t", "ext4", "-F", "-L", "rootfs", str(part)])
         log.append(mk.stdout)
-        # debugfs works directly on image files and avoids mounting or requiring root.
-        # Copy the recovery archive to a temporary local directory only after extracting
-        # it from P2 with debugfs. No physical device is involved.
         with tempfile.TemporaryDirectory(prefix="pmkb-rebuild-") as td:
             td_path = Path(td)
             fs_tgz = td_path / "fs.tgz"
@@ -198,10 +194,6 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
                 run_checked(["debugfs", "-R", f"dump -p {source} {dest}", str(recovery_path)])
                 if not dest.is_file() or dest.stat().st_size == 0:
                     raise RuntimeError(f"required recovery artifact missing or empty: {source}")
-            # e2fsprogs debugfs rdump imports a host directory preserving ordinary
-            # metadata supported by debugfs. Extract tar as the current user into an
-            # isolated tree; archive safety is checked before extraction.
-            import tarfile
             root = td_path / "root"
             root.mkdir()
             with tarfile.open(fs_tgz, "r:gz") as tf:
