@@ -89,13 +89,18 @@ def deny_reading(target: Path):
     Both Path.open and builtins.open (used by gzip/tarfile) are intercepted, so
     the test is deterministic on Linux and Windows and needs no real permissions.
     """
-    target_text = os.path.normcase(os.path.abspath(target))
+    # realpath (not abspath): on Windows the temporary directory may be given as an
+    # 8.3 short name while the verifier resolves paths to their long form.
+    def canonical(file: Any) -> str:
+        return os.path.normcase(os.path.realpath(os.fspath(file)))
+
+    target_text = canonical(target)
     original_path_open = Path.open
     original_open = builtins.open
 
     def denied(file: Any) -> bool:
         try:
-            return os.path.normcase(os.path.abspath(os.fspath(file))) == target_text
+            return canonical(file) == target_text
         except TypeError:
             return False
 
