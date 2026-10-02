@@ -102,7 +102,9 @@ En cas d'écart, le fichier est renommé en `.FAILED` : il est conservé comme p
 
 En fin de sauvegarde, la zone pré-P1 est relue pour vérifier que la carte n'a pas changé entre-temps (`identity_recheck`).
 
-Vérifier plus tard une sauvegarde :
+Vérifier plus tard une sauvegarde complète, hors ligne et sans carte connectée : [`verify-backup-aura-hd.py`](verify-backup-aura-hd-fr.md) recontrôle le manifeste, les tailles, les SHA-256, `SHA256SUMS` et l'empreinte cible.
+
+Contrôle manuel des seules empreintes :
 
 ```bash
 cd ~/Aura-backup && sha256sum -c SHA256SUMS
@@ -158,6 +160,13 @@ Ses limites :
 - elle ne dit rien de l'état de P1, P2 et P3.
 
 Elle **ne doit pas** devenir à elle seule la règle d'autorisation d'une future restauration. Les règles de restauration restent à décider explicitement.
+
+## Décisions retenues
+
+1. L'empreinte cible est un **indice de concordance**, jamais le seul critère autorisant une restauration.
+2. L'unicité de la zone pré-P1 entre deux Aura HD **reste inconnue**.
+3. La sauvegarde stricte (P1 `rootfs` reconnue) reste le comportement par défaut. Un futur mode de secours pour une P1 corrompue sera un chantier distinct, non implémenté.
+4. La sauvegarde couvre les composants sélectionnés (pré-P1, P1, P2, et P3 en option), **pas l'intégralité de la carte**.
 
 ## Données à garder privées
 

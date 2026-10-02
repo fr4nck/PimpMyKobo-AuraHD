@@ -73,6 +73,19 @@ Documentation :
 sudo python3 ./tools/backup-aura-hd.py /dev/sdX ~/Aura-backup --dry-run
 ```
 
+## `verify-backup-aura-hd.py`
+
+Vérification **hors ligne et en lecture seule** d'un dossier produit par `backup-aura-hd.py`. Aucune carte n'est nécessaire. L'outil contrôle le manifeste, les tailles et SHA-256 recalculés, `SHA256SUMS`, la géométrie, le HWCONFIG et l'empreinte cible relus dans `pre-p1.bin`. Verdicts : `valid` (0), `incomplete` (1), `inconsistent` (2), `invalid` (3). Un verdict valide prouve la cohérence avec le manifeste, ni l'authenticité ni l'aptitude à une restauration.
+
+Documentation :
+
+- [Français](../docs/verify-backup-aura-hd-fr.md)
+- [English](../docs/verify-backup-aura-hd-en.md)
+
+```bash
+python3 ./tools/verify-backup-aura-hd.py ~/Aura-backup
+```
+
 ## Tests
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.

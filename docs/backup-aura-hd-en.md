@@ -101,7 +101,9 @@ On any mismatch, the file is renamed to `.FAILED`: it is kept as evidence but ne
 
 At the end, the pre-P1 area is read again to check that the card did not change in the meantime (`identity_recheck`).
 
-To verify a backup later:
+To re-verify a complete backup later, offline and with no card connected, use [`verify-backup-aura-hd.py`](verify-backup-aura-hd-en.md): it re-checks the manifest, sizes, SHA-256 hashes, `SHA256SUMS` and the target fingerprint.
+
+Manual check of the hashes only:
 
 ```bash
 cd ~/Aura-backup && sha256sum -c SHA256SUMS
@@ -157,6 +159,13 @@ Its limits:
 - it says nothing about the state of P1, P2 and P3.
 
 It **must not** become, on its own, the authorization rule of a future restore. Restore rules remain to be decided explicitly.
+
+## Decisions adopted
+
+1. The target fingerprint is a **matching hint**, never the sole criterion authorizing a restore.
+2. The uniqueness of the pre-P1 area between two Aura HD units **remains unknown**.
+3. Strict backup (P1 `rootfs` recognized) remains the default behaviour. A future rescue mode for a corrupted P1 will be a separate work item and is not implemented.
+4. The backup covers the selected components (pre-P1, P1, P2, optional P3), **not the whole card**.
 
 ## Keep the backup private
 
