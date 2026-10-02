@@ -1,0 +1,21 @@
+# Sources externes / amont
+aurahd-src/
+kobolabs/
+okreader/
+
+# Dumps originaux et images disque
+*.bin
+*.img
+*.img.gz
+*.raw
+
+# Builds
+build/
+output/
+*.o
+*.ko
+
+# Temporaires
+*.log
+*.tmp
+*~
