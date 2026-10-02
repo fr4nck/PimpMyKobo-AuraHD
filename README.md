@@ -145,6 +145,22 @@ Après écriture ciblée dans P1, le SHA-256 relu directement depuis la microSD 
 
 Cette procédure montre qu'une Aura HD dont `rootfs` a été vidée peut parfois être reconstruite à partir de sa propre partition recovery, sans télécharger d'image système tierce.
 
+## Premier outil : `inspect-aura-hd`
+
+Le dépôt contient désormais un inspecteur autonome en Python, sans dépendance externe et **strictement en lecture seule**.
+
+Sous Windows, depuis la racine du dépôt :
+
+```powershell
+python .\tools\inspect-aura-hd.py
+```
+
+Il récupère la liste actuelle des disques, lit leur MBR et leur HWCONFIG, reconnaît `E606C0 / Dragon`, décode les principaux paramètres matériels et détecte les labels `rootfs`, `recoveryfs` et `KOBOeReader` sans monter les partitions.
+
+Aucun numéro de disque n'est codé en dur. L'option `--hash-boot` calcule en plus le SHA-256 de la zone brute avant P1.
+
+Voir [la documentation de l'inspecteur](docs/inspect-aura-hd-fr.md).
+
 ## Philosophie de publication
 
 Ce dépôt ne doit pas redistribuer :
@@ -195,8 +211,9 @@ La documentation française est la référence principale. Les traductions angla
 - [x] Cas réel de `rootfs` vidée diagnostiqué
 - [x] `rootfs` reconstruite depuis `recoveryfs/upgrade/fs.tgz`
 - [x] Reconstruction vérifiée par MD5, e2fsck et SHA-256
+- [x] Outil `inspect-aura-hd` en lecture seule
 - [ ] Extraire et documenter précisément la waveform E-Ink
-- [ ] Écrire un outil `inspect-aura-hd` en lecture seule
+- [ ] Écrire `verify-recovery`
 - [ ] Écrire les outils de sauvegarde et de reconstruction locale
 - [ ] Compiler U-Boot et le kernel de référence
 - [ ] Construire un userspace minimal moderne
@@ -206,6 +223,8 @@ La documentation française est la référence principale. Les traductions angla
 ## Documentation
 
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
+- [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
+- [Inspecteur Aura HD](docs/inspect-aura-hd-fr.md)
 - [Matériel Aura HD](docs/hardware-fr.md)
 - [HWCONFIG Netronix](docs/hwconfig-fr.md)
 - [Partitionnement](docs/partition-layout-fr.md)
