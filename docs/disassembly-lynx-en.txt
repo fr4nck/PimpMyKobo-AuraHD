@@ -186,7 +186,5 @@ CREDITS
 This documentation does not claim discovery of the disassembly method.
 It combines our real-world disassembly with the sources above.
 
-The guide's original photographs show the real PimpMyKobo-AuraHD device
+The guide's original photographs show the reader disassembled for the project
 and do not reproduce iFixit or MobileRead photographs.
-
-Photos: (c) Franck, 2026 — PimpMyKobo-AuraHD.
