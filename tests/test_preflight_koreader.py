@@ -73,8 +73,13 @@ class InputTests(unittest.TestCase):
                       mock.patch.object(pre.rebuild, 'read_ext_parameters', return_value={'label': 'rootfs'}) as params,
                       mock.patch.object(pre.subprocess, 'run', return_value=mock.Mock(returncode=code, stdout='fixture')) as run):
                     report = pre.preflight(path)
-                params.assert_called_once_with(path)
-                self.assertEqual(['e2fsck', '-f', '-n', str(path)], run.call_args.args[0])
+                # preflight() calls Path.resolve(), which on some Windows CI
+                # runners normalizes the short (8.3) temp-path form
+                # differently from the un-resolved `path` this test holds;
+                # compare the resolved identity, not raw Path equality.
+                params.assert_called_once()
+                self.assertTrue(Path(params.call_args.args[0]).samefile(path))
+                self.assertEqual(['e2fsck', '-f', '-n', str(path.resolve())], run.call_args.args[0])
                 self.assertEqual('PASS' if code == 0 else 'FAIL', report['checks']['filesystem']['status'])
                 self.assertEqual('UNQUALIFIED', report['checks']['koreader_presence']['status'])
                 self.assertFalse(report['hardware_qualified'])
