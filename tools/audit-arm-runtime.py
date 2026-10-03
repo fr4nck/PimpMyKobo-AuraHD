@@ -139,7 +139,30 @@ def bootstrap(root):
     return records, errors
 
 
-def audit(root, check_bootstrap=False):
+def storage(root):
+    """Inspect the underlying rootfs mount directory, never mount or repair P3."""
+    result = {'directories': [], 'onboard_empty': None, 'mount_verified': False}
+    for guest in ('/mnt', '/mnt/onboard'):
+        # Reject links at each level before descending, including guest-absolute
+        # links. A mount target must not redirect to another rootfs location.
+        path = root / guest.lstrip('/')
+        try:
+            info = path.lstat()
+            mode = info.st_mode
+            if not stat.S_ISDIR(mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+                raise ValueError('expected a real directory, not a file or symlink')
+            result['directories'].append({'path': guest, 'mode': format(stat.S_IMODE(mode), '04o')})
+        except (OSError, ValueError) as exc:
+            return result, [f'{guest}: {exc}']
+    try:
+        # Record only presence, never names or contents of user books.
+        result['onboard_empty'] = next((root / 'mnt/onboard').iterdir(), None) is None
+    except OSError as exc:
+        return result, [f'/mnt/onboard: {exc}']
+    return result, []
+
+
+def audit(root, check_bootstrap=False, check_storage=False):
     raw = str(root)
     if raw.startswith(('/dev', '/proc', '/sys', '\\\\.\\')):
         raise ValueError('local extracted rootfs required')
@@ -190,7 +213,12 @@ def audit(root, check_bootstrap=False):
     if check_bootstrap:
         boot_files, boot_errors = bootstrap(root)
         errors.extend(boot_errors)
-    return {'bootstrap_checked': check_bootstrap, 'bootstrap_files': boot_files,
+    storage_report = None
+    if check_storage:
+        storage_report, storage_errors = storage(root)
+        errors.extend(storage_errors)
+    return {'storage_checked': check_storage, 'storage': storage_report,
+            'bootstrap_checked': check_bootstrap, 'bootstrap_files': boot_files,
             'tool': 'audit-arm-runtime', 'status': 'failed' if errors else 'ok',
             'physical_restore_eligible': False, 'hardware_qualified': False,
             'elf_files': records, 'errors': errors}
@@ -201,9 +229,12 @@ def main():
     parser.add_argument('rootfs', help='local extracted directory; never a device or mounted card')
     parser.add_argument('--check-bootstrap', action='store_true',
                         help='also check the offline prototype launch files and POSIX execute bits')
+    parser.add_argument('--check-storage', action='store_true',
+                        help='also check the local /mnt/onboard directory required by the prototype')
     args = parser.parse_args()
     try:
-        report = audit(args.rootfs, check_bootstrap=args.check_bootstrap)
+        report = audit(args.rootfs, check_bootstrap=args.check_bootstrap,
+                       check_storage=args.check_storage)
     except (OSError, ValueError) as exc:
         report = {'status': 'failed', 'errors': [str(exc)], 'physical_restore_eligible': False}
     print(json.dumps(report, indent=2, sort_keys=True))

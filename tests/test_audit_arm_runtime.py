@@ -3,6 +3,7 @@ import os
 import struct
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location('arm_audit', Path(__file__).resolve().parents[1] / 'tools/audit-arm-runtime.py')
@@ -168,3 +169,72 @@ class BootstrapTests(unittest.TestCase):
         (self.root / 'bin/busybox').chmod(0o644)
         self.assertTrue(any('/sbin/init: bootstrap executable' in e
                             for e in audit.audit(self.root, True)['errors']))
+
+
+class StorageTests(unittest.TestCase):
+    def setUp(self):
+        RuntimeTests.setUp(self)
+        (self.root / 'bin/reader').write_bytes(binary())
+
+    def test_missing_mountpoint_fails_only_when_requested(self):
+        self.assertEqual('ok', audit.audit(self.root)['status'])
+        self.assertFalse(audit.audit(self.root)['storage_checked'])
+        report = audit.audit(self.root, check_storage=True)
+        self.assertEqual('failed', report['status'])
+        self.assertTrue(report['errors'][0].startswith('/mnt:'))
+        (self.root / 'mnt').mkdir()
+        report = audit.audit(self.root, check_storage=True)
+        self.assertTrue(report['errors'][0].startswith('/mnt/onboard:'))
+        self.assertFalse((self.root / 'mnt/onboard').exists())
+
+    def test_valid_empty_directory_does_not_claim_p3_is_mounted(self):
+        (self.root / 'mnt/onboard').mkdir(parents=True)
+        report = audit.audit(self.root, check_storage=True)
+        self.assertEqual('ok', report['status'], report)
+        self.assertTrue(report['storage']['onboard_empty'])
+        self.assertFalse(report['storage']['mount_verified'])
+        self.assertFalse(report['physical_restore_eligible'])
+        self.assertEqual(['/mnt', '/mnt/onboard'],
+                         [item['path'] for item in report['storage']['directories']])
+
+    def test_file_in_place_of_either_directory_is_refused(self):
+        reparse = mock.Mock(st_mode=audit.stat.S_IFDIR | 0o755, st_file_attributes=0x400)
+        with mock.patch.object(Path, 'lstat', return_value=reparse):
+            result, errors = audit.storage(self.root)
+            self.assertTrue(errors)
+            self.assertIsNone(result['onboard_empty'])
+        (self.root / 'mnt').write_text('keep')
+        self.assertEqual('failed', audit.audit(self.root, check_storage=True)['status'])
+        self.assertEqual('keep', (self.root / 'mnt').read_text())
+        (self.root / 'mnt').unlink()
+        (self.root / 'mnt').mkdir()
+        (self.root / 'mnt/onboard').write_text('keep')
+        self.assertEqual('failed', audit.audit(self.root, check_storage=True)['status'])
+        self.assertEqual('keep', (self.root / 'mnt/onboard').read_text())
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX symlink fixture')
+    def test_linked_mountpoint_or_parent_is_refused_without_following(self):
+        outside = self.root / 'outside'
+        outside.mkdir()
+        for relative in ('mnt', 'mnt/onboard'):
+            path = self.root / relative
+            if relative == 'mnt/onboard':
+                (self.root / 'mnt').mkdir()
+            for link in (str(outside), '/absent-guest-directory', 'absent-relative'):
+                path.symlink_to(link, target_is_directory=True)
+                result, errors = audit.storage(self.root)
+                self.assertTrue(errors, (relative, link))
+                self.assertIsNone(result['onboard_empty'])
+                path.unlink()
+        self.assertEqual([], list(outside.iterdir()))
+
+    def test_underlying_books_are_reported_without_names_or_mutation(self):
+        (self.root / 'mnt/onboard').mkdir(parents=True)
+        book = self.root / 'mnt/onboard/private title.epub'
+        book.write_bytes(b'synthetic book')
+        before = (book.read_bytes(), book.stat().st_mode, book.stat().st_mtime_ns)
+        report = audit.audit(self.root, check_storage=True)
+        self.assertEqual('ok', report['status'], report)
+        self.assertFalse(report['storage']['onboard_empty'])
+        self.assertNotIn('private title', str(report['storage']))
+        self.assertEqual(before, (book.read_bytes(), book.stat().st_mode, book.stat().st_mtime_ns))
