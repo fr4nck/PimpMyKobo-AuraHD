@@ -1,5 +1,7 @@
 # PimpMyKobo-AuraHD
 
+![Logo rétro PMKB — Pimp My Kobo](assets/branding/pmkb-logo-original.png)
+
 **Français** | [English](README.en.md)
 
 Résurrection, sauvetage, libération et modernisation de la Kobo Aura HD.
@@ -222,6 +224,8 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 
 ## Documentation
 
+- [Démonter l'Aura HD et accéder à la microSD interne](docs/disassembly-fr.md) — avec photos originales, sources iFixit/MobileRead et version texte pour Lynx.
+- [Version texte / Lynx du guide de démontage](docs/disassembly-lynx-fr.txt)
 - [Index de la documentation](docs/README.md)
 - [Roadmap et prochaines étapes](docs/ROADMAP.fr.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
