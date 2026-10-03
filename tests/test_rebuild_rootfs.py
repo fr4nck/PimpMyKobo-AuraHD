@@ -148,7 +148,7 @@ def _add(tf, name, kind, *, data=None, mode=0o755, uid=0, gid=0, linkname="", ma
         tf.addfile(info)
 
 
-def build_fs_tgz(path: Path, *, bad_md5: bool = False) -> None:
+def build_fs_tgz(path: Path, *, bad_md5: bool = False, historical_root: bool = False) -> None:
     files = {
         "bin/busybox": (b"\x7fELF busybox\n" * 64, 0o755, 0, 0),
         "etc/inittab": (b"::sysinit:/etc/init.d/rcS\n", 0o644, 0, 0),
@@ -158,7 +158,11 @@ def build_fs_tgz(path: Path, *, bad_md5: bool = False) -> None:
     md5 = [f"{hashlib.md5(d).hexdigest()}  ./{n}" for n, (d, *_rest) in files.items()]
     if bad_md5:
         md5[0] = "0" * 32 + md5[0][32:]
+    if historical_root:
+        md5.append(f"{hashlib.md5(files['bin/busybox'][0]).hexdigest()}  ./bin/ash")
     with tarfile.open(path, "w:gz", format=tarfile.GNU_FORMAT) as tf:
+        if historical_root:
+            _add(tf, "./", tarfile.DIRTYPE, uid=1000, gid=1000)
         for d in ("bin", "etc", "usr", "usr/bin", "dev", "proc", "home"):
             _add(tf, f"./{d}", tarfile.DIRTYPE)
         _add(tf, "./home/user", tarfile.DIRTYPE, mode=0o700, uid=1000, gid=1000)
@@ -188,10 +192,10 @@ class RebuildRootfsLinuxBuildTests(unittest.TestCase):
     def tearDown(self):
         self._td.cleanup()
 
-    def make_inputs(self, *, bad_md5: bool = False):
+    def make_inputs(self, *, bad_md5: bool = False, historical_root: bool = False):
         tree = self.root / "p2tree"
         (tree / "upgrade").mkdir(parents=True)
-        build_fs_tgz(tree / "upgrade" / "fs.tgz", bad_md5=bad_md5)
+        build_fs_tgz(tree / "upgrade" / "fs.tgz", bad_md5=bad_md5, historical_root=historical_root)
         recovery = self.root / "p2 récupération.img"
         with open(recovery, "xb") as handle:
             handle.truncate(8 * 1024 * 1024)
@@ -310,6 +314,29 @@ class RebuildRootfsLinuxBuildTests(unittest.TestCase):
         self.assertTrue(any("fs.md5sum" in e for e in report["errors"]))
         self.assertFalse(output.exists())
 
+    def test_archive_root_owner_and_md5_hard_links_are_preserved(self):
+        manifest, recovery, _ = self.make_inputs(historical_root=True)
+        report = mod.build_rootfs(manifest, recovery, self.root / "root.img")
+        self.assertEqual("ok", report["status"], report)
+        checks = report["checks"]
+        self.assertEqual(checks["metadata"]["entries"], checks["metadata"]["verified"])
+        self.assertEqual((5, 5), (checks["fs_md5sum"]["entries"], checks["fs_md5sum"]["matched"]))
+
+    def test_hard_link_content_and_inode_corruption_are_detected(self):
+        manifest, recovery, _ = self.make_inputs(historical_root=True)
+        image = self.root / "root.img"
+        self.assertEqual("ok", mod.build_rootfs(manifest, recovery, image)["status"])
+        # Change only the temporary output, never the recovery source.
+        subprocess.run(["debugfs", "-w", "-R", "unlink /bin/ash", str(image)], check=True, capture_output=True)
+        subprocess.run(["debugfs", "-w", "-R", "link /etc/inittab /bin/ash", str(image)], check=True, capture_output=True)
+        with tarfile.open(self.root / "p2tree" / "upgrade" / "fs.tgz", "r:gz") as tf:
+            entries, hashes, md5sum = mod._validate_archive(tf)
+        with tempfile.TemporaryDirectory() as td:
+            _, errors = mod.verify_image(image, entries, hashes, md5sum, Path(td))
+        self.assertTrue(any("hard link does not share target inode" in e for e in errors), errors)
+        self.assertTrue(any("/bin/ash: content differs" in e for e in errors), errors)
+        self.assertTrue(any("fs.md5sum" in e for e in errors), errors)
+
 
 class RebuildRootfsArchiveSafetyTests(unittest.TestCase):
     def _archive(self, members):
@@ -337,6 +364,23 @@ class RebuildRootfsArchiveSafetyTests(unittest.TestCase):
                         [(("a", tarfile.LNKTYPE), {"linkname": "../outside"})]):
             with self.subTest(members=members), self._archive(members) as tf:
                 with self.assertRaises(RuntimeError):
+                    mod._validate_archive(tf)
+
+    def test_chained_hard_links_get_expected_content_hashes(self):
+        with self._archive([(("data", tarfile.REGTYPE), {"data": b"content"}),
+                            (("first", tarfile.LNKTYPE), {"linkname": "data"}),
+                            (("second", tarfile.LNKTYPE), {"linkname": "first"})]) as tf:
+            _, hashes, _ = mod._validate_archive(tf)
+        self.assertEqual({"data", "first", "second"}, set(hashes))
+        self.assertEqual({hashlib.sha256(b"content").hexdigest()}, set(hashes.values()))
+
+    def test_dangling_cyclic_and_non_regular_hard_links_are_refused(self):
+        for members in ([(("a", tarfile.LNKTYPE), {"linkname": "missing"})],
+                        [(("a", tarfile.LNKTYPE), {"linkname": "b"}),
+                         (("b", tarfile.LNKTYPE), {"linkname": "a"})],
+                        [(("dir", tarfile.DIRTYPE), {}), (("a", tarfile.LNKTYPE), {"linkname": "dir"})]):
+            with self.subTest(members=members), self._archive(members) as tf:
+                with self.assertRaisesRegex(RuntimeError, "hard link"):
                     mod._validate_archive(tf)
 
 if __name__ == "__main__":

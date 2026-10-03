@@ -226,7 +226,7 @@ def _member_path(name: str) -> str:
     path = name.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
-    return path.strip("/")
+    return path.strip("/") or "."
 
 
 def _member_kind(member: tarfile.TarInfo) -> str:
@@ -288,11 +288,27 @@ def _validate_archive(tf: tarfile.TarFile) -> tuple[dict[str, tarfile.TarInfo], 
         hashes[rel] = h.hexdigest()
         if data is not None:
             md5sum = bytes(data)
+    # Hard links carry no archive payload. Their expected bytes come from the
+    # final regular target; still dump/hash each link independently in the image.
+    for rel, member in entries.items():
+        if not member.islnk():
+            continue
+        seen = {rel}
+        target = _member_path(member.linkname)
+        while target in entries and entries[target].islnk():
+            if target in seen:
+                raise RuntimeError(f"cyclic archive hard link: {rel}")
+            seen.add(target)
+            target = _member_path(entries[target].linkname)
+        if target not in entries or not entries[target].isreg():
+            raise RuntimeError(f"hard link has no regular archive target: {rel}")
+        hashes[rel] = hashes[target]
     return entries, hashes, md5sum
 
 
 def _fakeroot_build_script(fs_tgz: Path, root: Path, part: Path, conf: Path,
-                           params: dict[str, Any], blocks: int) -> str:
+                           params: dict[str, Any], blocks: int,
+                           root_owner: tuple[int, int] = (0, 0)) -> str:
     # One fakeroot process owns both extraction and mke2fs -d.  This is essential:
     # fakeroot's synthetic UID/GID and device-node metadata only exists inside that
     # process.  All paths are local temporary/output files, never block devices.
@@ -302,7 +318,8 @@ def _fakeroot_build_script(fs_tgz: Path, root: Path, part: Path, conf: Path,
         f"mkdir -p {q(str(root))}\n" + \
         f"tar --numeric-owner --same-owner --same-permissions -xzf {q(str(fs_tgz))} -C {q(str(root))}\n" + \
         f"MKE2FS_CONFIG={q(str(conf))} mke2fs -q -F -T pmkb -L rootfs -b {params['block_size']} " \
-        f"-I {params['inode_size']} -O {q(features)} -d {q(str(root))} {q(str(part))} {blocks}\n"
+        f"-I {params['inode_size']} -E root_owner={root_owner[0]}:{root_owner[1]} " \
+        f"-O {q(features)} -d {q(str(root))} {q(str(part))} {blocks}\n"
 
 
 def _debugfs_batch(image: Path, commands: list[str], workdir: Path) -> dict[str, str]:
@@ -362,6 +379,13 @@ def verify_image(image: Path, entries: dict[str, tarfile.TarInfo], hashes: dict[
             dev = re.search(r"Device major/minor number: (\d+):(\d+)", block)
             if not dev or (int(dev.group(1)), int(dev.group(2))) != (member.devmajor, member.devminor):
                 problems.append(f"device {dev.group(0) if dev else 'missing'} != {member.devmajor}:{member.devminor}")
+        if member.islnk():
+            target = _member_path(member.linkname)
+            target_stat = stats.get(f"stat {_quote_debugfs(target)}", "")
+            inode = re.search(r"Inode:\s+(\d+)", block)
+            target_inode = re.search(r"Inode:\s+(\d+)", target_stat)
+            if not inode or not target_inode or inode.group(1) != target_inode.group(1):
+                problems.append(f"hard link does not share target inode: /{target}")
         if problems:
             errors.append(f"/{rel}: " + "; ".join(problems))
             failed.add(rel)
@@ -464,7 +488,9 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path, *,
             # blocks and the remainder (if any) stays zero, as on the original card.
             with open(part, "xb") as handle:
                 handle.truncate(p1_size)
-            script = _fakeroot_build_script(fs_tgz, td_path / "root", part, conf, reference, blocks)
+            archive_root = entries.get(".")
+            root_owner = (archive_root.uid, archive_root.gid) if archive_root else (0, 0)
+            script = _fakeroot_build_script(fs_tgz, td_path / "root", part, conf, reference, blocks, root_owner)
             run_checked(["fakeroot", "--", "sh", "-c", script])
             if part.stat().st_size != p1_size:
                 raise RuntimeError("rebuilt image size does not match P1 geometry")

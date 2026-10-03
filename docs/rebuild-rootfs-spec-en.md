@@ -39,6 +39,7 @@ V1 creates an ext filesystem compatible with the device recovery and extracts `u
 - The image is created at the exact P1 size. The filesystem uses `P1_size // block_size` blocks; the remainder (512 bytes on the studied unit) stays zero.
 - After the build, the parameters are re-read with `dumpe2fs` and must equal the reference; the label must be `rootfs`.
 - Extraction and `mke2fs -d` run in one `fakeroot` session, preserving numeric owners, modes (including setuid), links and device nodes without root privileges.
+- The archive root directory owner is passed explicitly through `mke2fs -E root_owner=UID:GID`; otherwise mke2fs defaults to 0:0 even when the archive specifies another owner. Archives without a root entry retain the 0:0 default.
 
 System-tool requirements (`mkfs.ext4`, loop mounting or a mount-free method) must be detected explicitly. Missing prerequisites cause a clean failure and can never trigger access to physical media.
 
@@ -50,7 +51,7 @@ A rebuild is `complete` only after:
 2. ext4 parameters identical to the recovery reference, label `rootfs`;
 3. `e2fsck -f -n` with no issue at all (exit 0);
 4. a read-only, mount-free re-read of the image with `debugfs`. For **every** `fs.tgz` member: presence, type, mode, UID/GID, symlink target, device major/minor;
-5. the content of **every** regular file compared by SHA-256 with `fs.tgz`;
+5. the content of **every** regular file and hard link compared by SHA-256 with `fs.tgz`; hard links must also share their target inode. Chained links are resolved within the archive, and dangling/cyclic/non-regular targets are refused;
 6. verification against the `fs.md5sum` shipped inside `fs.tgz`, when present;
 7. final image SHA-256;
 8. writing the rebuild manifest `<output>.rebuild.json`, whose `checks` fields reflect the checks actually performed.
@@ -72,6 +73,8 @@ A local path is not persistent identity.
 A future restore tool must not trust the rebuilt-image SHA alone. It must independently match the target medium against the backup `source_fingerprint`.
 
 `rebuild-rootfs` defines no rule authorizing physical writes; that decision belongs exclusively to a future `restore-rootfs`.
+
+[Legacy imports](import-legacy-backup-en.md) are accepted only with `--accept-legacy-import` for local reconstruction. Their declared association and `physical_restore_eligible=false` are retained in the result.
 
 ## Minimum tests before usable implementation
 

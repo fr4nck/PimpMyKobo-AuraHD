@@ -50,6 +50,7 @@ Les noms de membres absolus ou contenant `..`, les liens physiques sortant de l'
 - L'image est créée à la taille exacte de P1. Le système de fichiers occupe `taille_P1 // taille_de_bloc` blocs ; le reste (512 octets sur l'exemplaire étudié) est laissé à zéro.
 - Après construction, les paramètres sont relus avec `dumpe2fs` et doivent être identiques à la référence ; le label doit être `rootfs`.
 - Extraction et `mke2fs -d` tournent dans une seule session `fakeroot` : propriétaires numériques, modes (y compris setuid), liens et nœuds de périphérique sont préservés sans droits root.
+- Le propriétaire du dossier racine de l'archive est transmis explicitement par `mke2fs -E root_owner=UID:GID` : sinon mke2fs utilise 0:0 même si l'archive indique un autre propriétaire. Sans entrée racine dans l'archive, le défaut reste 0:0.
 
 Les détails dépendant d'outils système (`mkfs.ext4`, montage loop ou méthode sans montage) doivent être détectés explicitement. L'outil doit échouer proprement si les prérequis ne sont pas présents ; il ne doit jamais compenser en accédant à un disque physique.
 
@@ -99,6 +100,13 @@ Le chemin local du fichier n'est pas une identité persistante.
 Le futur outil de restauration ne devra pas faire confiance au seul SHA de l'image reconstruite. Il devra vérifier séparément l'identité du support cible contre le `source_fingerprint` de la sauvegarde.
 
 `rebuild-rootfs` ne définit aucune règle autorisant une écriture physique : cette décision appartient exclusivement au futur `restore-rootfs`.
+
+Les [imports historiques](import-legacy-backup-fr.md) exigent `--accept-legacy-import` pour la reconstruction locale. Leur association déclarée et `physical_restore_eligible=false` sont conservés dans le résultat.
+
+Les liens physiques sont hachés séparément dans l'image et doivent partager
+l'inode de leur cible. Les chaînes sont résolues dans l'archive ; les cibles
+absentes, cycliques ou non ordinaires sont refusées. Ces liens participent
+aussi à la vérification du manifeste MD5 interne.
 
 ## Tests minimum avant implémentation utilisable
 
