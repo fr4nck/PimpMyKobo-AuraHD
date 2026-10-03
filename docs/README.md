@@ -21,6 +21,7 @@ Pour un navigateur texte, une console ou une session SSH : [version texte / Lynx
 - [Matériel Aura HD / Dragon / E606C0](hardware-fr.md)
 - [HWCONFIG Netronix v1.7](hwconfig-fr.md)
 - [Partitionnement observé](partition-layout-fr.md)
+- [Protocole de qualification FIRST BOOT #1](first-boot-qualification-fr.md) — préparation uniquement, sans essai matériel ni autorisation d'écriture.
 
 ## Outils
 

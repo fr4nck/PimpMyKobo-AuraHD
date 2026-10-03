@@ -21,6 +21,7 @@ For a text browser, console or SSH session: [plain-text / Lynx disassembly guide
 - [Aura HD / Dragon / E606C0 hardware](hardware-en.md)
 - [Netronix HWCONFIG v1.7](hwconfig-en.md)
 - [Observed partition layout](partition-layout-en.md)
+- [FIRST BOOT #1 qualification protocol](first-boot-qualification-en.md) — preparation only, no hardware test or write authorization.
 
 ## Tools
 
