@@ -23,11 +23,11 @@ legacy = load("legacy", "import-legacy-backup.py")
 rebuild = load("rebuild", "rebuild-rootfs.py")
 
 
-def make_pre(path, p1_size=268435968, p2_size=268435968):
+def make_pre(path, p1_size=268435968, p2_size=268435968, p3_size=31368150016):
     offset = 9961472
     data = bytearray(offset)
     data[510:512] = b"\x55\xaa"
-    for index, (ptype, size) in enumerate(((0x83, p1_size), (0x83, p2_size), (0x0B, 31368150016))):
+    for index, (ptype, size) in enumerate(((0x83, p1_size), (0x83, p2_size), (0x0B, p3_size))):
         entry = 446 + 16 * index
         data[entry + 4] = ptype
         data[entry + 8:entry + 12] = (offset // 512).to_bytes(4, "little")

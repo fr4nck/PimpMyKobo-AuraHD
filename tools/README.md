@@ -70,6 +70,15 @@ Cet import ne peut pas autoriser de restauration physique.
 - [Français](../docs/import-legacy-backup-fr.md)
 - [English](../docs/import-legacy-backup-en.md)
 
+## Simulation locale du remplacement de P1
+
+`restore-rootfs.py` vérifie un plan par défaut. Avec `--simulate`, il crée
+une nouvelle copie d'une image disque locale et remplace uniquement P1.
+Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
+
+- [Français](../docs/restore-rootfs-simulation-fr.md)
+- [English](../docs/restore-rootfs-simulation-en.md)
+
 ## Tests
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
@@ -86,4 +95,4 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 
 - `backup-aura-hd` : produire des sauvegardes locales avec empreintes ;
 - `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
-- `restore-rootfs` : restauration encadrée avec garde-fous et vérification après écriture.
+- `restore-rootfs` physique : contrat distinct encore à concevoir ; l'outil actuel simule uniquement sur fichiers locaux.
