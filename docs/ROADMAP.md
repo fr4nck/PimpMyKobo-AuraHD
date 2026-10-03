@@ -134,7 +134,7 @@ Hardware behavior of exclusive locking/ioctl remains unqualified until an author
 
 No implementation should weaken these gates merely to make restoration easier.
 
-## 6. Liberation layer — PLANNED
+## 6. Liberation layer — LOCAL PROTOTYPE; hardware pending
 
 Goal: move from “recoverable Kobo” to a useful Aura HD whose software can be maintained without depending blindly on Kobo's historical recovery path.
 
@@ -146,7 +146,11 @@ Possible work includes:
 - preserve a documented route back to the verified original backup;
 - evaluate alternative reader/user environments and boot-time customisation without sacrificing recovery.
 
-This phase starts only after the restore safety model is proven on real hardware.
+Local-only research and an experimental direct-KOReader rootfs are authorized; see [offline liberation](offline-liberation-en.md). Physical restoration authorization is withdrawn. Hardware trials remain gated; the earlier restore evidence does not qualify this new image.
+
+`build-koreader-rootfs` assembles that prototype overlay with a local KOReader release and local runtime components (never committed) into one verifiable manifest, flags path/file collisions and a bounded set of unintended Nickel references, and — Linux-only — builds and offline-validates an actual ext4 P1 image from it, reusing `rebuild-rootfs`'s ext4 construction and verification; see [the V1 contract](build-koreader-rootfs-spec-en.md). It still needs to be exercised against a real KOReader release and real local runtime components, not only synthetic fixtures, before any hardware trial is proposed.
+
+Cross-checked against `feat/audit-arm-runtime`'s offline bootstrap/storage audit (parallel branch, not merged here): three defects it found in the prototype itself (scripts tracked without the execute bit, `rcS` not creating `/mnt/onboard` before mounting it, `pmkb-reader` not re-checking the mount before launch) are fixed on this branch; a local-only scratch merge (never pushed) confirmed the builder's output already works as `audit-arm-runtime`'s input, and fixed a permanent false positive in its Nickel-reference reuse of this builder's scanner (`scan_tree_for_nickel`, not yet adopted on the other branch). See the V1 contract's "Relationship to other in-flight work" section for detail.
 
 ## 7. Reproducible rescue for other Aura HD units — PLANNED
 
@@ -215,5 +219,6 @@ There must never be a convenience path that silently collapses those stages into
 - `restore-rootfs`: implemented local full-image simulator, no physical mode.
 - `restore-p1-linux`: implemented separate native Live executor; hardware qualification and physical launch pending.
 - `pmkb`: implemented installable CLI; optional Qt/PySide6 local workshop implemented.
+- `build-koreader-rootfs`: implemented local assembly/offline validation of the direct-KOReader rootfs; `--build` ext4 construction is Linux-only and still untested against real KOReader/runtime inputs.
 
 Parallel development is welcome when branches do not weaken or bypass the interfaces and safety boundaries between these lanes.

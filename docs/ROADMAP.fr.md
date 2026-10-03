@@ -56,8 +56,12 @@ La première interface n'effectue pas de restauration physique. Voir [l’atelie
 - Choisir la licence du code propre au projet avant de planifier une distribution publique du paquet.
 - Garder les tests synthétiques et la documentation FR/EN ; ne publier aucun dump ou firmware privé.
 
-## 5. Libérer la Kobo — après sauvetage et retour arrière éprouvés
+## 5. Libérer la Kobo — prototype local en cours, matériel en attente
 
+- Direction validée : démarrage direct de KOReader, sans interface/services Kobo ; réseau refusé au lancement hors loopback. Voir [le prototype autonome](offline-liberation-fr.md).
+- `build-koreader-rootfs.py` assemble cette surcouche avec une version locale de KOReader et des composants runtime locaux (jamais committés) en un manifeste vérifiable, détecte les collisions et un ensemble borné de références Nickel involontaires, et — sous Linux uniquement — construit et valide hors ligne une vraie image ext4 P1 en réutilisant les fonctions de `rebuild-rootfs`. Voir [le contrat V1](build-koreader-rootfs-spec-fr.md). Reste à exercer avec une vraie version de KOReader et de vrais composants locaux, pas seulement des fixtures synthétiques.
+- Audité à la lumière de l'audit bootstrap/stockage hors ligne de `feat/audit-arm-runtime` (branche parallèle, non fusionnée ici) : trois défauts qu'il a trouvés dans le prototype lui-même (scripts suivis sans bit d'exécution, `rcS` ne créant pas `/mnt/onboard` avant de le monter, `pmkb-reader` ne revérifiant pas le montage avant lancement) sont corrigés sur cette branche ; une fusion locale à usage unique (jamais poussée) a confirmé que la sortie du constructeur fonctionne déjà comme entrée d'`audit-arm-runtime`, et a corrigé un faux positif permanent dans sa réutilisation du scanner Nickel de ce constructeur (`scan_tree_for_nickel`, pas encore adopté sur l'autre branche). Voir la section « Lien avec les autres chantiers » du contrat V1 pour le détail.
+- L’autorisation de restauration physique est retirée ; les anciens plans ne qualifient pas la nouvelle image.
 - Documenter et extraire la waveform E-Ink de manière reproductible.
 - Compiler les références U-Boot/kernel et qualifier les contraintes E606C0.
 - Construire un userspace minimal maintenable puis intégrer KOReader.
