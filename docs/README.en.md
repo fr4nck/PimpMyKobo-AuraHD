@@ -24,6 +24,8 @@ For an Aura HD that no longer boots or whose factory reset failed:
 
 Scripts live in [`../tools/`](../tools/).
 
+[Install the pmkb command on Debian/Ubuntu and WSL](cli-install-en.md).
+
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
 - `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files.
 

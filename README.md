@@ -4,6 +4,8 @@
 
 Résurrection, sauvetage, libération et modernisation de la Kobo Aura HD.
 
+La commande `pmkb` regroupe les outils du projet. [Installation Debian/Ubuntu et WSL](docs/cli-install-fr.md). Les modes physiques restent réservés à Linux natif et à une autorisation explicite de restauration.
+
 ## Objectif
 
 Construire un système de lecture léger, libre et indépendant pour la Kobo Aura HD, tout en documentant une procédure de sauvetage reproductible pour les machines abandonnées après une réinitialisation ou une corruption logicielle.

@@ -2,6 +2,10 @@
 
 Les outils publics du projet privilégient la **lecture seule**. L'exécuteur Linux de restauration P1 est séparé, explicite et protégé par des garde-fous supplémentaires ; préparer son code n'autorise aucune écriture physique.
 
+## Commande pmkb et paquet Debian
+
+`python3 tools/pmkb.py --help` regroupe les outils sans modifier leurs arguments ni garde-fous. Le paquet `.deb` fournit la commande `pmkb`. Voir [Français](../docs/cli-install-fr.md) / [English](../docs/cli-install-en.md). `build-deb.py` construit le paquet local avec dpkg-deb, sans installation ni accès aux périphériques.
+
 ## `inspect-aura-hd.py`
 
 Inspecteur bas niveau d'une microSD complète ou d'une image disque Aura HD.
