@@ -59,6 +59,7 @@ La première interface n'effectue pas de restauration physique. Voir [l’atelie
 ## 5. Libérer la Kobo — prototype local en cours, matériel en attente
 
 - Direction validée : démarrage direct de KOReader, sans interface/services Kobo ; réseau refusé au lancement hors loopback. Voir [le prototype autonome](offline-liberation-fr.md).
+- `build-koreader-rootfs.py` assemble cette surcouche avec une version locale de KOReader et des composants runtime locaux (jamais committés) en un manifeste vérifiable, détecte les collisions et un ensemble borné de références Nickel involontaires, et — sous Linux uniquement — construit et valide hors ligne une vraie image ext4 P1 en réutilisant les fonctions de `rebuild-rootfs`. Voir [le contrat V1](build-koreader-rootfs-spec-fr.md). Reste à exercer avec une vraie version de KOReader et de vrais composants locaux, pas seulement des fixtures synthétiques.
 - L’autorisation de restauration physique est retirée ; les anciens plans ne qualifient pas la nouvelle image.
 - Documenter et extraire la waveform E-Ink de manière reproductible.
 - Compiler les références U-Boot/kernel et qualifier les contraintes E606C0.

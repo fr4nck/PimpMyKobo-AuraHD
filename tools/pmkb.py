@@ -17,6 +17,7 @@ COMMANDS = {
     "simulate": ("restore-rootfs.py", "Plan or simulate P1 replacement in a new local disk image."),
     "prepare-p1": ("prepare-p1-restore.py", "Prepare a local, reviewable restoration plan."),
     "restore-p1": ("restore-p1-linux.py", "Check local evidence; physical modes require native Linux and explicit options."),
+    "build-koreader-rootfs": ("build-koreader-rootfs.py", "Assemble/build an experimental KOReader-direct P1 rootfs."),
 }
 
 

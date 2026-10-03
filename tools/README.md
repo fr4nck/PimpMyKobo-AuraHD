@@ -113,6 +113,10 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 
 `prepare-p1-restore.py` relie la sauvegarde complète, la reconstruction et la simulation par leurs empreintes et produit un plan sans autoriser d'écriture physique. Voir [la procédure](../docs/prepare-p1-restore-fr.md).
 
+## Rootfs KOReader expérimental (sans Nickel)
+
+`build-koreader-rootfs.py` assemble un rootfs P1 expérimental à partir de la surcouche `experimental/offline-rootfs`, d'une version locale de KOReader et de composants runtime locaux (jamais committés). L'assemblage est multiplateforme et ne nécessite aucun outil Linux ; `--build` construit l'image ext4 et réutilise les fonctions de `rebuild-rootfs.py`, sous Linux uniquement. Voir [le contrat V1](../docs/build-koreader-rootfs-spec-fr.md).
+
 ## Tests
 
 La première restauration physique dispose d'un exécuteur Linux Live distinct : `restore-p1-linux.py`. Son mode par défaut vérifie uniquement les fichiers locaux. Voir [Français](../docs/restore-p1-linux-fr.md) / [English](../docs/restore-p1-linux-en.md) pour les refus, l'autorisation séparée et les limites.

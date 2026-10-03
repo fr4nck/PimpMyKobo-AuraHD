@@ -148,6 +148,8 @@ Possible work includes:
 
 Local-only research and an experimental direct-KOReader rootfs are authorized; see [offline liberation](offline-liberation-en.md). Physical restoration authorization is withdrawn. Hardware trials remain gated; the earlier restore evidence does not qualify this new image.
 
+`build-koreader-rootfs` assembles that prototype overlay with a local KOReader release and local runtime components (never committed) into one verifiable manifest, flags path/file collisions and a bounded set of unintended Nickel references, and — Linux-only — builds and offline-validates an actual ext4 P1 image from it, reusing `rebuild-rootfs`'s ext4 construction and verification; see [the V1 contract](build-koreader-rootfs-spec-en.md). It still needs to be exercised against a real KOReader release and real local runtime components, not only synthetic fixtures, before any hardware trial is proposed.
+
 ## 7. Reproducible rescue for other Aura HD units — PLANNED
 
 Goal: make the project useful beyond the development device.
@@ -215,5 +217,6 @@ There must never be a convenience path that silently collapses those stages into
 - `restore-rootfs`: implemented local full-image simulator, no physical mode.
 - `restore-p1-linux`: implemented separate native Live executor; hardware qualification and physical launch pending.
 - `pmkb`: implemented installable CLI; optional Qt/PySide6 local workshop implemented.
+- `build-koreader-rootfs`: implemented local assembly/offline validation of the direct-KOReader rootfs; `--build` ext4 construction is Linux-only and still untested against real KOReader/runtime inputs.
 
 Parallel development is welcome when branches do not weaken or bypass the interfaces and safety boundaries between these lanes.
