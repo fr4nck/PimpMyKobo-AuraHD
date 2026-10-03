@@ -14,8 +14,8 @@
 | Reconstruction de P1 | Réalisée sur nos données ; filesystem, contenu, permissions, liens et empreintes vérifiés | Démarrage non essayé |
 | Simulation complète | Réalisée sur la vraie sauvegarde ; seule P1 change dans une copie du PC | Aucune restauration physique |
 | Exécuteur P1 sous Linux Live | Garde-fous implémentés et tests synthétiques réussis | Verrouillage/ioctl et restauration sur matériel réel non qualifiés |
-| Commande `pmkb` et paquet `.deb` 0.1.0 | Construits ; paquet extrait et lanceur vérifiés ; 140 tests Linux et CI Linux/Windows | Installation APT sur l'environnement Live de référence à valider |
-| Application Qt/PySide6 | Direction retenue après la CLI | Interface non implémentée |
+| Commande `pmkb` et paquet `.deb` 0.2.0 | Construits ; paquet extrait et lanceur vérifiés ; 150 tests Linux (5 Qt ignorés sans dépendance) et CI Linux/Windows | Installation APT sur l'environnement Live de référence à valider |
+| Application Qt/PySide6 | Premier atelier local implémenté et testé | Qt optionnel ; aucune restauration physique |
 
 ## 1. Préparer l'environnement de référence — prochaine étape
 
@@ -36,7 +36,7 @@ La création d'une clé Live écrit aussi sur un support physique : elle nécess
 
 Les étapes précédentes ne prouvent ni le démarrage ni la santé du filesystem P3. Le contrat legacy conserve ses limites : les vérifications contemporaines et l'intention de l'opérateur sont distinctes. Voir [la procédure Linux Live](restore-p1-linux-fr.md).
 
-## 3. Construire l'application Qt/PySide6 — prochain lot logiciel
+## 3. Application Qt/PySide6 — premier lot local
 
 Première version centrée sur les fichiers locaux :
 
@@ -46,7 +46,7 @@ Première version centrée sur les fichiers locaux :
 - présenter erreurs, progression et rapports JSON ;
 - préserver les décisions et garde-fous de la CLI.
 
-La première interface n'effectuera pas de restauration physique. Une future interface d'écriture demandera une conception et une qualification séparées. Ce lot local peut avancer pendant que les essais matériels attendent l'opérateur. Qt n'est pas une dépendance du paquet CLI actuel.
+La première interface n'effectue pas de restauration physique. Voir [l’atelier local](gui-fr.md). Une future interface d'écriture demandera une conception et une qualification séparées. Ce lot local peut avancer pendant que les essais matériels attendent l'opérateur. Qt reste une dépendance optionnelle ; la CLI fonctionne sans lui.
 
 ## 4. Rendre le sauvetage reproductible sur d'autres Aura HD
 

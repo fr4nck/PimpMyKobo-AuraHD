@@ -19,8 +19,8 @@ assert spec.loader
 spec.loader.exec_module(pmkb)
 
 PACKAGE = "pimpmykobo-aura-hd"
-SCRIPTS = ("pmkb.py", *(script for script, _ in pmkb.COMMANDS.values()))
-DOCS = ("cli-install-fr.md", "cli-install-en.md", "inspect-aura-hd-fr.md", "inspect-aura-hd-en.md",
+SCRIPTS = ("pmkb.py", "pmkb-qt.py", "gui-workflows.py", *(script for script, _ in pmkb.COMMANDS.values()))
+DOCS = ("cli-install-fr.md", "cli-install-en.md", "gui-fr.md", "gui-en.md", "inspect-aura-hd-fr.md", "inspect-aura-hd-en.md",
         "verify-recovery-fr.md", "verify-recovery-en.md", "import-legacy-backup-fr.md",
         "import-legacy-backup-en.md", "rebuild-rootfs-spec-fr.md", "rebuild-rootfs-spec-en.md",
         "restore-rootfs-simulation-fr.md", "restore-rootfs-simulation-en.md",

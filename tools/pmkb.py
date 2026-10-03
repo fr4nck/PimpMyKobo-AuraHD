@@ -7,8 +7,9 @@ import runpy
 import sys
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 COMMANDS = {
+    "gui": ("pmkb-gui.py", "Open the optional Qt workshop for local files only."),
     "inspect": ("inspect-aura-hd.py", "Inspect an image or device read-only."),
     "verify-recovery": ("verify-recovery.py", "Verify an extracted recovery tree read-only."),
     "import-legacy": ("import-legacy-backup.py", "Qualify historical local evidence."),

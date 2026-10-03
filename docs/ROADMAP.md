@@ -17,15 +17,15 @@ Status legend: **DONE** · **IMPLEMENTED** (hardware qualification pending where
 | Offline P1 reconstruction | Actual image checked for filesystem, metadata, contents, links and hashes | Bootability untested |
 | Full-image simulation | Actual backup copied; rebuilt P1 inserted; all regions outside P1 preserved | Local files only |
 | Native Linux Live P1 executor | Implemented; synthetic failures and bounded writes tested | Hardware locking/ioctl, restore and boot qualification pending |
-| Installable CLI | `pmkb` 0.1.0, local `.deb`, extracted launcher verified; 140 Linux tests and Linux/Windows CI | APT installation on the reference Live environment pending |
-| Qt/PySide6 interface | Chosen direction after CLI; not implemented | First GUI should operate on local files and reuse existing contracts |
+| Installable CLI | `pmkb` 0.2.0, local `.deb`, extracted launcher verified; 150 Linux tests (5 Qt skipped without optional dependency) and Linux/Windows CI | APT installation on the reference Live environment pending |
+| Qt/PySide6 interface | First local workshop implemented and tested | Optional Qt; no physical restoration; see [GUI](gui-en.md) |
 
 Next gates, in order:
 
 1. Prepare a native Linux Live reference environment, validate CLI installation and access to evidence on persistent storage. Creating a Live USB also requires authorization before writing any physical support.
 2. Identify the card explicitly and run the exclusive **read-only** full-target comparison. Refine/document the return-to-original-P1 procedure before the first write; automatic rollback is not implemented.
 3. Review the exact target, P1 bounds and plan; obtain separate explicit human authorization. Only then perform the first bounded P1 restore, verify all preserved regions, and test boot on the Kobo. Failed or interrupted operations require review, not automatic retries.
-4. Build the first Qt/PySide6 GUI for local evidence, reconstruction, simulation and reports. Reuse the CLI/backend checks; keep physical writing out of the first GUI. This local-only work can proceed while hardware qualification awaits the operator.
+4. Qualify the first Qt/PySide6 local workshop on operator environments. Reuse the CLI/backend checks; keep physical writing out of the first GUI. This local-only work can proceed while hardware qualification awaits the operator.
 5. Integrate the native backup lane and qualify the end-to-end workflow on other Aura HD units; choose the project's own-code license before planning a public packaged release.
 6. Start the liberation layer once the actual rescue and return-to-original workflow is proven.
 
@@ -161,7 +161,7 @@ Goal: make the project useful beyond the development device.
 
 ## 8. Installable CLI, Qt interface and retro extras
 
-The `pmkb` CLI and local Debian/Ubuntu/WSL package are implemented. Installing the package does not access devices or run restoration. Qt/PySide6 is the next interface direction; no GUI has been implemented.
+The `pmkb` CLI and local Debian/Ubuntu/WSL package are implemented. Installing the package does not access devices or run restoration. The first optional Qt/PySide6 local workshop is implemented; see [GUI instructions](gui-en.md).
 
 For the first GUI:
 
@@ -214,6 +214,6 @@ There must never be a convenience path that silently collapses those stages into
 - `rebuild-rootfs`: implemented local-only construction and offline validation.
 - `restore-rootfs`: implemented local full-image simulator, no physical mode.
 - `restore-p1-linux`: implemented separate native Live executor; hardware qualification and physical launch pending.
-- `pmkb`: implemented installable CLI; Qt/PySide6 GUI planned.
+- `pmkb`: implemented installable CLI; optional Qt/PySide6 local workshop implemented.
 
 Parallel development is welcome when branches do not weaken or bypass the interfaces and safety boundaries between these lanes.

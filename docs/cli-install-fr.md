@@ -1,13 +1,13 @@
 # Installer la commande pmkb sur Debian/Ubuntu et WSL
 
-Le paquet local `pimpmykobo-aura-hd` installe la commande `pmkb`, les outils Python et leur documentation. Python 3.10 ou plus est requis. Les dépendances système sont Python, e2fsprogs, fakeroot et tar ; aucun module Python tiers, Qt, service, règle udev ou script de maintenance n'est ajouté. L'installation ne lance aucun outil et n'accède à aucun périphérique. Aucun dump ou fichier Kobo privé n'est inclus.
+Le paquet local `pimpmykobo-aura-hd` installe la commande `pmkb`, les outils Python et leur documentation. Python 3.10 ou plus est requis. Les dépendances système sont Python, e2fsprogs, fakeroot et tar ; aucun module Python tiers obligatoire, service, règle udev ou script de maintenance n'est ajouté. L'installation ne lance aucun outil et n'accède à aucun périphérique. Aucun dump ou fichier Kobo privé n'est inclus.
 
 ## Installation et suppression
 
 Sur Debian/Ubuntu ou leur distribution WSL, depuis le dossier contenant le paquet :
 
 ```sh
-sudo apt install ./pimpmykobo-aura-hd_0.1.0_all.deb
+sudo apt install ./pimpmykobo-aura-hd_0.2.0_all.deb
 pmkb --version
 pmkb --help
 pmkb rebuild-rootfs --help
@@ -48,7 +48,7 @@ Sous WSL, qualification, reconstruction et simulation sur fichiers sont possible
 Dans le dépôt, depuis Debian/Ubuntu ou WSL avec `dpkg-deb` :
 
 ```sh
-python3 tools/build-deb.py /dossier/existant/pimpmykobo-aura-hd_0.1.0_all.deb \
+python3 tools/build-deb.py /dossier/existant/pimpmykobo-aura-hd_0.2.0_all.deb \
   --maintainer 'Votre nom <votre-adresse@example.org>'
 ```
 
@@ -56,4 +56,4 @@ Renseigner une identité de contact réelle pour votre paquet. Le constructeur u
 
 Les outils sont installés dans `/usr/lib/pimpmykobo-aura-hd`, le lanceur dans `/usr/bin/pmkb`, et les documents dans `/usr/share/doc/pimpmykobo-aura-hd`. La liste des fichiers exclut les sauvegardes, firmware, tests et le constructeur lui-même.
 
-Une future interface Qt/PySide6 pourra utiliser ces commandes et rapports JSON ; aucune interface graphique n'est implémentée ou requise dans cette version.
+L’atelier graphique optionnel est disponible avec `pmkb gui` lorsque Qt/PySide6 est installé pour le même interpréteur. Voir [l’interface locale](gui-fr.md). La CLI fonctionne sans Qt.

@@ -5,7 +5,7 @@ The local `pimpmykobo-aura-hd` package installs the `pmkb` command, the existing
 On Debian/Ubuntu or their WSL distributions, from the package directory:
 
 ```sh
-sudo apt install ./pimpmykobo-aura-hd_0.1.0_all.deb
+sudo apt install ./pimpmykobo-aura-hd_0.2.0_all.deb
 pmkb --version
 pmkb --help
 pmkb rebuild-rootfs --help
@@ -20,10 +20,10 @@ WSL supports local-file qualification, reconstruction and simulation. Physical P
 Build a local package from the repository on Debian/Ubuntu or WSL with dpkg-deb:
 
 ```sh
-python3 tools/build-deb.py /existing/directory/pimpmykobo-aura-hd_0.1.0_all.deb \
+python3 tools/build-deb.py /existing/directory/pimpmykobo-aura-hd_0.2.0_all.deb \
   --maintainer 'Your name <your-address@example.org>'
 ```
 
 Provide the actual package contact. The builder uses an explicit script/document allowlist, LF line endings and fixed owners/timestamps for reproducibility. It refuses existing output, needs no root and never installs anything. Installed `build-info.json` records the payload hashes and version. This is a local package, not a Debian/Ubuntu repository publication.
 
-Paths: `/usr/bin/pmkb`, `/usr/lib/pimpmykobo-aura-hd`, `/usr/share/doc/pimpmykobo-aura-hd`. No backups, firmware, tests or package builder are shipped. The scripts can also be used directly from the checkout. A future Qt/PySide6 interface can reuse these commands and JSON reports; no GUI is implemented or required now.
+Paths: `/usr/bin/pmkb`, `/usr/lib/pimpmykobo-aura-hd`, `/usr/share/doc/pimpmykobo-aura-hd`. No backups, firmware, tests or package builder are shipped. The scripts can also be used directly from the checkout. The optional local workshop is available with `pmkb gui` when Qt/PySide6 is installed for the same interpreter. See [the local interface](gui-en.md). The CLI works without Qt.
