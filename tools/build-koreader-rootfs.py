@@ -537,6 +537,13 @@ def _verify_built_image(image: Path, manifest: dict[str, dict], workdir: Path) -
         if not kind_match:
             errors.append(f"missing in image: /{rel}")
             continue
+        owner_match = re.search(r"User:\s+(\d+)\s+Group:\s+(\d+)", block)
+        if not owner_match:
+            errors.append(f"/{rel}: cannot read owner from image")
+        elif (int(owner_match.group(1)), int(owner_match.group(2))) != (0, 0):
+            errors.append(
+                f"/{rel}: owner {owner_match.group(1)}:{owner_match.group(2)} != 0:0"
+            )
         kind, mode = kind_match.group(1).strip(), kind_match.group(2)
         if _rebuild.DEBUGFS_TYPES.get(kind) != entry["kind"]:
             errors.append(f"/{rel}: type {kind} != {entry['kind']}")
@@ -615,8 +622,12 @@ def build_rootfs(koreader_dir: Path, runtime_dir: Path, reference_recovery: Path
             with open(part, "xb") as handle:
                 handle.truncate(size)
             features = ",".join(["none", *reference["features"]])
+            # Keep root ownership entirely in fakeroot's metadata database.
+            # Some user namespaces/mapped filesystems return EINVAL for the real
+            # fchownat(0:0); fakeroot masks EPERM but not EINVAL.
             script = (
                 "set -eu\n"
+                "export FAKEROOTDONTTRYCHOWN=1\n"
                 f"chown -R 0:0 {shlex.quote(str(root))}\n"
                 f"MKE2FS_CONFIG={shlex.quote(str(conf))} mke2fs -q -F -T pmkb -L rootfs "
                 f"-b {block_size} -I {reference['inode_size']} -E root_owner=0:0 "

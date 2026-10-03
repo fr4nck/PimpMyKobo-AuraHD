@@ -403,6 +403,49 @@ class BuildRootfsPreflightTests(unittest.TestCase):
         self.assertIn("output already exists; implicit overwrite is forbidden", report["errors"])
 
 
+@unittest.skipUnless(
+    sys.platform == "linux" and shutil.which("fakeroot") and shutil.which("unshare"),
+    "Linux fakeroot/unshare probe not available",
+)
+class FakerootChownCompatibilityTests(unittest.TestCase):
+    def test_unmapped_user_namespace_einval_is_avoided_without_losing_fake_ownership(self):
+        if os.geteuid() == 0:
+            self.skipTest("probe requires an unprivileged caller")
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "root"
+            (root / "sub").mkdir(parents=True)
+            (root / "file").write_text("file\n", encoding="utf-8")
+            (root / "sub" / "nested").write_text("nested\n", encoding="utf-8")
+            (root / "link").symlink_to("file")
+
+            failing = subprocess.run(
+                ["unshare", "-U", "--", "fakeroot", "--", "chown", "-R", "0:0", str(root)],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+            if failing.returncode != 0 and "unshare failed" in failing.stdout:
+                self.skipTest(f"user namespaces unavailable: {failing.stdout.strip()}")
+            if failing.returncode == 0:
+                self.skipTest("this host maps uid/gid 0 in the probe namespace")
+
+            self.assertIn("Invalid argument", failing.stdout)
+
+            fixed = subprocess.run(
+                [
+                    "unshare", "-U", "--", "env", "FAKEROOTDONTTRYCHOWN=1",
+                    "fakeroot", "--", "sh", "-c",
+                    'chown -R 0:0 "$1" && '
+                    'stat -c "%u:%g" "$1/file" && '
+                    'stat -c "%u:%g" "$1/sub" && '
+                    'stat -c "%u:%g" "$1/link"',
+                    "sh", str(root),
+                ],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+            self.assertEqual(0, fixed.returncode, fixed.stdout)
+            self.assertEqual(["0:0", "0:0", "0:0"], fixed.stdout.strip().splitlines())
+
+
 @unittest.skipUnless(sys.platform == "linux" and all(shutil.which(t) for t in mod._rebuild.REQUIRED_TOOLS),
                      "Linux e2fsprogs/fakeroot backend not available")
 class BuildRootfsLinuxBuildTests(unittest.TestCase):
@@ -430,6 +473,7 @@ class BuildRootfsLinuxBuildTests(unittest.TestCase):
     def test_real_build_produces_verified_image(self):
         koreader = make_koreader_dir(self.root)
         runtime = make_runtime_dir(self.root)
+        (runtime / "bin" / "sh").symlink_to("busybox")
         recovery = self.make_reference_recovery()
         output = self.root / "out" / "p1-koreader.img"
         output.parent.mkdir()
@@ -452,6 +496,19 @@ class BuildRootfsLinuxBuildTests(unittest.TestCase):
         self.assertFalse(Path(str(output) + ".part").exists())
         self.assertTrue(Path(str(output) + ".koreader-build.json").is_file())
         self.assertEqual(0, subprocess.run(["e2fsck", "-f", "-n", str(output)], capture_output=True).returncode)
+
+        fakeroot_calls = [argv for argv in calls if Path(argv[0]).name == "fakeroot"]
+        self.assertEqual(1, len(fakeroot_calls), fakeroot_calls)
+        self.assertIn("export FAKEROOTDONTTRYCHOWN=1", fakeroot_calls[0][-1])
+
+        # Verify uid/gid in the ext4 image itself, including a symlink.
+        for rel in ("opt/koreader/reader.lua", "opt/koreader", "bin/sh"):
+            stat_out = subprocess.run(
+                ["debugfs", "-R", f"stat /{rel}", str(output)],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+            ).stdout
+            self.assertRegex(stat_out, r"User:\s+0\s+Group:\s+0", rel)
+
         for argv in calls:
             tool = Path(argv[0]).name
             self.assertNotIn(tool, {"dd", "mount", "umount", "losetup", "blockdev", "diskpart"})
