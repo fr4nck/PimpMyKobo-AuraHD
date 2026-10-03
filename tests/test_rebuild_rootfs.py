@@ -1,6 +1,12 @@
 import hashlib
 import importlib.util
+import io
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -122,6 +128,183 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
                 mod.build_rootfs(manifest, recovery, root / "out.img")
         self.assertFalse(forbidden.intersection(seen))
 
+
+
+# Conservative ext4 layout, as an old Kobo mke2fs would produce: no metadata_csum/64bit.
+KOBO_LIKE_FEATURES = ("has_journal,ext_attr,resize_inode,dir_index,filetype,extent,flex_bg,"
+                      "sparse_super,large_file,huge_file,uninit_bg,dir_nlink,extra_isize")
+P1_SIZE = 4 * 1024 * 1024 + 512  # deliberately not a multiple of the block size, like the real card
+
+
+def _add(tf, name, kind, *, data=None, mode=0o755, uid=0, gid=0, linkname="", major=0, minor=0):
+    info = tarfile.TarInfo(name)
+    info.type, info.mode, info.uid, info.gid = kind, mode, uid, gid
+    info.uname = info.gname = ""
+    info.linkname, info.devmajor, info.devminor = linkname, major, minor
+    if data is not None:
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    else:
+        tf.addfile(info)
+
+
+def build_fs_tgz(path: Path, *, bad_md5: bool = False) -> None:
+    files = {
+        "bin/busybox": (b"\x7fELF busybox\n" * 64, 0o755, 0, 0),
+        "etc/inittab": (b"::sysinit:/etc/init.d/rcS\n", 0o644, 0, 0),
+        "usr/bin/suid-tool": (b"suid\n", 0o4755, 0, 0),
+        "home/user/note été.txt": (b"bonjour\n", 0o600, 1000, 1000),
+    }
+    md5 = [f"{hashlib.md5(d).hexdigest()}  ./{n}" for n, (d, *_rest) in files.items()]
+    if bad_md5:
+        md5[0] = "0" * 32 + md5[0][32:]
+    with tarfile.open(path, "w:gz", format=tarfile.GNU_FORMAT) as tf:
+        for d in ("bin", "etc", "usr", "usr/bin", "dev", "proc", "home"):
+            _add(tf, f"./{d}", tarfile.DIRTYPE)
+        _add(tf, "./home/user", tarfile.DIRTYPE, mode=0o700, uid=1000, gid=1000)
+        for name, (data, mode, uid, gid) in files.items():
+            _add(tf, f"./{name}", tarfile.REGTYPE, data=data, mode=mode, uid=uid, gid=gid)
+        _add(tf, "./bin/sh", tarfile.SYMTYPE, linkname="busybox", mode=0o777)
+        _add(tf, "./usr/bin/vi", tarfile.SYMTYPE, linkname="../../bin/busybox", mode=0o777)
+        _add(tf, "./etc/mtab", tarfile.SYMTYPE, linkname="/proc/mounts", mode=0o777)
+        _add(tf, "./bin/long", tarfile.SYMTYPE, linkname="/" + "x" * 90, mode=0o777)
+        _add(tf, "./bin/ash", tarfile.LNKTYPE, linkname="./bin/busybox", mode=0o755)
+        _add(tf, "./dev/console", tarfile.CHRTYPE, mode=0o600, major=5, minor=1)
+        _add(tf, "./dev/null", tarfile.CHRTYPE, mode=0o666, major=1, minor=3)
+        _add(tf, "./dev/mmcblk0", tarfile.BLKTYPE, mode=0o660, major=179, minor=0, gid=6)
+        _add(tf, "./dev/initctl", tarfile.FIFOTYPE, mode=0o600)
+        _add(tf, "./fs.md5sum", tarfile.REGTYPE, data=("\n".join(md5) + "\n").encode(), mode=0o644)
+
+
+@unittest.skipUnless(sys.platform == "linux" and all(shutil.which(t) for t in mod.REQUIRED_TOOLS),
+                     "Linux e2fsprogs/fakeroot backend not available")
+class RebuildRootfsLinuxBuildTests(unittest.TestCase):
+    """Real end-to-end build with fakeroot, tar, mke2fs, debugfs and e2fsck."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.root = Path(self._td.name)
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def make_inputs(self, *, bad_md5: bool = False):
+        tree = self.root / "p2tree"
+        (tree / "upgrade").mkdir(parents=True)
+        build_fs_tgz(tree / "upgrade" / "fs.tgz", bad_md5=bad_md5)
+        recovery = self.root / "p2 récupération.img"
+        with open(recovery, "xb") as handle:
+            handle.truncate(8 * 1024 * 1024)
+        conf = self.root / "empty.conf"
+        conf.write_text("[defaults]\n\n[fs_types]\n\tpmkb = {\n\t}\n", encoding="utf-8")
+        subprocess.run(["mke2fs", "-q", "-F", "-T", "pmkb", "-L", "recoveryfs", "-b", "1024", "-I", "256",
+                        "-O", "none," + KOBO_LIKE_FEATURES, "-d", str(tree), str(recovery)],
+                       check=True, capture_output=True, env={**os.environ, "MKE2FS_CONFIG": str(conf)})
+        digest = hashlib.sha256(recovery.read_bytes()).hexdigest()
+        manifest = self.root / "backup-manifest.json"
+        manifest.write_text(json.dumps({
+            "schema_version": 1, "tool": "backup-aura-hd", "status": "complete", "complete": True,
+            "identification": {"aura_hd_e606c0": True},
+            "mbr": {"partitions": [{"number": 1, "size": P1_SIZE}, {"number": 2, "size": recovery.stat().st_size}]},
+            "components": [
+                {"name": "p1_rootfs", "size": P1_SIZE, "status": "verified", "sha256": "1" * 64},
+                {"name": "p2_recoveryfs", "size": recovery.stat().st_size, "status": "verified", "sha256": digest},
+            ],
+            "target_fingerprint": {"algorithm": "pmkb-target-v1", "fingerprint_sha256": "2" * 64},
+        }), encoding="utf-8")
+        return manifest, recovery, digest
+
+    def test_real_build_preserves_layout_metadata_and_content(self):
+        manifest, recovery, digest = self.make_inputs()
+        output = self.root / "out" / "p1 rootfs.img"
+        output.parent.mkdir()
+        calls = []
+        real_run = subprocess.run
+
+        def recording_run(argv, *args, **kwargs):
+            calls.append(list(argv))
+            return real_run(argv, *args, **kwargs)
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=recording_run):
+            report = mod.build_rootfs(manifest, recovery, output)
+        self.assertEqual("ok", report["status"], report)
+        self.assertEqual(P1_SIZE, output.stat().st_size)
+        self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(), report["rootfs_sha256"])
+        self.assertFalse(Path(str(output) + ".part").exists())
+        self.assertTrue(Path(str(output) + ".rebuild.json").is_file())
+        # ext4 layout copied from the recovery superblock, never from host defaults.
+        built = mod.read_ext_parameters(output)
+        self.assertEqual(sorted(KOBO_LIKE_FEATURES.split(",")), built["features"])
+        self.assertNotIn("metadata_csum", built["features"])
+        self.assertNotIn("64bit", built["features"])
+        self.assertEqual((1024, 256, "rootfs"), (built["block_size"], built["inode_size"], built["label"]))
+        self.assertEqual(512, report["ext4"]["unused_tail_bytes"])
+        checks = report["checks"]
+        self.assertEqual(checks["metadata"]["entries"], checks["metadata"]["verified"])
+        self.assertEqual(checks["content"]["files"], checks["content"]["verified"])
+        self.assertEqual(4, checks["special_files"])
+        self.assertEqual(4, checks["symlinks"])
+        self.assertEqual((4, 4), (checks["fs_md5sum"]["entries"], checks["fs_md5sum"]["matched"]))
+        self.assertEqual(0, subprocess.run(["e2fsck", "-f", "-n", str(output)], capture_output=True).returncode)
+        # The recovery input is untouched; nothing but the .part output is ever written.
+        self.assertEqual(digest, hashlib.sha256(recovery.read_bytes()).hexdigest())
+        for argv in calls:
+            tool = Path(argv[0]).name
+            self.assertNotIn(tool, {"dd", "mount", "umount", "losetup", "blockdev", "diskpart"})
+            if tool == "debugfs":
+                self.assertNotIn("-w", argv)
+            self.assertFalse(any(a.startswith("/dev/") for a in argv), argv)
+
+    def test_md5_mismatch_fails_and_keeps_only_a_part_file(self):
+        manifest, recovery, _ = self.make_inputs(bad_md5=True)
+        output = self.root / "p1.img"
+        report = mod.build_rootfs(manifest, recovery, output)
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(any("fs.md5sum" in e for e in report["errors"]), report["errors"])
+        self.assertFalse(output.exists())
+        self.assertTrue(Path(str(output) + ".part").exists())
+
+    def test_verification_detects_metadata_differences(self):
+        manifest, recovery, _ = self.make_inputs()
+        output = self.root / "p1.img"
+        self.assertEqual("ok", mod.build_rootfs(manifest, recovery, output)["status"])
+        with tarfile.open(self.root / "p2tree" / "upgrade" / "fs.tgz", "r:gz") as tf:
+            entries, hashes, md5sum = mod._validate_archive(tf)
+        entries["home/user"].uid = 0
+        entries["dev/console"].devminor = 9
+        with tempfile.TemporaryDirectory() as td:
+            _, errors = mod.verify_image(output, entries, hashes, md5sum, Path(td))
+        self.assertTrue(any("/home/user" in e and "owner" in e for e in errors), errors)
+        self.assertTrue(any("/dev/console" in e and "device" in e for e in errors), errors)
+
+
+class RebuildRootfsArchiveSafetyTests(unittest.TestCase):
+    def _archive(self, members):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tf:
+            for args, kwargs in members:
+                _add(tf, *args, **kwargs)
+        buf.seek(0)
+        return tarfile.open(fileobj=buf, mode="r")
+
+    def test_absolute_and_parent_symlink_targets_are_allowed(self):
+        with self._archive([(("bin/sh", tarfile.SYMTYPE), {"linkname": "/bin/busybox"}),
+                            (("usr/bin/vi", tarfile.SYMTYPE), {"linkname": "../../bin/busybox"})]) as tf:
+            entries, _, _ = mod._validate_archive(tf)
+        self.assertIn("usr/bin/vi", entries)
+
+    def test_member_extracted_through_a_symlink_is_refused(self):
+        with self._archive([(("etc", tarfile.SYMTYPE), {"linkname": "/etc"}),
+                            (("etc/passwd", tarfile.REGTYPE), {"data": b"x"})]) as tf:
+            with self.assertRaisesRegex(RuntimeError, "through a symlink"):
+                mod._validate_archive(tf)
+
+    def test_traversal_and_unsafe_hard_links_are_refused(self):
+        for members in ([(("../evil", tarfile.REGTYPE), {"data": b"x"})],
+                        [(("a", tarfile.LNKTYPE), {"linkname": "../outside"})]):
+            with self.subTest(members=members), self._archive(members) as tf:
+                with self.assertRaises(RuntimeError):
+                    mod._validate_archive(tf)
 
 if __name__ == "__main__":
     unittest.main()

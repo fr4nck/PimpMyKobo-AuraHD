@@ -30,13 +30,32 @@ The backed-up MBR geometry is authoritative. V1 output size must exactly match t
 
 ## Construction
 
-V1 creates an ext filesystem compatible with the device recovery and extracts `upgrade/fs.tgz` while preventing archive members from escaping the reconstructed root. Absolute paths, `..`, links or equivalent traversal are rejected.
+V1 creates an ext filesystem compatible with the device recovery and extracts `upgrade/fs.tgz` while preventing archive members from escaping the reconstructed root. Absolute or `..` member names, hard links leaving the archive, and any member that would be extracted *through* a symlink of the archive are rejected. Absolute or `..` symlink **targets** (for example `../../bin/busybox`) are normal in a rootfs: they are kept as-is and never followed during extraction.
+
+### ext4 parameters (current Linux implementation)
+
+- Filesystem parameters are **copied from the recovery image (P2) superblock**, written by the Kobo tools: exact ext4 feature list, block size and inode size. State flags (`needs_recovery`, `orphan_present`) are not copied.
+- `mke2fs` runs with an empty configuration (`MKE2FS_CONFIG`) and `-O none,<list>`, so host defaults such as `metadata_csum` or `64bit`, which a 2.6.35 kernel cannot mount, cannot be added.
+- The image is created at the exact P1 size. The filesystem uses `P1_size // block_size` blocks; the remainder (512 bytes on the studied unit) stays zero.
+- After the build, the parameters are re-read with `dumpe2fs` and must equal the reference; the label must be `rootfs`.
+- Extraction and `mke2fs -d` run in one `fakeroot` session, preserving numeric owners, modes (including setuid), links and device nodes without root privileges.
 
 System-tool requirements (`mkfs.ext4`, loop mounting or a mount-free method) must be detected explicitly. Missing prerequisites cause a clean failure and can never trigger access to physical media.
 
 ## Output validation
 
-A rebuild is `complete` only after exact image-size validation, non-destructive filesystem checking, applicable `fs.md5sum` content verification, final image SHA-256, and creation of a rebuild manifest.
+A rebuild is `complete` only after:
+
+1. exact image size;
+2. ext4 parameters identical to the recovery reference, label `rootfs`;
+3. `e2fsck -f -n` with no issue at all (exit 0);
+4. a read-only, mount-free re-read of the image with `debugfs`. For **every** `fs.tgz` member: presence, type, mode, UID/GID, symlink target, device major/minor;
+5. the content of **every** regular file compared by SHA-256 with `fs.tgz`;
+6. verification against the `fs.md5sum` shipped inside `fs.tgz`, when present;
+7. final image SHA-256;
+8. writing the rebuild manifest `<output>.rebuild.json`, whose `checks` fields reflect the checks actually performed.
+
+On any mismatch the image stays under its temporary `.part` name, is never renamed, and the result is `failed`.
 
 The historical SHA-256 `ADC8995C3F0754CBCF80ABA1540A69CF043DE9823800A359EC75167354B2993C` is evidence from the manual rebuild, not an expected value.
 
