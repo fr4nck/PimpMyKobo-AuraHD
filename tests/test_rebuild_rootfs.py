@@ -128,6 +128,19 @@ class RebuildRootfsPreflightTests(unittest.TestCase):
                 mod.build_rootfs(manifest, recovery, root / "out.img")
         self.assertFalse(forbidden.intersection(seen))
 
+    def test_run_checked_reports_command_and_captured_output(self):
+        argv = ["fakeroot", "--", "sh", "-c", "mke2fs --synthetic"]
+        failure = subprocess.CalledProcessError(
+            1, argv, output="mke2fs: synthetic diagnostic from stderr\n"
+        )
+        with mock.patch.object(mod.subprocess, "run", side_effect=failure):
+            with self.assertRaises(RuntimeError) as raised:
+                mod.run_checked(argv)
+        message = str(raised.exception)
+        self.assertIn("command failed with exit 1", message)
+        self.assertIn("fakeroot -- sh -c", message)
+        self.assertIn("mke2fs: synthetic diagnostic from stderr", message)
+
 
 
 # Conservative ext4 layout, as an old Kobo mke2fs would produce: no metadata_csum/64bit.
