@@ -150,6 +150,8 @@ Local-only research and an experimental direct-KOReader rootfs are authorized; s
 
 `build-koreader-rootfs` assembles that prototype overlay with a local KOReader release and local runtime components (never committed) into one verifiable manifest, flags path/file collisions and a bounded set of unintended Nickel references, and — Linux-only — builds and offline-validates an actual ext4 P1 image from it, reusing `rebuild-rootfs`'s ext4 construction and verification; see [the V1 contract](build-koreader-rootfs-spec-en.md). It still needs to be exercised against a real KOReader release and real local runtime components, not only synthetic fixtures, before any hardware trial is proposed.
 
+Cross-checked against `feat/audit-arm-runtime`'s offline bootstrap/storage audit (parallel branch, not merged here): three defects it found in the prototype itself (scripts tracked without the execute bit, `rcS` not creating `/mnt/onboard` before mounting it, `pmkb-reader` not re-checking the mount before launch) are fixed on this branch; a local-only scratch merge (never pushed) confirmed the builder's output already works as `audit-arm-runtime`'s input, and fixed a permanent false positive in its Nickel-reference reuse of this builder's scanner (`scan_tree_for_nickel`, not yet adopted on the other branch). See the V1 contract's "Relationship to other in-flight work" section for detail.
+
 ## 7. Reproducible rescue for other Aura HD units — PLANNED
 
 Goal: make the project useful beyond the development device.
