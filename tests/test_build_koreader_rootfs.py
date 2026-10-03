@@ -128,23 +128,38 @@ class PlanRootfsTests(unittest.TestCase):
         self.assertEqual("dir", manifest["etc"]["kind"])
         self.assertEqual("file", manifest["etc/runtime.conf"]["kind"])
 
-    def test_content_referencing_nickel_is_flagged(self):
+    def test_content_referencing_nickel_is_informational_and_visible(self):
         koreader = make_koreader_dir(self.root)
         runtime = make_runtime_dir(self.root)
         (runtime / "bin" / "legacy-helper").write_text("#!/bin/sh\n# calls Nickel helpers\n", encoding="utf-8")
         report, _ = mod.plan_rootfs(koreader, runtime)
-        self.assertEqual("failed", report["status"])
-        self.assertTrue(any("Nickel" in hit for hit in report["nickel_scan"]), report["nickel_scan"])
-        self.assertTrue(any("unexpected Nickel" in e for e in report["errors"]), report["errors"])
+        self.assertEqual("assembled", report["status"], report)
+        self.assertTrue(any("legacy-helper" in hit and "Nickel" in hit for hit in report["nickel_scan"]),
+                        report["nickel_scan"])
+        self.assertEqual([], report["nickel_blocking"])
 
-    def test_path_named_like_nickel_is_flagged(self):
+    def test_path_named_like_nickel_is_informational_and_visible(self):
         koreader = make_koreader_dir(self.root)
         runtime = make_runtime_dir(self.root)
         (runtime / "etc").mkdir()
         (runtime / "etc" / "nickel_conf.lua").write_text("return {}\n", encoding="utf-8")
         report, _ = mod.plan_rootfs(koreader, runtime)
-        self.assertEqual("failed", report["status"])
+        self.assertEqual("assembled", report["status"], report)
         self.assertTrue(any("nickel_conf.lua" in hit for hit in report["nickel_scan"]), report["nickel_scan"])
+        self.assertEqual([], report["nickel_blocking"])
+
+    def test_koreader_upstream_nickel_conf_is_not_rejected_by_name_or_reference(self):
+        koreader = make_koreader_dir(self.root)
+        upstream = koreader / "frontend" / "device" / "kobo"
+        upstream.mkdir(parents=True)
+        (upstream / "nickel_conf.lua").write_text(
+            "local kobo_conf_path = '/mnt/onboard/.kobo/Kobo/Kobo eReader.conf'\n",
+            encoding="utf-8")
+        report, _ = mod.plan_rootfs(koreader, make_runtime_dir(self.root))
+        self.assertEqual("assembled", report["status"], report)
+        self.assertTrue(any("frontend/device/kobo/nickel_conf.lua" in hit
+                            for hit in report["nickel_scan"]), report["nickel_scan"])
+        self.assertEqual([], report["nickel_blocking"])
 
     def test_json_output_is_stable_and_serializable(self):
         koreader = make_koreader_dir(self.root)
@@ -173,17 +188,19 @@ class ReaderProfileTests(unittest.TestCase):
         self.assertIn("KOBO_LIGHT_ON_START = -1", content)
         self.assertIn("KOBO_SYNC_BRIGHTNESS_WITH_NICKEL = false", content)
 
-    def test_profile_is_excluded_from_nickel_content_scan_despite_its_name(self):
-        # KOBO_SYNC_BRIGHTNESS_WITH_NICKEL legitimately contains "NICKEL";
-        # this file is first-party/reviewed like the overlay, not external
-        # content, so it must not itself trigger a scan hit.
+    def test_profile_reference_is_visible_first_party_and_nonblocking(self):
         content = mod.READER_PROFILE_FILE.read_text(encoding="utf-8")
         self.assertIn("NICKEL", content)
         koreader = make_koreader_dir(self.root)
         runtime = make_runtime_dir(self.root)
         report, _manifest = mod.plan_rootfs(koreader, runtime)
         self.assertEqual("assembled", report["status"], report)
-        self.assertEqual([], report["nickel_scan"])
+        profile_findings = [f for f in report["nickel_findings"]
+                            if f["path"] == "/opt/koreader/defaults.custom.lua"]
+        self.assertTrue(profile_findings, report)
+        self.assertTrue(all(f["origin"] == "first_party_verified" for f in profile_findings),
+                        profile_findings)
+        self.assertFalse(any(f["blocking"] for f in profile_findings), profile_findings)
         dest = self.root / "assembled"
         dest.mkdir()
         build_manifest: dict = {}
@@ -192,7 +209,11 @@ class ReaderProfileTests(unittest.TestCase):
         mod._place_reader_profile(dest, build_manifest, write=True)
         mod._copy_tree(koreader, dest, build_manifest, {}, base="opt/koreader", write=True)
         mod._copy_tree(runtime, dest, build_manifest, {}, write=True)
-        self.assertEqual([], mod.scan_tree_for_nickel(dest))
+        policy = mod.classify_tree_for_nickel(dest)
+        self.assertTrue(any(f["path"] == "/opt/koreader/defaults.custom.lua"
+                            and f["origin"] == "first_party_verified"
+                            for f in policy["findings"]), policy)
+        self.assertEqual([], policy["blocking_findings"])
 
     def test_koreader_provided_profile_collides_instead_of_silently_overriding(self):
         koreader = make_koreader_dir(self.root)
@@ -229,17 +250,20 @@ class ScanTreeForNickelTests(unittest.TestCase):
         manifest: dict = {}
         mod._copy_tree(mod.OVERLAY_ROOT, dest, manifest, {}, write=True, force_mode=0o755)
         mod._add_skeleton_dirs(manifest, dest, write=True)
+        mod._place_reader_profile(dest, manifest, write=True)
         mod._copy_tree(koreader, dest, manifest, {}, base="opt/koreader", write=True)
         mod._copy_tree(runtime, dest, manifest, {}, write=True)
         return dest
 
-    def test_overlays_own_nickel_comment_is_not_a_false_positive_once_merged(self):
-        # usr/bin/pmkb-reader legitimately documents bypassing Nickel paths; a
-        # naive re-scan of the merged tree would otherwise always flag it.
+    def test_overlays_own_nickel_comment_is_visible_but_informational(self):
         tree = self.materialize()
         self.assertIn("Nickel", (tree / "usr/bin/pmkb-reader").read_text(encoding="utf-8"))
-        hits = mod.scan_tree_for_nickel(tree)
-        self.assertEqual([], hits)
+        policy = mod.classify_tree_for_nickel(tree)
+        findings = [f for f in policy["findings"] if f["path"] == "/usr/bin/pmkb-reader"]
+        self.assertTrue(any(f["kind"] == "content_reference"
+                            and f["origin"] == "first_party_verified"
+                            for f in findings), findings)
+        self.assertFalse(any(f["blocking"] for f in findings), findings)
 
     def test_external_nickel_reference_in_merged_tree_is_still_flagged(self):
         tree = self.materialize()
@@ -253,6 +277,58 @@ class ScanTreeForNickelTests(unittest.TestCase):
             "#!/bin/sh\n# calls Nickel helpers\n", encoding="utf-8")
         hits = mod.scan_tree_for_nickel(tree)
         self.assertTrue(any("legacy-helper" in hit and "Nickel" in hit for hit in hits), hits)
+
+    def test_opt_koreader_is_not_globally_exempt(self):
+        tree = self.materialize()
+        helper = tree / "opt" / "koreader" / "external-helper"
+        helper.write_text("#!/bin/sh\n# Nickel compatibility note\n", encoding="utf-8")
+        policy = mod.classify_tree_for_nickel(tree)
+        self.assertTrue(any(f["path"].endswith("/opt/koreader/external-helper")
+                            and f["kind"] == "content_reference"
+                            and f["origin"] == "external"
+                            for f in policy["findings"]), policy)
+        self.assertEqual([], policy["blocking_findings"])
+
+    def test_explicit_nickel_launch_from_bootstrap_is_blocking(self):
+        tree = self.materialize()
+        reader = tree / "usr" / "bin" / "pmkb-reader"
+        reader.write_text("#!/bin/sh\nexec /usr/bin/nickel\n", encoding="utf-8")
+        policy = mod.classify_tree_for_nickel(tree)
+        self.assertTrue(any(f["path"] == "/usr/bin/pmkb-reader"
+                            and f["kind"] == "bootstrap_launch"
+                            for f in policy["blocking_findings"]), policy)
+
+    def test_first_party_trust_requires_matching_hash(self):
+        tree = self.materialize()
+        reader = tree / "usr" / "bin" / "pmkb-reader"
+        reader.write_text(reader.read_text(encoding="utf-8") + "\n# Nickel review marker\n",
+                          encoding="utf-8")
+        policy = mod.classify_tree_for_nickel(tree)
+        findings = [f for f in policy["findings"] if f["path"] == "/usr/bin/pmkb-reader"]
+        self.assertTrue(any(f["kind"] == "content_reference"
+                            and f["origin"] == "first_party_modified"
+                            for f in findings), findings)
+        self.assertFalse(any(f["blocking"] for f in findings), findings)
+
+    def test_unsafe_reader_profile_is_blocking_after_hash_mismatch(self):
+        tree = self.materialize()
+        profile = tree / "opt" / "koreader" / "defaults.custom.lua"
+        profile.write_text(
+            "return { KOBO_LIGHT_ON_START = -1, KOBO_SYNC_BRIGHTNESS_WITH_NICKEL = true }\n",
+            encoding="utf-8")
+        policy = mod.classify_tree_for_nickel(tree)
+        self.assertTrue(any(f["path"] == "/opt/koreader/defaults.custom.lua"
+                            and f["kind"] == "normal_path_dependency"
+                            and f["origin"] == "first_party_modified"
+                            for f in policy["blocking_findings"]), policy)
+
+    def test_missing_profile_safety_override_is_blocking(self):
+        tree = self.materialize()
+        profile = tree / "opt" / "koreader" / "defaults.custom.lua"
+        profile.write_text("return { KOBO_LIGHT_ON_START = -1 }\n", encoding="utf-8")
+        policy = mod.classify_tree_for_nickel(tree)
+        self.assertTrue(any(f["signature"] == "missing -> upstream default true"
+                            for f in policy["blocking_findings"]), policy)
 
 
 @unittest.skipUnless(os.name == "posix", "symlink creation semantics are POSIX-specific")

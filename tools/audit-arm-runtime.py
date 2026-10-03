@@ -144,6 +144,49 @@ def bootstrap(root):
 
 ORIGIN_TOKEN = re.compile(r'\$(?:ORIGIN|\{ORIGIN\})')
 UNSUPPORTED_TOKEN = re.compile(r'\$(?:LIB|\{LIB\}|PLATFORM|\{PLATFORM\})')
+NICKEL_COMPONENT_PATTERN = re.compile(r'nickel|hindenburg|/usr/local/kobo', re.I)
+
+
+def _is_nickel_component(value):
+    return bool(value and NICKEL_COMPONENT_PATTERN.search(value))
+
+
+def _bootstrap_nickel_dependencies(records):
+    """Return Nickel/Kobo ELF dependencies reachable from required boot ELFs."""
+    by_path = {}
+    for record in records:
+        by_path.setdefault(record['path'], record)
+        by_path.setdefault(record.get('resolved_path', record['path']), record)
+    findings = []
+    emitted = set()
+    visited = set()
+    queue = [(bootstrap, bootstrap) for bootstrap in BOOT_ELFS]
+    while queue:
+        bootstrap, current = queue.pop()
+        record = by_path.get(current)
+        if record is None:
+            continue
+        identity = (bootstrap, record.get('resolved_path', record['path']))
+        if identity in visited:
+            continue
+        visited.add(identity)
+        for dep in record.get('resolved_dependencies', []):
+            if any(_is_nickel_component(dep.get(key))
+                   for key in ('name', 'guest_path', 'resolved_path')):
+                key = (bootstrap, dep['name'], dep['guest_path'], dep['resolved_path'])
+                if key not in emitted:
+                    emitted.add(key)
+                    findings.append({
+                        'bootstrap': bootstrap,
+                        'from': record['path'],
+                        'name': dep['name'],
+                        'guest_path': dep['guest_path'],
+                        'resolved_path': dep['resolved_path'],
+                    })
+            next_path = dep['resolved_path'] if dep['resolved_path'] in by_path else dep['guest_path']
+            if next_path in by_path:
+                queue.append((bootstrap, next_path))
+    return findings
 
 
 def resolve_rpath(guest, search_paths):
@@ -198,9 +241,11 @@ def audit(root, check_bootstrap=False, check_storage=False):
         raise ValueError('local extracted rootfs directory required')
     records, errors = [], []
     # os.walk does not follow directory links. File links resolve within guest /.
-    for directory, dirs, files in os.walk(root, followlinks=False, onerror=lambda exc: errors.append(f'rootfs traversal: {exc}')):
+    for directory, dirs, files_in_dir in os.walk(
+            root, followlinks=False,
+            onerror=lambda exc: errors.append(f'rootfs traversal: {exc}')):
         dirs.sort()
-        for name in sorted(files):
+        for name in sorted(files_in_dir):
             guest = '/' + (Path(directory) / name).relative_to(root).as_posix()
             try:
                 path = target(root, guest)
@@ -210,21 +255,32 @@ def audit(root, check_bootstrap=False, check_storage=False):
                     stream.seek(0)
                     data = stream.read()
                 info = elf(data)
-                record = {'path': guest, 'sha256': hashlib.sha256(data).hexdigest(), **info}
+                record = {
+                    'path': guest,
+                    'resolved_path': '/' + path.relative_to(root).as_posix(),
+                    'sha256': hashlib.sha256(data).hexdigest(),
+                    **info,
+                    'resolved_dependencies': [],
+                }
                 records.append(record)
-                # RPATH/RUNPATH apply only to this ELF's own dependency lookups,
-                # searched before the default library directories.
                 rpath_dirs = resolve_rpath(guest, info['search_paths']) if info['search_paths'] else []
                 for dep in ([info['interpreter']] if info['interpreter'] else []) + info['needed']:
-                    candidates = [dep] if dep.startswith('/') else [base + '/' + dep for base in
-                                  (*rpath_dirs, '/opt/koreader/libs', '/lib', '/usr/lib')]
                     if '/' in dep and not dep.startswith('/'):
                         raise ValueError('relative dependency path unsupported')
+                    candidates = [dep] if dep.startswith('/') else [
+                        base + '/' + dep for base in
+                        (*rpath_dirs, '/opt/koreader/libs', '/lib', '/usr/lib')
+                    ]
                     found = False
                     for candidate in candidates:
                         try:
                             dependency = target(root, candidate)
                             elf(dependency.read_bytes())
+                            record['resolved_dependencies'].append({
+                                'name': dep,
+                                'guest_path': candidate,
+                                'resolved_path': '/' + dependency.relative_to(root).as_posix(),
+                            })
                             found = True
                             break
                         except FileNotFoundError:
@@ -237,6 +293,12 @@ def audit(root, check_bootstrap=False, check_storage=False):
                 errors.append(f'{guest}: {exc}')
     if not records:
         errors.append('no ARM ELF runtime found')
+    nickel_dependencies = _bootstrap_nickel_dependencies(records)
+    for finding in nickel_dependencies:
+        errors.append(
+            f"{finding['bootstrap']}: bootstrap dependency reaches Nickel/Kobo component "
+            f"{finding['name']} via {finding['guest_path']}"
+        )
     boot_files = []
     if check_bootstrap:
         boot_files, boot_errors = bootstrap(root)
@@ -249,8 +311,8 @@ def audit(root, check_bootstrap=False, check_storage=False):
             'bootstrap_checked': check_bootstrap, 'bootstrap_files': boot_files,
             'tool': 'audit-arm-runtime', 'status': 'failed' if errors else 'ok',
             'physical_restore_eligible': False, 'hardware_qualified': False,
-            'elf_files': records, 'errors': errors}
-
+            'elf_files': records, 'nickel_dependencies': nickel_dependencies,
+            'errors': errors}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

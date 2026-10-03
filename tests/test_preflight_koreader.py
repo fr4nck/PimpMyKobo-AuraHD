@@ -116,6 +116,23 @@ class TreeTests(unittest.TestCase):
         self.assertEqual('FAIL', report['status'])
         self.assertEqual('FAIL', report['checks']['bootstrap_and_execute_bits']['status'])
 
+    def test_explicit_nickel_launch_in_reader_fails_preflight(self):
+        reader = self.root / 'usr/bin/pmkb-reader'
+        reader.write_text('#!/bin/sh\nexec /usr/bin/nickel\n')
+        report = pre.preflight(self.root)
+        self.assertEqual('FAIL', report['status'], report)
+        self.assertEqual('FAIL', report['checks']['nickel_signatures']['status'])
+        self.assertTrue(report['checks']['nickel_signatures']['blocking_findings'])
+
+    def test_informational_opt_koreader_reference_stays_visible_and_passes(self):
+        helper = self.root / 'opt/koreader/legacy-helper'
+        helper.write_text('#!/bin/sh\n# calls Nickel helpers\n')
+        report = pre.preflight(self.root)
+        self.assertEqual('PASS', report['status'], report)
+        self.assertEqual('PASS', report['checks']['nickel_signatures']['status'])
+        self.assertTrue(any(f['path'].endswith('/opt/koreader/legacy-helper')
+                            for f in report['checks']['nickel_signatures']['findings']))
+
     def test_runtime_failure(self):
         (self.root / 'opt/koreader/luajit').write_bytes(b'\x7fELFbroken')
         with self.qualified_signatures():
@@ -139,18 +156,26 @@ class TreeTests(unittest.TestCase):
         self.assertEqual('UNQUALIFIED', report['status'])
         self.assertIsNone(report['offline_checks_satisfied'])
 
-    def test_optional_builder_scanner_is_reused_on_the_post_merge_tree(self):
-        # scan_tree_for_nickel (not the pre-merge _copy_tree/_scan_for_nickel
-        # pair) is the builder's dedicated entry point for an already
-        # assembled directory like the one preflight is given here.
+    def test_builder_classifier_keeps_informational_findings_without_failing(self):
         builder = mock.Mock()
-        builder.scan_tree_for_nickel.return_value = []
+        info = {'path': '/opt/koreader/frontend/device/kobo/nickel_conf.lua',
+                'kind': 'path_reference', 'blocking': False}
+        builder.classify_tree_for_nickel.return_value = {
+            'findings': [info], 'blocking_findings': [],
+            'scan': ['informational Nickel finding'], 'blocking': [],
+        }
         with (mock.patch.object(pre.Path, 'is_file', return_value=True),
               mock.patch.object(pre, 'peer', return_value=builder)):
             result = pre.nickel(self.root)
         self.assertEqual('PASS', result['status'])
-        builder.scan_tree_for_nickel.assert_called_once_with(self.root)
-        builder.scan_tree_for_nickel.return_value = ['/opt/koreader/defaults.lua: Nickel reference']
+        self.assertEqual([info], result['findings'])
+        builder.classify_tree_for_nickel.assert_called_once_with(self.root)
+
+        blocking = {**info, 'blocking': True, 'kind': 'bootstrap_launch'}
+        builder.classify_tree_for_nickel.return_value = {
+            'findings': [blocking], 'blocking_findings': [blocking],
+            'scan': ['blocking Nickel finding'], 'blocking': ['blocking Nickel finding'],
+        }
         with (mock.patch.object(pre.Path, 'is_file', return_value=True),
               mock.patch.object(pre, 'peer', return_value=builder)):
             self.assertEqual('FAIL', pre.nickel(self.root)['status'])

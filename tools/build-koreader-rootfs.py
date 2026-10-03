@@ -30,8 +30,8 @@ TOOL_ROOT = Path(__file__).resolve().parent.parent
 OVERLAY_ROOT = TOOL_ROOT / "experimental" / "offline-rootfs"
 # Reviewed, first-party KOReader defaults profile (docs/offline-hardware-
 # qualification-fr.md): demonstrated necessary so startup never reads/writes
-# Kobo's own "Kobo eReader.conf" against a read-only P3. Not user-supplied,
-# so treated like the overlay for the Nickel content scan.
+# Kobo's own "Kobo eReader.conf" against a read-only P3. Its SHA-256 identifies
+# reviewed first-party content in post-merge reports; references remain visible.
 READER_PROFILE_FILE = TOOL_ROOT / "experimental" / "offline-audit" / "defaults.custom.lua"
 READER_PROFILE_REL = "opt/koreader/defaults.custom.lua"
 
@@ -53,10 +53,23 @@ REQUIRED_ENTRYPOINTS = (
     "opt/koreader/reader.lua", "opt/koreader/luajit", READER_PROFILE_REL,
 )
 
-# Best-effort, bounded scan: a hit means "look at this", not a hard proof.
+# Best-effort, bounded inventory. A signature is evidence to classify, not
+# by itself proof that the normal PMKB -> KOReader boot path depends on Nickel.
 NICKEL_NAME_PATTERN = re.compile(r"nickel|hindenburg|kobo\s*ereader\.conf", re.I)
-NICKEL_CONTENT_NEEDLES = (b"Nickel", b"Hindenburg", b"nickel_conf", b"/usr/local/Kobo", b"KoboRoot.tgz")
+NICKEL_CONTENT_NEEDLES = (
+    b"Nickel", b"Hindenburg", b"nickel_conf", b"/usr/local/Kobo",
+    b"KoboRoot.tgz", b"Kobo eReader.conf",
+)
 MAX_SCAN_BYTES = 2 * 1024 * 1024
+
+# Text files executed/read directly on the normal bootstrap path. References in
+# arbitrary KOReader upstream files remain findings; only active use from this
+# small contract can be blocking here.
+BOOTSTRAP_TEXT_PATHS = frozenset({
+    "etc/inittab", "etc/init.d/rcS", "usr/bin/pmkb-check-offline",
+    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
+    "opt/koreader/reader.lua", READER_PROFILE_REL,
+})
 
 
 class _AssemblyError(RuntimeError):
@@ -191,81 +204,272 @@ def _place_reader_profile(destination_root: Path | None, manifest: dict[str, dic
         os.chmod(dest, 0o644)
 
 
-def _scan_for_nickel(manifest: dict[str, dict], sources: dict[str, Path]) -> list[str]:
-    hits = [f"/{rel}: path name matches a Nickel/Kobo-userspace pattern"
-            for rel in manifest if NICKEL_NAME_PATTERN.search(rel)]
+def _finding(rel: str, kind: str, signature: str, reason: str, *,
+             blocking: bool = False, origin: str = "unknown") -> dict[str, Any]:
+    return {
+        "path": "/" + rel,
+        "kind": kind,
+        "signature": signature,
+        "classification": "blocking" if blocking else "informational",
+        "blocking": blocking,
+        "origin": origin,
+        "reason": reason,
+    }
+
+
+def _format_finding(finding: dict[str, Any]) -> str:
+    level = "FAIL" if finding["blocking"] else "INFO"
+    return (f"{finding['path']}: {level} {finding['reason']} "
+            f"({finding['signature']}; origin={finding['origin']})")
+
+
+def _generic_content_finding(rel: str, data: bytes, origin: str) -> dict[str, Any] | None:
+    lowered = data.lower()
+    for needle in NICKEL_CONTENT_NEEDLES:
+        if needle.lower() in lowered:
+            return _finding(
+                rel, "content_reference", needle.decode(),
+                "Nickel/Kobo-userspace reference retained for review",
+                origin=origin,
+            )
+    return None
+
+
+def _shell_command_groups(text: str) -> list[list[str]]:
+    groups: list[list[str]] = []
+    for line in text.splitlines():
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        lexer.commenters = "#"
+        try:
+            tokens = list(lexer)
+        except ValueError:
+            # Bootstrap validation rejects malformed scripts independently.
+            continue
+        group: list[str] = []
+        for token in tokens:
+            if token and all(ch in ";&|" for ch in token):
+                if group:
+                    groups.append(group)
+                    group = []
+            else:
+                group.append(token)
+        if group:
+            groups.append(group)
+    return groups
+
+
+def _is_nickel_command(token: str) -> bool:
+    name = token.rsplit("/", 1)[-1].lower()
+    return name in {"nickel", "nickel.sh", "hindenburg", "hindenburg.sh"}
+
+
+def _dangerous_runtime_reference(token: str) -> bool:
+    lowered = token.lower()
+    return ("/usr/local/kobo" in lowered or "kobo ereader.conf" in lowered
+            or "nickel_conf" in lowered)
+
+
+def _shell_group_blocker(group: list[str]) -> tuple[str, str] | None:
+    if not group:
+        return None
+    i = 0
+    while i < len(group) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", group[i]):
+        i += 1
+    while i < len(group) and group[i] in {"exec", "command", "nohup", "env", "if", "then", "elif", "do"}:
+        i += 1
+        while i < len(group) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", group[i]):
+            i += 1
+    if i >= len(group):
+        return None
+    command = group[i]
+    args = group[i + 1:]
+    if _is_nickel_command(command):
+        return ("bootstrap_launch", command)
+    if command in {".", "source"} and any(
+            _is_nickel_command(arg) or _dangerous_runtime_reference(arg) for arg in args):
+        return ("bootstrap_dependency", " ".join(args))
+    if command.rsplit("/", 1)[-1].lower() not in {"echo", "printf", "logger"}:
+        for token in (command, *args):
+            if _dangerous_runtime_reference(token):
+                return ("bootstrap_dependency", token)
+    return None
+
+
+def _lua_active_text(data: bytes) -> str:
+    text = data.decode("utf-8", errors="replace")
+    return "\n".join(line.split("--", 1)[0] for line in text.splitlines())
+
+
+def _blocking_findings_for_file(rel: str, data: bytes, origin: str) -> list[dict[str, Any]]:
+    if rel not in BOOTSTRAP_TEXT_PATHS:
+        return []
+    findings: list[dict[str, Any]] = []
+    if rel == READER_PROFILE_REL:
+        text = _lua_active_text(data)
+        light = re.search(r"\bKOBO_LIGHT_ON_START\s*=\s*(-?\d+)\b", text)
+        if light is None or int(light.group(1)) == -2:
+            signature = "missing -> upstream default -2" if light is None else "KOBO_LIGHT_ON_START=-2"
+            findings.append(_finding(
+                rel, "normal_path_dependency", signature,
+                "normal KOReader startup would read Nickel frontlight state",
+                blocking=True, origin=origin,
+            ))
+        sync = re.search(r"\bKOBO_SYNC_BRIGHTNESS_WITH_NICKEL\s*=\s*(true|false)\b", text, re.I)
+        if sync is None or sync.group(1).lower() != "false":
+            signature = ("missing -> upstream default true" if sync is None
+                         else "KOBO_SYNC_BRIGHTNESS_WITH_NICKEL=true")
+            findings.append(_finding(
+                rel, "normal_path_dependency", signature,
+                "KOReader settings would read/write Kobo eReader.conf",
+                blocking=True, origin=origin,
+            ))
+        return findings
+
+    if rel == "opt/koreader/reader.lua":
+        active = _lua_active_text(data)
+        direct = re.search(
+            r"(?:io\.open|os\.execute)\s*\([^\n)]*"
+            r"(?:Kobo eReader\.conf|/usr/local/Kobo|(?:^|[/\"'])nickel(?:[\"'/\s]|$))",
+            active, re.I,
+        )
+        if direct:
+            findings.append(_finding(
+                rel, "normal_path_dependency", direct.group(0)[:160],
+                "reader.lua directly accesses or launches a Nickel/Kobo userspace component",
+                blocking=True, origin=origin,
+            ))
+        return findings
+
+    text = data.decode("utf-8", errors="replace")
+    if rel == "etc/inittab":
+        processes = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split(":", 3)
+            processes.append(parts[3] if len(parts) == 4 else stripped)
+        groups = [group for process in processes for group in _shell_command_groups(process)]
+    else:
+        groups = _shell_command_groups(text)
+    for group in groups:
+        blocker = _shell_group_blocker(group)
+        if blocker:
+            kind, signature = blocker
+            findings.append(_finding(
+                rel, kind, signature,
+                "required bootstrap path actively launches or depends on Nickel/Kobo userspace",
+                blocking=True, origin=origin,
+            ))
+    return findings
+
+
+def _first_party_file_hashes() -> dict[str, str]:
+    """Reviewed first-party files keyed by path and SHA-256."""
+    manifest: dict[str, dict] = {}
+    _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
+    hashes = {
+        rel: entry["sha256"] for rel, entry in manifest.items()
+        if entry["kind"] == "file"
+    }
+    if READER_PROFILE_FILE.is_file():
+        hashes[READER_PROFILE_REL] = _rebuild.sha256_file(READER_PROFILE_FILE)
+    return hashes
+
+
+def _origin_for_digest(rel: str, digest: str | None, trusted: dict[str, str]) -> str:
+    if rel not in trusted:
+        return "external"
+    return "first_party_verified" if digest == trusted[rel] else "first_party_modified"
+
+
+def _findings_from_sources(manifest: dict[str, dict], sources: dict[str, Path]) -> list[dict[str, Any]]:
+    trusted = _first_party_file_hashes()
+    findings: list[dict[str, Any]] = []
+    for rel in sorted(manifest):
+        if not NICKEL_NAME_PATTERN.search(rel):
+            continue
+        entry = manifest[rel]
+        origin = _origin_for_digest(rel, entry.get("sha256"), trusted) if entry["kind"] == "file" else "unknown"
+        findings.append(_finding(
+            rel, "path_reference", "path-name",
+            "path name matches a Nickel/Kobo-userspace pattern", origin=origin,
+        ))
     for rel, path in sorted(sources.items()):
         try:
             data = path.read_bytes()
         except OSError:
             continue
-        for needle in NICKEL_CONTENT_NEEDLES:
-            if needle in data:
-                hits.append(f"/{rel}: content references {needle.decode()!r}")
-                break
-    return hits
+        origin = _origin_for_digest(rel, manifest.get(rel, {}).get("sha256"), trusted)
+        generic = _generic_content_finding(rel, data, origin)
+        if generic:
+            findings.append(generic)
+        findings.extend(_blocking_findings_for_file(rel, data, origin))
+    return findings
 
 
-def _first_party_file_paths() -> set[str]:
-    """Relative paths of this checkout's own reviewed content: the overlay
-    plus the KOReader defaults profile. Neither is user-supplied, so neither
-    is content-scanned for Nickel references once merged (see
-    scan_tree_for_nickel)."""
-    manifest: dict[str, dict] = {}
-    _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
-    paths = {rel for rel, entry in manifest.items() if entry["kind"] == "file"}
-    paths.add(READER_PROFILE_REL)
-    return paths
-
-
-def scan_tree_for_nickel(root: Path) -> list[str]:
-    """Scan an already-assembled rootfs *directory* (not pre-merge sources) for
-    unintended Nickel/Kobo-userspace references.
-
-    This is the entry point other local tools (for example a separate static
-    audit) should call against this builder's materialized output, instead of
-    reimplementing the merge or calling the pre-merge ``_copy_tree``/
-    ``_scan_for_nickel`` helpers directly on the final tree: once the overlay,
-    KOReader release and runtime components are merged on disk, a file's
-    origin is no longer recoverable from the tree alone, so a naive re-scan
-    would always flag this repository's own ``usr/bin/pmkb-reader`` comment
-    ("bypassing ... Nickel paths") as a false positive. This function instead
-    recomputes this checkout's own first-party content (the overlay plus the
-    KOReader defaults profile, see ``_first_party_file_paths``) and excludes
-    exactly those relative paths from the content scan, while still
-    name-scanning every path including theirs.
-    Read-only: never mounts, executes or modifies anything under ``root``.
-    """
+def _scan_tree_findings(root: Path) -> list[dict[str, Any]]:
     root = Path(root).resolve(strict=True)
-    excluded = _first_party_file_paths()
-    hits: list[str] = []
+    trusted = _first_party_file_hashes()
+    findings: list[dict[str, Any]] = []
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames.sort()
         filenames.sort()
         rel_dir = Path(dirpath).relative_to(root)
-        for name in (*dirnames, *filenames):
+        for name in dirnames:
             rel = _join("", rel_dir, name)
             if NICKEL_NAME_PATTERN.search(rel):
-                hits.append(f"/{rel}: path name matches a Nickel/Kobo-userspace pattern")
+                findings.append(_finding(
+                    rel, "path_reference", "path-name",
+                    "path name matches a Nickel/Kobo-userspace pattern",
+                ))
         for name in filenames:
             rel = _join("", rel_dir, name)
-            if rel in excluded:
-                continue
             full = Path(dirpath) / name
             if full.is_symlink() or not full.is_file():
                 continue
             try:
-                if full.stat().st_size > MAX_SCAN_BYTES:
+                size = full.stat().st_size
+                if size > MAX_SCAN_BYTES:
+                    if NICKEL_NAME_PATTERN.search(rel):
+                        findings.append(_finding(
+                            rel, "path_reference", "path-name",
+                            "path name matches a Nickel/Kobo-userspace pattern",
+                        ))
                     continue
+                digest = _rebuild.sha256_file(full)
                 data = full.read_bytes()
             except OSError:
                 continue
-            for needle in NICKEL_CONTENT_NEEDLES:
-                if needle in data:
-                    hits.append(f"/{rel}: content references {needle.decode()!r}")
-                    break
-    return hits
+            origin = _origin_for_digest(rel, digest, trusted)
+            if NICKEL_NAME_PATTERN.search(rel):
+                findings.append(_finding(
+                    rel, "path_reference", "path-name",
+                    "path name matches a Nickel/Kobo-userspace pattern", origin=origin,
+                ))
+            generic = _generic_content_finding(rel, data, origin)
+            if generic:
+                findings.append(generic)
+            findings.extend(_blocking_findings_for_file(rel, data, origin))
+    return findings
 
+
+def scan_tree_for_nickel(root: Path) -> list[str]:
+    """Return all signatures; informational references are never hidden."""
+    return [_format_finding(finding) for finding in _scan_tree_findings(root)]
+
+
+def classify_tree_for_nickel(root: Path) -> dict[str, Any]:
+    """Separate normal-path dependencies from informational compatibility refs."""
+    findings = _scan_tree_findings(root)
+    blocking = [finding for finding in findings if finding["blocking"]]
+    return {
+        "findings": findings,
+        "blocking_findings": blocking,
+        "scan": [_format_finding(finding) for finding in findings],
+        "blocking": [_format_finding(finding) for finding in blocking],
+    }
 
 def plan_rootfs(koreader_dir: Path, runtime_dir: Path) -> tuple[dict[str, Any], dict[str, dict]]:
     """Cross-platform, read-only dry run: validate inputs and compute the full manifest."""
@@ -285,29 +489,38 @@ def plan_rootfs(koreader_dir: Path, runtime_dir: Path) -> tuple[dict[str, Any], 
     manifest: dict[str, dict] = {}
     sources: dict[str, Path] = {}
     try:
-        # The overlay is first-party and already reviewed in this repository: it
-        # contributes manifest entries but is not content-scanned for Nickel
-        # references (its comments may legitimately describe bypassing Nickel).
-        _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
+        # First-party content is scanned too: references stay visible, while
+        # SHA-256 only identifies their reviewed origin for classification.
+        _copy_tree(OVERLAY_ROOT, None, manifest, sources, write=False, force_mode=0o755)
         _add_skeleton_dirs(manifest, None, write=False)
         _place_reader_profile(None, manifest, write=False)
+        if READER_PROFILE_FILE.stat().st_size <= MAX_SCAN_BYTES:
+            sources[READER_PROFILE_REL] = READER_PROFILE_FILE
         _copy_tree(koreader_dir, None, manifest, sources, base="opt/koreader", write=False)
         _copy_tree(runtime_dir, None, manifest, sources, write=False)
     except _AssemblyError as exc:
         return _report(status="failed", errors=[str(exc)]), {}
     missing = [p for p in REQUIRED_ENTRYPOINTS if p not in manifest]
     errors = [f"required entry point missing after assembly: /{p}" for p in missing]
-    nickel_hits = _scan_for_nickel(manifest, sources)
-    if nickel_hits:
-        errors.append(f"unexpected Nickel/Kobo-userspace references found ({len(nickel_hits)})")
+    nickel_findings = _findings_from_sources(manifest, sources)
+    nickel_blocking = [finding for finding in nickel_findings if finding["blocking"]]
+    if nickel_blocking:
+        errors.append(f"blocking Nickel/Kobo-userspace dependencies found ({len(nickel_blocking)})")
+    warnings = []
+    informational = len(nickel_findings) - len(nickel_blocking)
+    if informational:
+        warnings.append(f"Nickel/Kobo-userspace informational findings retained ({informational})")
     total_size = sum(entry.get("size", 0) for entry in manifest.values())
     files = [{"path": rel, **entry} for rel, entry in sorted(manifest.items())]
     report = _report(
         status="failed" if errors else "assembled",
         errors=errors,
+        warnings=warnings,
         entries=len(manifest),
         apparent_size=total_size,
-        nickel_scan=nickel_hits,
+        nickel_scan=[_format_finding(finding) for finding in nickel_findings],
+        nickel_findings=nickel_findings,
+        nickel_blocking=[_format_finding(finding) for finding in nickel_blocking],
         files=files,
     )
     return report, manifest
@@ -451,8 +664,10 @@ def build_rootfs(koreader_dir: Path, runtime_dir: Path, reference_recovery: Path
             },
             "owner_policy": "root:root (uniform); per-file ownership is not yet supported",
             "entries": len(manifest),
-            "nickel_scan": [],
-            "warnings": [],
+            "nickel_scan": plan.get("nickel_scan", []),
+            "nickel_findings": plan.get("nickel_findings", []),
+            "nickel_blocking": plan.get("nickel_blocking", []),
+            "warnings": plan.get("warnings", []),
             "errors": [],
         }
         build_manifest_path.write_text(json.dumps(report_out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
