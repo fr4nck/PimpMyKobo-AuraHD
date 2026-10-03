@@ -1,6 +1,10 @@
 # Outils / Tools
 
-Les outils publics du projet privilégient la **lecture seule**. Toute opération future d'écriture sur une microSD devra être séparée, explicite et protégée par des garde-fous supplémentaires.
+Les outils publics du projet privilégient la **lecture seule**. L'exécuteur Linux de restauration P1 est séparé, explicite et protégé par des garde-fous supplémentaires ; préparer son code n'autorise aucune écriture physique.
+
+## Commande pmkb et paquet Debian
+
+`python3 tools/pmkb.py --help` regroupe les outils sans modifier leurs arguments ni garde-fous. Le paquet `.deb` fournit la commande `pmkb`. Voir [Français](../docs/cli-install-fr.md) / [English](../docs/cli-install-en.md). `build-deb.py` construit le paquet local avec dpkg-deb, sans installation ni accès aux périphériques.
 
 ## `inspect-aura-hd.py`
 
@@ -86,7 +90,32 @@ Documentation :
 python3 ./tools/verify-backup-aura-hd.py ~/Aura-backup
 ```
 
+## Import historique pour reconstruction locale
+
+`import-legacy-backup.py` qualifie les fichiers pré-P1 et P2 avec une
+provenance `legacy/imported`, sans prétendre à une sauvegarde complète.
+`rebuild-rootfs.py` exige `--accept-legacy-import` et relit les preuves.
+Cet import ne peut pas autoriser de restauration physique.
+
+- [Français](../docs/import-legacy-backup-fr.md)
+- [English](../docs/import-legacy-backup-en.md)
+
+## Simulation locale du remplacement de P1
+
+`restore-rootfs.py` vérifie un plan par défaut. Avec `--simulate`, il crée
+une nouvelle copie d'une image disque locale et remplace uniquement P1.
+Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
+
+- [Français](../docs/restore-rootfs-simulation-fr.md)
+- [English](../docs/restore-rootfs-simulation-en.md)
+
+## Plan local avant restauration P1
+
+`prepare-p1-restore.py` relie la sauvegarde complète, la reconstruction et la simulation par leurs empreintes et produit un plan sans autoriser d'écriture physique. Voir [la procédure](../docs/prepare-p1-restore-fr.md).
+
 ## Tests
+
+La première restauration physique dispose d'un exécuteur Linux Live distinct : `restore-p1-linux.py`. Son mode par défaut vérifie uniquement les fichiers locaux. Voir [Français](../docs/restore-p1-linux-fr.md) / [English](../docs/restore-p1-linux-en.md) pour les refus, l'autorisation séparée et les limites.
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
 
@@ -100,5 +129,6 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 
 ## À venir
 
-- `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
-- `restore-rootfs` : restauration encadrée avec garde-fous et vérification après écriture.
+- Retour arrière physique automatisé : non implémenté. `restore-rootfs.py` reste un simulateur local ; la première écriture P1 relève de l'exécuteur Linux Live séparé.
+
+Voir la [roadmap actualisée](../docs/ROADMAP.fr.md) pour distinguer fonctionnalités implémentées et qualification matérielle restante.

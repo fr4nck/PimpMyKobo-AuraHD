@@ -18,6 +18,8 @@ uImage-*
 # Builds
 build/
 output/
+dist/
+*.deb
 *.o
 *.ko
 

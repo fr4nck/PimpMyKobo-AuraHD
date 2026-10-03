@@ -26,14 +26,16 @@ For a text browser, console or SSH session: [plain-text / Lynx disassembly guide
 
 Scripts live in [`../tools/`](../tools/).
 
+[Install the pmkb command on Debian/Ubuntu and WSL](cli-install-en.md).
+
+[Roadmap and qualification status](ROADMAP.md).
+
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
 - `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files;
 - [`backup-aura-hd.py`](backup-aura-hd-en.md): SHA-256-verified backup of a confirmed E606C0 Aura HD into an explicitly given directory;
 - [`verify-backup-aura-hd.py`](verify-backup-aura-hd-en.md): offline, read-only verification of an existing backup against its manifest.
 
-These tools never open the source microSD for writing. `backup-aura-hd.py` only writes into the backup directory.
-
-Before any inspection on Windows: [protect the microSD](windows-preservation-en.md).
+These tools never write to the microSD source. See the [tool catalogue](../tools/README.md) for local reconstruction and simulation. The [first P1 restore on native Linux Live](restore-p1-linux-en.md) uses a separate executor and requires explicit write authorization.
 
 Before any inspection on Windows: [protect the microSD](windows-preservation-en.md).
 

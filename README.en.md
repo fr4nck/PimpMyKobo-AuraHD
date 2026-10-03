@@ -6,6 +6,8 @@
 
 Rescue, liberation and modernization of the Kobo Aura HD.
 
+The `pmkb` command groups the project tools. [Install on Debian/Ubuntu and WSL](docs/cli-install-en.md). Physical modes still require native Linux and explicit restore authorization.
+
 ## Goal
 
 Build a lightweight, free and independent reading system for the Kobo Aura HD while documenting a reproducible rescue path for devices left unusable after a failed factory reset or software corruption.
@@ -210,7 +212,11 @@ A read-only tool does not make the host operating system unable to write to the 
 - [x] Linux/Windows CI on Python 3.10–3.13
 - [ ] Validate `inspect-aura-hd` against the physical microSD through the Windows card reader
 - [ ] Extract and document the E-Ink waveform precisely
-- [ ] Write backup and local reconstruction tools
+- [x] Local reconstruction, historical import and disk-image simulation
+- [x] pmkb command and Debian/Ubuntu/WSL package
+- [ ] Integrate and qualify the native backup tool
+- [ ] Qualify P1 restoration and boot on native Linux Live
+- [ ] Build the Qt/PySide6 interface for local operations
 - [ ] Build the reference U-Boot and kernel
 - [ ] Build a modern minimal userspace
 - [ ] Integrate KOReader
@@ -221,6 +227,7 @@ A read-only tool does not make the host operating system unable to write to the 
 - [Disassemble the Aura HD and access the internal microSD](docs/disassembly-en.md) — with original photos, iFixit/MobileRead sources and a Lynx-friendly text edition.
 - [Text / Lynx disassembly guide](docs/disassembly-lynx-en.txt)
 - [Documentation index](docs/README.en.md)
+- [Roadmap and next steps](docs/ROADMAP.md)
 - [Aura HD rescue](docs/rescue-en.md)
 - [Recover the recovery files](docs/recover-files-en.md)
 - [Aura HD inspector](docs/inspect-aura-hd-en.md)
