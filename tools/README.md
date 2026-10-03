@@ -115,7 +115,7 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 
 ## Rootfs KOReader expérimental (sans Nickel)
 
-`build-koreader-rootfs.py` assemble un rootfs P1 expérimental à partir de la surcouche `experimental/offline-rootfs`, d'une version locale de KOReader et de composants runtime locaux (jamais committés). L'assemblage est multiplateforme et ne nécessite aucun outil Linux ; `--build` construit l'image ext4 et réutilise les fonctions de `rebuild-rootfs.py`, sous Linux uniquement. Voir [le contrat V1](../docs/build-koreader-rootfs-spec-fr.md).
+`build-koreader-rootfs.py` assemble un rootfs P1 expérimental à partir de la surcouche `experimental/offline-rootfs`, d'une version locale de KOReader et de composants runtime locaux (jamais committés). L'assemblage est multiplateforme et ne nécessite aucun outil Linux ; `--build` construit l'image ext4 et réutilise les fonctions de `rebuild-rootfs.py`, sous Linux uniquement. `scan_tree_for_nickel(root)` est le point d'entrée public destiné aux outils tiers (par exemple un futur `preflight-koreader` fusionné) qui analysent un répertoire déjà assemblé par cet outil. Voir [le contrat V1](../docs/build-koreader-rootfs-spec-fr.md).
 
 ## Tests
 
