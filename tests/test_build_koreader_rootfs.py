@@ -73,7 +73,7 @@ class PlanRootfsTests(unittest.TestCase):
         self.assertEqual("assembled", report["status"], report)
         self.assertEqual([], report["errors"])
         for expected in ("etc/init.d/rcS", "etc/inittab", "usr/bin/pmkb-check-offline",
-                         "usr/bin/pmkb-reader", "bin/kobo_config.sh",
+                         "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
                          "opt/koreader/reader.lua", "opt/koreader/luajit",
                          "opt/koreader/libs/libfoo.so", "bin/busybox"):
             self.assertIn(expected, manifest, expected)

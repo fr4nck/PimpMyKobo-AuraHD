@@ -2,6 +2,9 @@
 set -eu
 [ -f /run/pmkb-ready ]
 /usr/bin/pmkb-check-offline
+# /run/pmkb-ready only proves P3 mounted during rcS; it says nothing about
+# now, so re-verify the mount right before launching.
+/usr/bin/pmkb-check-onboard
 export PRODUCT=dragon PLATFORM=ntx508
 export HOME=/tmp/pmkb KO_MULTIUSER=1
 export XDG_CONFIG_HOME=/tmp/pmkb/config XDG_DATA_HOME=/tmp/pmkb/data XDG_CACHE_HOME=/tmp/pmkb/cache

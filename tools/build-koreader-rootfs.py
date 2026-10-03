@@ -43,7 +43,7 @@ SKELETON_DIRS = ("proc", "sys", "dev", "dev/input", "dev/pts", "run", "tmp",
 
 REQUIRED_ENTRYPOINTS = (
     "etc/init.d/rcS", "etc/inittab", "usr/bin/pmkb-check-offline",
-    "usr/bin/pmkb-reader", "bin/kobo_config.sh",
+    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
     "opt/koreader/reader.lua", "opt/koreader/luajit",
 )
 

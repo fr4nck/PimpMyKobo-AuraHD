@@ -1,0 +1,8 @@
+#!/bin/sh
+# This guard is read-only. It only confirms /mnt/onboard is still mounted; it
+# never mounts, repairs or reads P3 content, and an unreadable mounts table
+# is a refusal, not an assumption that the mount is still there.
+set -eu
+mounts=${1:-/proc/mounts}
+[ -f "$mounts" ] || exit 1
+grep -q ' /mnt/onboard ' "$mounts"

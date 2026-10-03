@@ -29,6 +29,9 @@ done
 /usr/bin/pmkb-check-offline
 [ -c /dev/fb0 ] && [ -c /dev/input/event0 ] && [ -c /dev/input/event1 ]
 [ -b /dev/mmcblk0p3 ]
+# The rootfs build guarantees this directory, but rcS must not depend on that
+# alone: create it here too so a differently assembled rootfs still mounts.
+mkdir -p /mnt/onboard
 # No fsck, archive installation, formatting or partition changes.
 mount -t vfat -o ro,noatime,nodiratime,utf8 /dev/mmcblk0p3 /mnt/onboard
 /bin/busybox touch /run/pmkb-ready
