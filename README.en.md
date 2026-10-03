@@ -17,6 +17,41 @@ The project has two complementary goals:
 1. **Rescue an Aura HD** from its own microSD card without redistributing proprietary Kobo system images.
 2. **Liberate the Aura HD** by keeping only the hardware-specific layers that are required, then progressively replacing the Kobo userspace with a minimal stack centered on KOReader and free software components.
 
+The PMKB V1 target is **Linux → PMKB → KOReader directly**. Nickel and Kobo
+activation are outside the normal path. Necessary Netronix/Kobo hardware
+components remain identified and preserved; this does not mean the entire
+stack has already been rebuilt from source.
+
+## FIRST BOOT #1 — preparation status
+
+As of 3 October 2026, the FIRST BOOT #1 candidate is undergoing reconstruction
+and offline qualification. **No successful first PMKB hardware boot is established.**
+The following tools are available on `integration/pmkb-first-boot-1` at
+[`a8ce226`](https://github.com/fr4nck/PimpMyKobo-AuraHD/tree/a8ce226bcd46483feb8e35e49f826fa076098bfb),
+and are not yet integrated into `main` in this snapshot.
+
+| Item | Actual status / reference |
+| --- | --- |
+| KOReader/rootfs builder | Local assembly and Linux ext4 P1 construction available; [EN contract](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/build-koreader-rootfs-spec-en.md) |
+| ARM/runtime/bootstrap/storage audit | Static audit available, separate from hardware trials; [scope (FR)](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/audit-arm-runtime-fr.md) |
+| Preflight | Image/content aggregation available; no FAIL means neither successful boot nor write authorization; [contract (FR)](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/preflight-koreader-fr.md) |
+| FIRST BOOT #1 candidate | Final reconstruction result, commit, P1 SHA-256 and image-linked reports still to be recorded; [integration state](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/pmkb-first-boot-1-en.md) |
+| Actual PMKB hardware | **UNQUALIFIED**: boot, framebuffer/E-Ink, touch, frontlight, P3 mounting and USB; no hardware PASS claimed |
+| Calibre | A **V1** requirement, book transfer/USB not hardware-qualified; the read-only P3 prototype does not demonstrate that workflow |
+
+The [FIRST BOOT protocol](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/ff4e8c1a97d77fe02fe5b1d487c2299633d44fcf/docs/first-boot-qualification-en.md)
+and [evidence templates](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/d64a6e82d10ab1bb8833f3dbd9f464a27de1777a/docs/templates/first-boot/README.en.md)
+are prepared on documentation branches. Their tests remain NOT TESTED.
+Links are pinned so they work before convergence.
+
+**P2/recoveryfs is protected**: no modification, repurposing or log storage.
+Preserve pre-P1/HWCONFIG/waveform and P3 as well. A validated local build still
+requires a separate plan and authorization before physical writes; first boot
+will qualify only tests actually performed with evidence.
+
+The [documentation/Git convergence plan (FR)](docs/first-boot-convergence-fr.md)
+lists the proposed order and historical text to update after validation.
+
 ## Target hardware
 
 - Kobo Aura HD / N204
@@ -65,25 +100,10 @@ U-Boot includes Netronix adaptations such as `NTX_HWCONFIG`, RAM parameters, E-I
 
 ## Boot architecture
 
-    i.MX507 Boot ROM
-            |
-            v
-    U-Boot 2009.08 / Netronix
-            |
-            +-- HWCONFIG
-            +-- hardware parameters
-            +-- E-Ink waveform
-            |
-            v
-    Linux 2.6.35.3 / Kobo-Netronix
-            |
-            v
-         rootfs
-            |
-            v
-        userspace
-
-The long-term target is to preserve only the hardware initialization layers that are actually required while replacing the Kobo userspace.
+The target chain preserves the i.MX50 Boot ROM, U-Boot/Netronix, HWCONFIG,
+necessary hardware parameters and waveform, then Linux and a minimal PMKB P1
+launching KOReader directly. This is the target architecture, not a hardware
+boot already demonstrated.
 
 ## Original microSD card
 
@@ -186,7 +206,7 @@ Instead, it should provide documentation, inspection, validation, backup and loc
 - identify HWCONFIG and PCBA first;
 - require a backup before modification;
 - cryptographically verify writes;
-- preserve `recoveryfs` and HWCONFIG whenever possible.
+- require preservation of P2/`recoveryfs`, HWCONFIG and all areas outside the target.
 
 ### Operating-system writes still matter
 
@@ -214,13 +234,17 @@ A read-only tool does not make the host operating system unable to write to the 
 - [ ] Extract and document the E-Ink waveform precisely
 - [x] Local reconstruction, historical import and disk-image simulation
 - [x] pmkb command and Debian/Ubuntu/WSL package
-- [ ] Integrate and qualify the native backup tool
+- [x] Native backup and offline verification tools available
+- [ ] Qualify native backup on actual hardware
 - [ ] Qualify P1 restoration and boot on native Linux Live
-- [ ] Build the Qt/PySide6 interface for local operations
+- [x] First Qt/PySide6 workshop for local operations available
 - [ ] Build the reference U-Boot and kernel
-- [ ] Build a modern minimal userspace
-- [ ] Integrate KOReader
-- [ ] Test a fully liberated microSD image
+- [x] Minimal PMKB prototype and KOReader builder available on the integration branch
+- [x] ARM/runtime/bootstrap/storage audits and preflight available on the integration branch
+- [ ] Validate and record the reconstructed FIRST BOOT #1 candidate
+- [ ] Qualify the first PMKB boot and its hardware components
+- [ ] Qualify the V1-required Calibre book/USB workflow
+- [ ] Replace and rebuild preserved components when replacements are demonstrated
 
 ## Documentation
 

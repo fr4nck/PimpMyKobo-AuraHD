@@ -17,6 +17,42 @@ Le projet poursuit deux buts complémentaires :
 1. **Sauver une Aura HD** à partir de sa propre microSD, sans redistribuer d'images Kobo propriétaires.
 2. **Libérer l'Aura HD** en conservant les couches matérielles nécessaires puis en remplaçant progressivement l'environnement utilisateur Kobo par une pile minimale centrée sur KOReader et des composants libres.
 
+La cible PMKB V1 est **Linux → PMKB → KOReader directement**. Nickel et
+l'activation Kobo sont hors du chemin normal. Les couches Netronix/Kobo
+nécessaires au matériel restent identifiées et préservées ; cela ne signifie
+pas que toute la pile est déjà reconstruite depuis les sources.
+
+## FIRST BOOT #1 — état de préparation
+
+Au 3 octobre 2026, le candidat FIRST BOOT #1 est en cours de reconstruction
+et de qualification hors ligne. **Aucun premier boot PMKB réussi n'est établi.**
+Les outils ci-dessous sont disponibles sur `integration/pmkb-first-boot-1`
+au commit [`a8ce226`](https://github.com/fr4nck/PimpMyKobo-AuraHD/tree/a8ce226bcd46483feb8e35e49f826fa076098bfb),
+pas encore intégrés à `main` dans cet instantané.
+
+| Élément | État réel / référence |
+| --- | --- |
+| Builder KOReader/rootfs | Assemblage local et construction ext4 P1 sous Linux disponibles ; [contrat FR](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/build-koreader-rootfs-spec-fr.md) |
+| Audit ARM/runtime/bootstrap/storage | Audit statique disponible, distinct de l'essai matériel ; [portée](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/audit-arm-runtime-fr.md) |
+| Preflight | Agrégation image/contenu disponible ; sans FAIL ne vaut ni boot réussi ni autorisation d'écriture ; [contrat](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/preflight-koreader-fr.md) |
+| Candidat FIRST BOOT #1 | Résultat de reconstruction final, commit, SHA-256 P1 et rapports reliés à l'image encore à consigner ; [état d'intégration](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/a8ce226bcd46483feb8e35e49f826fa076098bfb/docs/pmkb-first-boot-1-fr.md) |
+| Matériel réel PMKB | **UNQUALIFIED** : boot, framebuffer/E-Ink, tactile, frontlight, montage P3 et USB ; aucun PASS matériel annoncé |
+| Calibre | Exigence **V1**, transfert des livres/USB non qualifiés matériellement ; le prototype P3 en lecture seule ne prouve pas ce parcours |
+
+[Protocole FIRST BOOT](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/ff4e8c1a97d77fe02fe5b1d487c2299633d44fcf/docs/first-boot-qualification-fr.md)
+et [modèles de preuves](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/d64a6e82d10ab1bb8833f3dbd9f464a27de1777a/docs/templates/first-boot/README.md)
+sont préparés sur des branches documentaires. Les tests y restent NOT TESTED.
+Les liens sont figés pour rester utilisables avant convergence.
+
+**P2/recoveryfs est sanctuarisée** : aucune modification, réaffectation ni
+utilisation pour les logs. Préserver aussi pré-P1/HWCONFIG/waveform et P3.
+Une construction locale validée exige encore un plan et une autorisation
+distincte avant toute écriture physique ; le premier boot ne qualifiera que
+les tests réellement exécutés avec preuves.
+
+La [préparation de convergence documentaire/Git](docs/first-boot-convergence-fr.md)
+précise l'ordre proposé et les textes historiques à actualiser après validation.
+
 ## Matériel cible
 
 - Kobo Aura HD / N204
@@ -65,25 +101,10 @@ U-Boot contient les adaptations Netronix, notamment `NTX_HWCONFIG`, les paramèt
 
 ## Architecture de démarrage
 
-    Boot ROM i.MX507
-            |
-            v
-    U-Boot 2009.08 / Netronix
-            |
-            +-- HWCONFIG
-            +-- paramètres matériels
-            +-- waveform E-Ink
-            |
-            v
-    Linux 2.6.35.3 / Kobo-Netronix
-            |
-            v
-         rootfs
-            |
-            v
-       environnement utilisateur
-
-La cible finale est de conserver le strict nécessaire à l'initialisation matérielle tout en remplaçant l'environnement utilisateur Kobo.
+La chaîne cible conserve la Boot ROM i.MX50, U-Boot/Netronix, HWCONFIG,
+paramètres matériels et waveform nécessaires, puis le noyau Linux et une
+P1 PMKB minimale lançant KOReader directement. C'est une architecture cible,
+pas un démarrage matériel déjà démontré.
 
 ## MicroSD originale
 
@@ -186,7 +207,7 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - identification du HWCONFIG et du PCBA ;
 - sauvegarde obligatoire avant modification ;
 - vérification cryptographique après écriture ;
-- conservation de `recoveryfs` et du HWCONFIG autant que possible.
+- préservation obligatoire de P2/`recoveryfs`, du HWCONFIG et des zones hors cible.
 
 ### Attention aux écritures du système d'exploitation
 
@@ -214,13 +235,17 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [ ] Extraire et documenter précisément la waveform E-Ink
 - [x] Reconstruction locale, import historique et simulation sur fichiers
 - [x] Commande `pmkb` et paquet Debian/Ubuntu/WSL
-- [ ] Intégrer et qualifier l'outil de sauvegarde natif
+- [x] Outils de sauvegarde native et de vérification hors ligne disponibles
+- [ ] Qualifier la sauvegarde native sur matériel réel
 - [ ] Qualifier la restauration P1 et le démarrage sous Linux Live
-- [ ] Construire l'interface Qt/PySide6 pour les opérations locales
+- [x] Premier atelier Qt/PySide6 pour les opérations locales disponible
 - [ ] Compiler U-Boot et le kernel de référence
-- [ ] Construire un userspace minimal moderne
-- [ ] Intégrer KOReader
-- [ ] Tester une microSD totalement libérée
+- [x] Prototype PMKB minimal et builder KOReader disponibles sur la branche d'intégration
+- [x] Audits ARM/runtime/bootstrap/storage et preflight disponibles sur la branche d'intégration
+- [ ] Valider et consigner le candidat FIRST BOOT #1 reconstruit
+- [ ] Qualifier le premier boot PMKB et ses composants matériels
+- [ ] Qualifier le parcours livres/USB Calibre requis pour V1
+- [ ] Remplacer et reconstruire les composants conservés quand leur remplacement est démontré
 
 ## Documentation
 
