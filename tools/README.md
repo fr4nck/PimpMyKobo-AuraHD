@@ -132,3 +132,7 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 - Retour arrière physique automatisé : non implémenté. `restore-rootfs.py` reste un simulateur local ; la première écriture P1 relève de l'exécuteur Linux Live séparé.
 
 Voir la [roadmap actualisée](../docs/ROADMAP.fr.md) pour distinguer fonctionnalités implémentées et qualification matérielle restante.
+
+## `audit-arm-runtime.py`
+
+Audit statique en lecture seule d'un rootfs extrait localement : ELF ARM32 little-endian, chargeur, dépendances et SHA-256. Disponible via `pmkb audit-arm-runtime`. Aucun ELF exécuté, aucun montage ni écriture. Voir [le contrat et ses limites](../docs/audit-arm-runtime-fr.md). Ce contrôle ne qualifie pas le démarrage matériel ni une restauration physique.

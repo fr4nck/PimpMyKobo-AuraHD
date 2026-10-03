@@ -9,6 +9,7 @@ from pathlib import Path
 
 VERSION = "0.2.0"
 COMMANDS = {
+    "audit-arm-runtime": ("audit-arm-runtime.py", "Audit ARM ELF dependencies in a local rootfs read-only."),
     "gui": ("pmkb-gui.py", "Open the optional Qt workshop for local files only."),
     "inspect": ("inspect-aura-hd.py", "Inspect an image or device read-only."),
     "verify-recovery": ("verify-recovery.py", "Verify an extracted recovery tree read-only."),
