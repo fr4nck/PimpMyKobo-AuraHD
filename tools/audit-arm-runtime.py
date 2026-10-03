@@ -98,7 +98,48 @@ def elf(data):
             'search_paths': [s for t, s in strings if t in (15, 29)], 'flags': header[6]}
 
 
-def audit(root):
+# Contract of the offline prototype at bec7fd5 / 6522092, not a new init.
+BOOT_ELFS = ('/sbin/init', '/bin/sh', '/bin/busybox', '/opt/koreader/luajit')
+BOOT_SCRIPTS = ('/etc/init.d/rcS', '/usr/bin/pmkb-check-offline',
+                '/usr/bin/pmkb-reader', '/bin/kobo_config.sh')
+BOOT_ACTIONS = ('::sysinit:/etc/init.d/rcS', '::once:/usr/bin/pmkb-reader',
+                '::shutdown:/bin/umount -a -r')
+
+
+def bootstrap(root):
+    """Check on-disk launch prerequisites, never execute init or scripts."""
+    if os.name != 'posix':
+        raise ValueError('bootstrap permissions require a POSIX extracted rootfs')
+    records, errors = [], []
+    for guest in (*BOOT_ELFS, *BOOT_SCRIPTS, '/etc/inittab', '/opt/koreader/reader.lua'):
+        try:
+            path = target(root, guest)
+            mode = stat.S_IMODE(path.stat().st_mode)
+            data = path.read_bytes()
+            records.append({'path': guest, 'resolved_path': '/' + path.relative_to(root).as_posix(),
+                            'mode': format(mode, '04o'), 'sha256': hashlib.sha256(data).hexdigest()})
+            if not data:
+                raise ValueError('empty bootstrap file')
+            if guest in (*BOOT_ELFS, *BOOT_SCRIPTS) and not mode & 0o111:
+                raise ValueError('bootstrap executable has no execute bit')
+            if guest in BOOT_ELFS:
+                elf(data)
+            if guest in BOOT_SCRIPTS:
+                if data.split(b'\n', 1)[0] != b'#!/bin/sh' or b'\r\n' in data:
+                    raise ValueError('expected LF shell script with #!/bin/sh')
+            if guest == '/etc/inittab':
+                if b'\r' in data:
+                    raise ValueError('inittab must use LF line endings')
+                actions = [line.strip() for line in data.decode('utf-8').splitlines()
+                           if line.strip() and not line.lstrip().startswith('#')]
+                if sorted(actions) != sorted(BOOT_ACTIONS):
+                    raise ValueError('inittab differs from the offline sysinit/once/shutdown contract')
+        except (OSError, ValueError) as exc:
+            errors.append(f'{guest}: {exc}')
+    return records, errors
+
+
+def audit(root, check_bootstrap=False):
     raw = str(root)
     if raw.startswith(('/dev', '/proc', '/sys', '\\\\.\\')):
         raise ValueError('local extracted rootfs required')
@@ -145,7 +186,12 @@ def audit(root):
                 errors.append(f'{guest}: {exc}')
     if not records:
         errors.append('no ARM ELF runtime found')
-    return {'tool': 'audit-arm-runtime', 'status': 'failed' if errors else 'ok',
+    boot_files = []
+    if check_bootstrap:
+        boot_files, boot_errors = bootstrap(root)
+        errors.extend(boot_errors)
+    return {'bootstrap_checked': check_bootstrap, 'bootstrap_files': boot_files,
+            'tool': 'audit-arm-runtime', 'status': 'failed' if errors else 'ok',
             'physical_restore_eligible': False, 'hardware_qualified': False,
             'elf_files': records, 'errors': errors}
 
@@ -153,9 +199,11 @@ def audit(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('rootfs', help='local extracted directory; never a device or mounted card')
+    parser.add_argument('--check-bootstrap', action='store_true',
+                        help='also check the offline prototype launch files and POSIX execute bits')
     args = parser.parse_args()
     try:
-        report = audit(args.rootfs)
+        report = audit(args.rootfs, check_bootstrap=args.check_bootstrap)
     except (OSError, ValueError) as exc:
         report = {'status': 'failed', 'errors': [str(exc)], 'physical_restore_eligible': False}
     print(json.dumps(report, indent=2, sort_keys=True))

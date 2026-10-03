@@ -89,3 +89,82 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn('not a regular file', '\n'.join(audit.audit(self.root)['errors']))
         for path in ('/dev/sdb', '/proc', '/sys', '/', r'\\.\PhysicalDrive2'):
             with self.assertRaises(ValueError): audit.audit(path)
+
+
+@unittest.skipUnless(os.name == 'posix', 'POSIX permissions required for bootstrap contract')
+class BootstrapTests(unittest.TestCase):
+    # Keep the runtime fixtures, with a synthetic offline execution chain.
+    def setUp(self):
+        RuntimeTests.setUp(self)
+        for guest in audit.BOOT_ELFS:
+            path = self.root / guest.lstrip('/')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(binary())
+            path.chmod(0o755)
+        for guest in audit.BOOT_SCRIPTS:
+            path = self.root / guest.lstrip('/')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'#!/bin/sh\nexit 0\n')
+            path.chmod(0o755)
+        (self.root / 'etc/inittab').write_text('\n'.join(audit.BOOT_ACTIONS) + '\n')
+        (self.root / 'opt/koreader/reader.lua').write_text('-- synthetic Lua fixture\n')
+
+    def test_bootstrap_contract_is_opt_in_and_does_not_mutate_files(self):
+        before = {p: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                  for p in self.root.rglob('*') if p.is_file()}
+        self.assertFalse(audit.audit(self.root)['bootstrap_checked'])
+        report = audit.audit(self.root, check_bootstrap=True)
+        self.assertEqual('ok', report['status'], report)
+        self.assertTrue(report['bootstrap_checked'])
+        self.assertEqual(10, len(report['bootstrap_files']))
+        self.assertFalse(report['hardware_qualified'])
+        self.assertFalse(report['physical_restore_eligible'])
+        self.assertEqual(before, {p: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                                  for p in before})
+
+    def test_missing_boot_files_fail_even_when_other_elfs_are_valid(self):
+        for guest in (*audit.BOOT_ELFS, *audit.BOOT_SCRIPTS, '/etc/inittab', '/opt/koreader/reader.lua'):
+            path = self.root / guest.lstrip('/')
+            data = path.read_bytes()
+            mode = path.stat().st_mode
+            path.unlink()
+            with self.subTest(guest=guest):
+                self.assertEqual('ok', audit.audit(self.root)['status'])
+                report = audit.audit(self.root, check_bootstrap=True)
+                self.assertEqual('failed', report['status'])
+                self.assertTrue(any(error.startswith(guest + ':') for error in report['errors']))
+            path.write_bytes(data)
+            path.chmod(mode)
+
+    def test_execute_bits_interpreters_and_line_endings(self):
+        reader = self.root / 'usr/bin/pmkb-reader'
+        reader.chmod(0o644)
+        self.assertIn('no execute bit', '\n'.join(audit.audit(self.root, True)['errors']))
+        reader.chmod(0o755)
+        for data in (b'#!/bin/sh\r\nexit 0\r\n', b'#!/missing/sh\n', b'exit 0\n', b''):
+            with self.subTest(data=data):
+                reader.write_bytes(data)
+                self.assertEqual('failed', audit.audit(self.root, True)['status'])
+        reader.write_bytes(b'#!/bin/sh\nexit 0\n')
+        (self.root / 'bin/sh').write_bytes(b'not an ARM shell')
+        self.assertIn('/bin/sh:', '\n'.join(audit.audit(self.root, True)['errors']))
+
+    def test_inittab_rejects_missing_duplicate_and_extra_actions(self):
+        path = self.root / 'etc/inittab'
+        for actions in (audit.BOOT_ACTIONS[:1], (*audit.BOOT_ACTIONS, '::once:/usr/bin/nickel'),
+                        (*audit.BOOT_ACTIONS, audit.BOOT_ACTIONS[1])):
+            path.write_text('\n'.join(actions))
+            self.assertIn('inittab differs', '\n'.join(audit.audit(self.root, True)['errors']))
+        path.write_text('# comment\n\n' + '\n'.join(audit.BOOT_ACTIONS))
+        self.assertEqual('ok', audit.audit(self.root, True)['status'])
+
+    def test_busybox_guest_absolute_links_are_validated(self):
+        for guest in ('/sbin/init', '/bin/sh'):
+            path = self.root / guest.lstrip('/')
+            path.unlink()
+            path.symlink_to('/bin/busybox')
+        report = audit.audit(self.root, True)
+        self.assertEqual('ok', report['status'], report)
+        (self.root / 'bin/busybox').chmod(0o644)
+        self.assertTrue(any('/sbin/init: bootstrap executable' in e
+                            for e in audit.audit(self.root, True)['errors']))
