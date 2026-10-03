@@ -26,6 +26,8 @@ Les scripts sont dans [`../tools/`](../tools/).
 
 [Installer la commande pmkb sur Debian/Ubuntu et WSL](cli-install-fr.md).
 
+[Roadmap et état de qualification](ROADMAP.fr.md).
+
 - `inspect-aura-hd.py` : identification et cartographie d'une microSD complète ;
 - `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0.
 

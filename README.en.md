@@ -210,7 +210,11 @@ A read-only tool does not make the host operating system unable to write to the 
 - [x] Linux/Windows CI on Python 3.10–3.13
 - [ ] Validate `inspect-aura-hd` against the physical microSD through the Windows card reader
 - [ ] Extract and document the E-Ink waveform precisely
-- [ ] Write backup and local reconstruction tools
+- [x] Local reconstruction, historical import and disk-image simulation
+- [x] pmkb command and Debian/Ubuntu/WSL package
+- [ ] Integrate and qualify the native backup tool
+- [ ] Qualify P1 restoration and boot on native Linux Live
+- [ ] Build the Qt/PySide6 interface for local operations
 - [ ] Build the reference U-Boot and kernel
 - [ ] Build a modern minimal userspace
 - [ ] Integrate KOReader
@@ -219,6 +223,7 @@ A read-only tool does not make the host operating system unable to write to the 
 ## Documentation
 
 - [Documentation index](docs/README.en.md)
+- [Roadmap and next steps](docs/ROADMAP.md)
 - [Aura HD rescue](docs/rescue-en.md)
 - [Recover the recovery files](docs/recover-files-en.md)
 - [Aura HD inspector](docs/inspect-aura-hd-en.md)

@@ -104,5 +104,7 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 ## À venir
 
 - `backup-aura-hd` : produire des sauvegardes locales avec empreintes ;
-- `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
+- Application Qt/PySide6 pour les opérations locales et les rapports ;
 - Retour arrière physique automatisé : non implémenté. `restore-rootfs.py` reste un simulateur local ; la première écriture P1 relève de l'exécuteur Linux Live séparé.
+
+Voir la [roadmap actualisée](../docs/ROADMAP.fr.md) pour distinguer fonctionnalités implémentées et qualification matérielle restante.

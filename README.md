@@ -210,7 +210,11 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [x] CI Linux/Windows Python 3.10–3.13
 - [ ] Valider `inspect-aura-hd` sur la microSD physique via le lecteur Windows
 - [ ] Extraire et documenter précisément la waveform E-Ink
-- [ ] Écrire les outils de sauvegarde et de reconstruction locale
+- [x] Reconstruction locale, import historique et simulation sur fichiers
+- [x] Commande `pmkb` et paquet Debian/Ubuntu/WSL
+- [ ] Intégrer et qualifier l'outil de sauvegarde natif
+- [ ] Qualifier la restauration P1 et le démarrage sous Linux Live
+- [ ] Construire l'interface Qt/PySide6 pour les opérations locales
 - [ ] Compiler U-Boot et le kernel de référence
 - [ ] Construire un userspace minimal moderne
 - [ ] Intégrer KOReader
@@ -219,6 +223,7 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 ## Documentation
 
 - [Index de la documentation](docs/README.md)
+- [Roadmap et prochaines étapes](docs/ROADMAP.fr.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
 - [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
 - [Inspecteur Aura HD](docs/inspect-aura-hd-fr.md)

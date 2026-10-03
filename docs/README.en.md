@@ -26,6 +26,8 @@ Scripts live in [`../tools/`](../tools/).
 
 [Install the pmkb command on Debian/Ubuntu and WSL](cli-install-en.md).
 
+[Roadmap and qualification status](ROADMAP.md).
+
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
 - `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files.
 
