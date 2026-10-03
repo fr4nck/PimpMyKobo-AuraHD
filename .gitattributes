@@ -1,2 +1,4 @@
 # Boot sources must remain executable by Linux shells in Windows/WSL checkouts.
 experimental/offline-rootfs/** text eol=lf
+experimental/offline-audit/** text eol=lf
+tests/offline-audit/*.lua text eol=lf

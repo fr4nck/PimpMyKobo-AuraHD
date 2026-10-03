@@ -2,6 +2,8 @@
 
 Cet audit porte sur les sources du paquet officiel KOReader `v2026.07.1`, les scripts de démarrage extraits des sauvegardes locales et l'init expérimental du dépôt. Aucun script matériel n'a été exécuté, aucun périphérique physique ouvert et aucune image modifiée. Ce document ne qualifie ni le démarrage ni une restauration.
 
+L'[audit approfondi des sources Netronix et de la recovery](offline-hardware-qualification-fr.md) complète ce premier relevé : configuration extraite du vrai noyau sauvegardé, chaîne waveform en RAM, activation ZForce, ioctl NTX et preuve de correction des réglages Nickel. Le prototype reste inchangé.
+
 ## Résultat
 
 Le support logiciel `dragon` existe dans KOReader, mais cela ne prouve pas qu'un rootfs autonome initialise correctement une Aura HD. Le lancement direct contourne des préparations du lanceur de référence. Le prototype actuel doit conserver son statut expérimental.
