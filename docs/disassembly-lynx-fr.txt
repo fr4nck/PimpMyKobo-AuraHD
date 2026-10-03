@@ -188,7 +188,5 @@ Cette documentation ne revendique pas la decouverte de la methode de
 demontage. Elle croise notre propre demontage avec les sources ci-dessus.
 
 Les photographies originales du guide proviennent de l'exemplaire reel
-etudie par PimpMyKobo-AuraHD et ne reproduisent pas les images d'iFixit ou
+demonte pour le projet et ne reproduisent pas les images d'iFixit ou
 de MobileRead.
-
-Photos : (c) Franck, 2026 — PimpMyKobo-AuraHD.

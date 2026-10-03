@@ -4,11 +4,9 @@
 
 Ce guide décrit l’ouverture d’une **Kobo Aura HD / N204** afin d’accéder à sa **microSD système interne**.
 
-La procédure est basée sur notre propre démontage d’une Aura HD réelle, puis **recoupée avec les sources iFixit et MobileRead** indiquées à chaque étape. Les photographies sont celles de l’exemplaire étudié par PimpMyKobo-AuraHD : aucune photographie iFixit ou MobileRead n’est reproduite ici.
+La procédure s’appuie sur le démontage de l’exemplaire du projet et sur les sources iFixit et MobileRead citées au fil des étapes.
 
-> **Principe du projet :** quand une information provient d’une source externe, elle est citée. Quand une observation provient directement de la machine étudiée, elle est signalée comme telle.
->
-> **Navigation texte :** aucune étape ne dépend des photographies. Avec Lynx ou un terminal sans images, le texte alternatif, les légendes et les schémas ASCII fournissent l’information nécessaire. Une [version texte pur](disassembly-lynx-fr.txt) est également disponible.
+Toutes les étapes restent lisibles sans images : les descriptions et les schémas ASCII complètent les photos. Une [version texte pour Lynx](disassembly-lynx-fr.txt) est disponible.
 
 ## Avant de commencer
 
@@ -83,11 +81,11 @@ Action :
 
 ![Cadre avant noir posé en diagonale au-dessus de la coque arrière ouverte de la Kobo Aura HD, montrant les deux éléments séparés.](images/disassembly/01-bezel-rear-shell.jpg)
 
-*Cadre avant et coque arrière séparés. Photo originale — © Franck, 2026 — PimpMyKobo-AuraHD.*
+*Cadre avant et coque arrière séparés.*
 
 ![Vue latérale rapprochée du cadre et de la coque arrière de la Kobo Aura HD, montrant la rangée de clips plastiques qui retiennent le cadre avant.](images/disassembly/02-bezel-clips.jpg)
 
-*Détail des clips périphériques. Cette vue explique pourquoi il vaut mieux progresser clip par clip plutôt que tirer sur le cadre. Photo originale — © Franck, 2026 — PimpMyKobo-AuraHD.*
+*Détail des clips périphériques.*
 
 Le wiki MobileRead indique **au moins six clips sur chaque grand côté** et du ruban adhésif double-face entre le cadre et l’écran. Le guide iFixit recommande de commencer au coin inférieur droit avec un spudger en plastique, puis de progresser le long du bas et autour de l’appareil.
 
@@ -96,10 +94,6 @@ Le wiki MobileRead indique **au moins six clips sur chaque grand côté** et du 
 - iFixit — [Kobo Aura HD Screen Replacement](https://www.ifixit.com/Guide/Kobo+Aura+HD+Screen+Replacement/96135), étape 1 ;
 - MobileRead Wiki — [Aura HD](https://wiki.mobileread.com/wiki/Aura_HD), section *Hacking* ;
 - MobileRead Forum — [Aura HD Replacing internal SD card?](https://www.mobileread.com/forums/showthread.php?t=214272), retour de démontage détaillant les clips et l’adhésif.
-
-### Ce que nous avons observé
-
-Sur l’exemplaire PimpMyKobo-AuraHD, le cadre et la coque se séparent bien par une succession de clips périphériques. La vue latérale ci-dessus permet d’en voir directement la forme et l’espacement.
 
 ---
 
@@ -151,7 +145,7 @@ Ne pas chercher à séparer l’écran de la carte mère pour accéder à la mic
 
 ![Module écran E-Ink de la Kobo Aura HD vu de face après retrait de la coque.](images/disassembly/03-eink-panel.jpg)
 
-*Module écran E-Ink sorti de la coque. La dalle doit être manipulée sans torsion. Photo originale — © Franck, 2026 — PimpMyKobo-AuraHD.*
+*Module écran E-Ink sorti de la coque.*
 
 Le guide iFixit confirme qu’après retrait des quatre vis, l’ensemble écran/carte mère se retire de la plaque arrière.
 
@@ -187,8 +181,6 @@ Le connecteur de batterie se soulève **perpendiculairement à la carte mère**.
 
 ## 5. Identifier la microSD système interne
 
-C’est le point essentiel du démontage.
-
 La Kobo Aura HD possède une **microSD amovible utilisée comme stockage système**. MobileRead la situe sur le **dos de la carte mère**, c’est-à-dire le côté opposé à l’écran.
 
 ```text
@@ -211,7 +203,7 @@ Dos de la carte mère — représentation fonctionnelle
 
 ![Gros plan de la carte mère de la Kobo Aura HD avec la microSD système noire encore insérée dans son logement interne.](images/disassembly/04-internal-system-microsd.jpg)
 
-*La microSD système encore en place sur la carte mère. C’est cette carte qu’il faut sauvegarder pour travailler sur le système interne. Photo originale — © Franck, 2026 — PimpMyKobo-AuraHD.*
+*MicroSD système encore en place sur la carte mère.*
 
 ### Attention : il y a deux usages microSD différents
 
@@ -232,8 +224,6 @@ MICROSD D’EXTENSION UTILISATEUR
        +--> ce n’est PAS la carte système
 ```
 
-Cette distinction est visible directement sur l’exemplaire démonté pour PimpMyKobo-AuraHD.
-
 **Sources :**
 
 - MobileRead Wiki — [Aura HD](https://wiki.mobileread.com/wiki/Aura_HD) : « An internal SD card is on the back side of the board » ;
@@ -248,11 +238,11 @@ Une fois la batterie déconnectée, retirer la microSD sans la tordre et sans ex
 
 ![MicroSD système d’origine retirée de la Kobo Aura HD et posée sur une table en bois.](images/disassembly/05-original-microsd.jpg)
 
-*MicroSD système d’origine après extraction. Photo originale — © Franck, 2026 — PimpMyKobo-AuraHD.*
+*MicroSD système d’origine après extraction.*
 
 **Ne rien écrire dessus à ce stade.**
 
-La première opération recommandée par ce projet est une **inspection en lecture seule**, puis une **sauvegarde complète** avant toute tentative de réparation.
+Commencer par une **inspection en lecture seule**, puis faire une **sauvegarde complète** avant toute tentative de réparation.
 
 Voir ensuite :
 
@@ -273,7 +263,7 @@ Un retour MobileRead de 2015 décrit explicitement la récupération des livres 
 
 Le remontage s’effectue dans l’ordre inverse.
 
-Il existe toutefois un piège important : **le tactile peut ne pas répondre lorsque le cadre avant n’est pas remis en place**. Ce comportement est documenté à la fois par iFixit et MobileRead.
+Attention au remontage : **le tactile peut ne pas répondre lorsque le cadre avant n’est pas remis en place**. Ce comportement est documenté à la fois par iFixit et MobileRead.
 
 Ne pas conclure trop vite à une panne du tactile en testant la liseuse complètement ouverte.
 
@@ -294,20 +284,13 @@ Ce document est conçu pour rester exploitable sans rendu graphique :
 - aucune étape ne dépend uniquement d’une flèche ou d’une annotation graphique ;
 - une édition texte pur est disponible dans [`disassembly-lynx-fr.txt`](disassembly-lynx-fr.txt).
 
-Un afficheur braille peut naturellement restituer le texte via son logiciel d’accès. Nous n’utilisons pas de pseudo-images en caractères braille Unicode : les caractères ASCII classiques sont plus robustes dans Lynx, SSH, consoles série et terminaux anciens.
+Les schémas ASCII restent lisibles dans Lynx et les terminaux. Le texte peut aussi être restitué par un afficheur braille.
 
 ---
 
-## Sources et remerciements
+## Sources
 
-Cette documentation ne revendique pas la découverte de la méthode de démontage de l’Aura HD.
-
-Elle a été construite à partir :
-
-- de notre démontage réel de la Kobo Aura HD utilisée par le projet ;
-- du guide iFixit **Kobo Aura HD Screen Replacement** ;
-- du **MobileRead Wiki — Aura HD** ;
-- des retours historiques de la communauté MobileRead concernant l’ouverture et le remplacement de la microSD interne.
+Le guide s’appuie sur le démontage de l’exemplaire du projet, le guide iFixit et les retours de la communauté MobileRead.
 
 ### Références principales
 
@@ -319,6 +302,4 @@ Elle a été construite à partir :
 
 Le wiki MobileRead indique que sa page Aura HD a été modifiée par Dale DePriest et repose notamment sur le travail de Chris Ridd et d’un contributeur anonyme. Le contenu du wiki est publié sous licence **Creative Commons Attribution-NonCommercial-ShareAlike**.
 
-Les photographies originales de ce guide proviennent de l’exemplaire démonté pour **PimpMyKobo-AuraHD**. Elles ne reprennent pas les photographies d’iFixit ou de MobileRead.
-
-Photos : © Franck, 2026 — utilisées dans le cadre du projet PimpMyKobo-AuraHD.
+Les photographies de ce guide proviennent de l’exemplaire démonté pour le projet. Elles ne reprennent pas les photographies d’iFixit ou de MobileRead.
