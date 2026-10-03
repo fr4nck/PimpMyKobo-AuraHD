@@ -1,0 +1,10 @@
+#!/bin/sh
+# This guard is read-only. An unknown or unreadable network state is a refusal.
+set -eu
+interfaces=${1:-/sys/class/net}
+[ -d "$interfaces" ] || exit 1
+[ -e "$interfaces/lo" ] || exit 1
+for interface in "$interfaces"/* "$interfaces"/.[!.]* "$interfaces"/..?*; do
+    [ -e "$interface" ] || [ -L "$interface" ] || continue
+    [ "${interface##*/}" = lo ] || exit 1
+done
