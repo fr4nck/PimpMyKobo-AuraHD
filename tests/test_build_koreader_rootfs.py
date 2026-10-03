@@ -154,6 +154,48 @@ class PlanRootfsTests(unittest.TestCase):
         self.assertFalse(report["hardware_qualified"])
 
 
+class ScanTreeForNickelTests(unittest.TestCase):
+    """Covers the integration entry point other local tools call post-merge."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.root = Path(self._td.name)
+        self.addCleanup(self._td.cleanup)
+
+    def materialize(self) -> Path:
+        koreader = make_koreader_dir(self.root)
+        runtime = make_runtime_dir(self.root)
+        dest = self.root / "assembled"
+        dest.mkdir()
+        manifest: dict = {}
+        mod._copy_tree(mod.OVERLAY_ROOT, dest, manifest, {}, write=True, force_mode=0o755)
+        mod._add_skeleton_dirs(manifest, dest, write=True)
+        mod._copy_tree(koreader, dest, manifest, {}, base="opt/koreader", write=True)
+        mod._copy_tree(runtime, dest, manifest, {}, write=True)
+        return dest
+
+    def test_overlays_own_nickel_comment_is_not_a_false_positive_once_merged(self):
+        # usr/bin/pmkb-reader legitimately documents bypassing Nickel paths; a
+        # naive re-scan of the merged tree would otherwise always flag it.
+        tree = self.materialize()
+        self.assertIn("Nickel", (tree / "usr/bin/pmkb-reader").read_text(encoding="utf-8"))
+        hits = mod.scan_tree_for_nickel(tree)
+        self.assertEqual([], hits)
+
+    def test_external_nickel_reference_in_merged_tree_is_still_flagged(self):
+        tree = self.materialize()
+        (tree / "opt/koreader/nickel_conf.lua").write_text("return {}\n", encoding="utf-8")
+        hits = mod.scan_tree_for_nickel(tree)
+        self.assertTrue(any("nickel_conf.lua" in hit for hit in hits), hits)
+
+    def test_external_content_reference_in_merged_tree_is_still_flagged(self):
+        tree = self.materialize()
+        (tree / "opt" / "koreader" / "legacy-helper").write_text(
+            "#!/bin/sh\n# calls Nickel helpers\n", encoding="utf-8")
+        hits = mod.scan_tree_for_nickel(tree)
+        self.assertTrue(any("legacy-helper" in hit and "Nickel" in hit for hit in hits), hits)
+
+
 @unittest.skipUnless(os.name == "posix", "symlink creation semantics are POSIX-specific")
 class PlanRootfsSymlinkTests(unittest.TestCase):
     def setUp(self):

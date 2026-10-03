@@ -170,6 +170,60 @@ def _scan_for_nickel(manifest: dict[str, dict], sources: dict[str, Path]) -> lis
     return hits
 
 
+def _overlay_file_paths() -> set[str]:
+    manifest: dict[str, dict] = {}
+    _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
+    return {rel for rel, entry in manifest.items() if entry["kind"] == "file"}
+
+
+def scan_tree_for_nickel(root: Path) -> list[str]:
+    """Scan an already-assembled rootfs *directory* (not pre-merge sources) for
+    unintended Nickel/Kobo-userspace references.
+
+    This is the entry point other local tools (for example a separate static
+    audit) should call against this builder's materialized output, instead of
+    reimplementing the merge or calling the pre-merge ``_copy_tree``/
+    ``_scan_for_nickel`` helpers directly on the final tree: once the overlay,
+    KOReader release and runtime components are merged on disk, a file's
+    origin is no longer recoverable from the tree alone, so a naive re-scan
+    would always flag this repository's own ``usr/bin/pmkb-reader`` comment
+    ("bypassing ... Nickel paths") as a false positive. This function instead
+    recomputes the overlay's own file set (from ``experimental/offline-rootfs``
+    in this checkout) and excludes exactly those relative paths from the
+    content scan, while still name-scanning every path including the overlay's.
+    Read-only: never mounts, executes or modifies anything under ``root``.
+    """
+    root = Path(root).resolve(strict=True)
+    excluded = _overlay_file_paths()
+    hits: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames.sort()
+        filenames.sort()
+        rel_dir = Path(dirpath).relative_to(root)
+        for name in (*dirnames, *filenames):
+            rel = _join("", rel_dir, name)
+            if NICKEL_NAME_PATTERN.search(rel):
+                hits.append(f"/{rel}: path name matches a Nickel/Kobo-userspace pattern")
+        for name in filenames:
+            rel = _join("", rel_dir, name)
+            if rel in excluded:
+                continue
+            full = Path(dirpath) / name
+            if full.is_symlink() or not full.is_file():
+                continue
+            try:
+                if full.stat().st_size > MAX_SCAN_BYTES:
+                    continue
+                data = full.read_bytes()
+            except OSError:
+                continue
+            for needle in NICKEL_CONTENT_NEEDLES:
+                if needle in data:
+                    hits.append(f"/{rel}: content references {needle.decode()!r}")
+                    break
+    return hits
+
+
 def plan_rootfs(koreader_dir: Path, runtime_dir: Path) -> tuple[dict[str, Any], dict[str, dict]]:
     """Cross-platform, read-only dry run: validate inputs and compute the full manifest."""
     errors = []
