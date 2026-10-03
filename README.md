@@ -1,5 +1,7 @@
 # PimpMyKobo-AuraHD
 
+![Logo rétro PMKB — Pimp My Kobo](assets/branding/pmkb-logo-original.png)
+
 **Français** | [English](README.en.md)
 
 Résurrection, sauvetage, libération et modernisation de la Kobo Aura HD.
