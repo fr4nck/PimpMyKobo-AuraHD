@@ -534,15 +534,19 @@ def _verify_built_image(image: Path, manifest: dict[str, dict], workdir: Path) -
     for rel, entry in manifest.items():
         block = stats.get(f"stat {_rebuild._quote_debugfs(rel)}", "")
         kind_match = re.search(r"Type: (.+?)\s+Mode:\s+([0-7]+)", block)
-        if not kind_match:
-            errors.append(f"missing in image: /{rel}")
+        owner_match = re.search(r"User:\s+(\d+)\s+Group:\s+(\d+)", block)
+        if not kind_match or not owner_match:
+            errors.append(f"missing or unreadable metadata in image: /{rel}")
             continue
         kind, mode = kind_match.group(1).strip(), kind_match.group(2)
+        owner = (int(owner_match.group(1)), int(owner_match.group(2)))
         if _rebuild.DEBUGFS_TYPES.get(kind) != entry["kind"]:
             errors.append(f"/{rel}: type {kind} != {entry['kind']}")
             continue
         if entry["kind"] != "symlink" and int(mode, 8) & 0o7777 != entry["mode"] & 0o7777:
             errors.append(f"/{rel}: mode {mode} != {entry['mode'] & 0o7777:04o}")
+        if owner != (0, 0):
+            errors.append(f"/{rel}: owner {owner[0]}:{owner[1]} != 0:0")
         if entry["kind"] == "symlink":
             fast = re.search(r'Fast link dest: "(.*)"', block)
             if fast and fast.group(1) != entry["target"]:
@@ -617,6 +621,11 @@ def build_rootfs(koreader_dir: Path, runtime_dir: Path, reference_recovery: Path
             features = ",".join(["none", *reference["features"]])
             script = (
                 "set -eu\n"
+                # In restricted user namespaces, uid/gid 0 may be unmapped and
+                # the real chown(2) returns EINVAL. Keep chown -R so fakeroot
+                # records uniform root:root metadata, but do not forward the
+                # ownership syscall to the underlying filesystem.
+                "export FAKEROOTDONTTRYCHOWN=1\n"
                 f"chown -R 0:0 {shlex.quote(str(root))}\n"
                 f"MKE2FS_CONFIG={shlex.quote(str(conf))} mke2fs -q -F -T pmkb -L rootfs "
                 f"-b {block_size} -I {reference['inode_size']} -E root_owner=0:0 "

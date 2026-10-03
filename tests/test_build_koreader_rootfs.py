@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -355,6 +356,48 @@ class PlanRootfsSymlinkTests(unittest.TestCase):
         self.assertTrue(any("kobo_config.sh" in e for e in report["errors"]), report["errors"])
 
 
+@unittest.skipUnless(sys.platform == "linux" and shutil.which("fakeroot") and shutil.which("unshare"),
+                     "Linux fakeroot/unshare required")
+class FakerootChownUserNamespaceTests(unittest.TestCase):
+    """Reproduce EINVAL for unmapped uid/gid 0 and prove the fakeroot workaround."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.root = Path(self._td.name)
+        self.addCleanup(self._td.cleanup)
+
+    def test_donttrychown_keeps_fake_root_ownership_when_real_chown_is_einval(self):
+        target = self.root / "tree"
+        (target / "sub").mkdir(parents=True)
+        (target / "file").write_text("x\n", encoding="utf-8")
+        (target / "sub" / "file").write_text("x\n", encoding="utf-8")
+        (target / "link").symlink_to("file")
+
+        probe = subprocess.run(["unshare", "-U", "-m", "true"], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if probe.returncode != 0:
+            self.skipTest("host does not allow an unmapped user namespace")
+
+        quoted = shlex.quote(str(target))
+        failing = subprocess.run(
+            ["unshare", "-U", "-m", "fakeroot", "--", "sh", "-c",
+             f"set -eu; chown -R 0:0 {quoted}"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if failing.returncode == 0 or "Invalid argument" not in failing.stdout:
+            self.skipTest("host fakeroot/kernel combination does not reproduce EINVAL")
+
+        fixed = subprocess.run(
+            ["unshare", "-U", "-m", "fakeroot", "--", "sh", "-c",
+             f"set -eu; export FAKEROOTDONTTRYCHOWN=1; chown -R 0:0 {quoted}; "
+             f"stat -c '%u:%g' {quoted} {quoted}/file {quoted}/link"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        self.assertEqual(0, fixed.returncode, fixed.stdout)
+        owners = [line.strip() for line in fixed.stdout.splitlines() if line.strip()]
+        self.assertEqual(["0:0", "0:0", "0:0"], owners[-3:], fixed.stdout)
+
+
 class BuildRootfsPreflightTests(unittest.TestCase):
     def setUp(self):
         self._td = tempfile.TemporaryDirectory()
@@ -452,6 +495,24 @@ class BuildRootfsLinuxBuildTests(unittest.TestCase):
         self.assertFalse(Path(str(output) + ".part").exists())
         self.assertTrue(Path(str(output) + ".koreader-build.json").is_file())
         self.assertEqual(0, subprocess.run(["e2fsck", "-f", "-n", str(output)], capture_output=True).returncode)
+
+        # owner_policy is verified from the ext4 image, not merely reported.
+        with tempfile.TemporaryDirectory() as td:
+            commands = [
+                f"stat {mod._rebuild._quote_debugfs('bin/busybox')}",
+                f"stat {mod._rebuild._quote_debugfs('opt/koreader/reader.lua')}",
+                f"stat {mod._rebuild._quote_debugfs('mnt/onboard')}",
+            ]
+            stats = mod._rebuild._debugfs_batch(output, commands, Path(td))
+        for command in commands:
+            self.assertRegex(stats[command], r"User:\s+0\s+Group:\s+0", stats[command])
+
+        fakeroot_scripts = [argv[-1] for argv in calls if Path(argv[0]).name == "fakeroot"]
+        self.assertTrue(fakeroot_scripts, calls)
+        self.assertTrue(any("export FAKEROOTDONTTRYCHOWN=1" in script and
+                            "chown -R 0:0" in script for script in fakeroot_scripts),
+                        fakeroot_scripts)
+
         for argv in calls:
             tool = Path(argv[0]).name
             self.assertNotIn(tool, {"dd", "mount", "umount", "losetup", "blockdev", "diskpart"})
