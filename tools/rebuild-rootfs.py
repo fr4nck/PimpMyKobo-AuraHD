@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -28,11 +29,17 @@ REQUIRED_TOOLS = ("mke2fs", "debugfs", "dumpe2fs", "e2fsck", "fakeroot", "tar")
 
 
 def looks_like_device(value: str) -> bool:
+    unix_raw = value.strip().replace("\\", "/")
+    if unix_raw.startswith("//"):
+        return True
     raw = value.strip().replace("/", "\\")
     if PHYSICALDRIVE_RE.match(raw):
         return True
     unix = value.strip().replace("\\", "/")
-    return unix == "/dev" or unix.startswith("/dev/")
+    if unix == "/dev" or unix.startswith("/dev/"):
+        return True
+    resolved = str(Path(value).resolve()).replace("\\", "/")
+    return resolved == "/dev" or resolved.startswith("/dev/") or resolved.startswith("//")
 
 
 def sha256_file(path: Path) -> str:
@@ -91,7 +98,7 @@ def _component_hash(component: dict[str, Any]) -> str | None:
     return None
 
 
-def preflight(manifest_path: Path, recovery_path: Path, output_path: Path) -> dict[str, Any]:
+def preflight(manifest_path: Path, recovery_path: Path, output_path: Path, *, accept_legacy_import: bool = False) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     for label, path in (("manifest", manifest_path), ("recovery", recovery_path), ("output", output_path)):
@@ -100,12 +107,29 @@ def preflight(manifest_path: Path, recovery_path: Path, output_path: Path) -> di
     if errors:
         return {"schema_version": 1, "tool": "rebuild-rootfs", "status": "failed", "ok": False, "errors": errors, "warnings": warnings}
     try:
+        if not manifest_path.is_file():
+            raise ValueError("manifest input is not a regular file")
         manifest = load_manifest(manifest_path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         return {"schema_version": 1, "tool": "rebuild-rootfs", "status": "failed", "ok": False, "errors": [f"cannot read backup manifest: {exc}"], "warnings": warnings}
     if manifest.get("schema_version") != SUPPORTED_BACKUP_SCHEMA:
         errors.append(f"unsupported backup schema: {manifest.get('schema_version')!r}")
-    if manifest.get("complete") is not True or manifest.get("status") not in ("complete", "ok"):
+    imported = manifest.get("tool") == "import-legacy-backup" or "provenance" in manifest or "contract" in manifest
+    if imported:
+        if not accept_legacy_import:
+            errors.append("legacy import requires explicit --accept-legacy-import")
+        try:
+            spec = importlib.util.spec_from_file_location("legacy_backup", Path(__file__).with_name("import-legacy-backup.py"))
+            legacy = importlib.util.module_from_spec(spec)
+            assert spec.loader
+            spec.loader.exec_module(legacy)
+            legacy.regular(manifest_path)
+            legacy.reject_device(output_path)
+            legacy.validate_import(manifest, manifest_path, recovery_path)
+            warnings.extend(manifest["warnings"])
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            errors.append(f"legacy import refused: {exc}")
+    elif manifest.get("complete") is not True or manifest.get("status") not in ("complete", "ok"):
         errors.append("backup manifest is not complete")
     if not _is_e606c0(manifest):
         errors.append("backup manifest does not identify E606C0")
@@ -150,6 +174,8 @@ def preflight(manifest_path: Path, recovery_path: Path, output_path: Path) -> di
     result: dict[str, Any] = {"schema_version": 1, "tool": "rebuild-rootfs", "status": "failed" if errors else "ready", "ok": False, "errors": errors, "warnings": warnings}
     if not errors:
         result.update({"rootfs_size": p1_size, "backup_manifest_sha256": sha256_file(manifest_path), "target_fingerprint": manifest.get("target_fingerprint"), "recovery_sha256": _component_hash(recovery or {})})
+        if imported:
+            result.update(input_provenance=manifest["provenance"], physical_restore_eligible=False)
     return result
 
 
@@ -402,8 +428,8 @@ def verify_image(image: Path, entries: dict[str, tarfile.TarInfo], hashes: dict[
     return checks, errors
 
 
-def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) -> dict[str, Any]:
-    result = preflight(manifest_path, recovery_path, output_path)
+def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path, *, accept_legacy_import: bool = False) -> dict[str, Any]:
+    result = preflight(manifest_path, recovery_path, output_path, accept_legacy_import=accept_legacy_import)
     if result["status"] != "ready":
         return result
     backend_errors = require_linux_backend()
@@ -459,7 +485,9 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
                     "checks": checks, "temporary_output": str(part)}
         digest = sha256_file(part)
         os.replace(part, output_path)
-        warnings = [] if md5sum is not None else ["fs.tgz contains no fs.md5sum; content verified against fs.tgz only"]
+        warnings = list(result["warnings"])
+        if md5sum is None:
+            warnings.append("fs.tgz contains no fs.md5sum; content verified against fs.tgz only")
         report = {
             "schema_version": 1,
             "tool": "rebuild-rootfs",
@@ -487,6 +515,8 @@ def build_rootfs(manifest_path: Path, recovery_path: Path, output_path: Path) ->
             "warnings": warnings,
             "errors": [],
         }
+        if "input_provenance" in result:
+            report.update(input_provenance=result["input_provenance"], physical_restore_eligible=False)
         rebuild_manifest.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return report
     except (OSError, subprocess.CalledProcessError, RuntimeError, tarfile.TarError) as exc:
@@ -500,14 +530,17 @@ def main() -> int:
     parser.add_argument("output_image")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--build", action="store_true", help="perform Linux-only local image construction")
+    parser.add_argument("--accept-legacy-import", action="store_true", help="accept declared historical association for local reconstruction only")
     args = parser.parse_args()
     paths = (Path(args.backup_manifest), Path(args.recovery_image), Path(args.output_image))
-    result = build_rootfs(*paths) if args.build else preflight(*paths)
+    result = (build_rootfs if args.build else preflight)(*paths, accept_legacy_import=args.accept_legacy_import)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print("PimpMyKobo-AuraHD — rebuild-rootfs")
         print("LOCAL FILES ONLY — physical/block devices are forbidden.")
+        for warning in result.get("warnings", []):
+            print(f"WARNING: {warning}")
         if result["status"] == "ready":
             print(f"READY: local inputs validated; planned P1 size = {result['rootfs_size']:,} bytes")
             print("Use --build under Linux/WSL2 to construct the local image.")

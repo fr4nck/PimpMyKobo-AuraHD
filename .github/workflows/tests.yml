@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, fix/claude-audit]
+    branches: [main, fix/claude-audit, feat/rebuild-rootfs-spec]
   pull_request:
 
 permissions:

@@ -60,6 +60,16 @@ Exemple :
 sudo python3 ./tools/verify-recovery.py /mnt/aurahd-recovery --hash-files
 ```
 
+## Import historique pour reconstruction locale
+
+`import-legacy-backup.py` qualifie les fichiers pré-P1 et P2 avec une
+provenance `legacy/imported`, sans prétendre à une sauvegarde complète.
+`rebuild-rootfs.py` exige `--accept-legacy-import` et relit les preuves.
+Cet import ne peut pas autoriser de restauration physique.
+
+- [Français](../docs/import-legacy-backup-fr.md)
+- [English](../docs/import-legacy-backup-en.md)
+
 ## Tests
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.

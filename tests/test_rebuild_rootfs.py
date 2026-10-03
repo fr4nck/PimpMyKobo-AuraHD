@@ -277,6 +277,39 @@ class RebuildRootfsLinuxBuildTests(unittest.TestCase):
         self.assertTrue(any("/home/user" in e and "owner" in e for e in errors), errors)
         self.assertTrue(any("/dev/console" in e and "device" in e for e in errors), errors)
 
+    def test_legacy_build_preserves_declared_provenance_and_inputs(self):
+        from test_import_legacy_backup import make_pre, imported_manifest, legacy
+        manifest, recovery, digest = self.make_inputs()
+        pre = self.root / "historical boot.bin"
+        make_pre(pre, P1_SIZE, recovery.stat().st_size)
+        pre_sha = legacy.digest(pre)
+        imported_manifest(pre, recovery, manifest)
+        output = self.root / "legacy rootfs.img"
+        report = mod.build_rootfs(manifest, recovery, output)
+        self.assertEqual("failed", report["status"])
+        self.assertFalse(output.exists())
+        report = mod.build_rootfs(manifest, recovery, output, accept_legacy_import=True)
+        self.assertEqual("ok", report["status"], report)
+        self.assertEqual("legacy/imported", report["input_provenance"]["kind"])
+        self.assertFalse(report["physical_restore_eligible"])
+        self.assertIsNone(report["target_fingerprint"])
+        self.assertEqual(pre_sha, legacy.digest(pre))
+        self.assertEqual(digest, legacy.digest(recovery))
+        saved = json.loads(Path(str(output) + ".rebuild.json").read_text())
+        self.assertFalse(saved["physical_restore_eligible"])
+
+    def test_legacy_qualification_does_not_bypass_recovery_content_validation(self):
+        from test_import_legacy_backup import make_pre, imported_manifest
+        manifest, recovery, _ = self.make_inputs(bad_md5=True)
+        pre = self.root / "boot.bin"
+        make_pre(pre, P1_SIZE, recovery.stat().st_size)
+        imported_manifest(pre, recovery, manifest)
+        output = self.root / "legacy rootfs.img"
+        report = mod.build_rootfs(manifest, recovery, output, accept_legacy_import=True)
+        self.assertEqual("failed", report["status"], report)
+        self.assertTrue(any("fs.md5sum" in e for e in report["errors"]))
+        self.assertFalse(output.exists())
+
 
 class RebuildRootfsArchiveSafetyTests(unittest.TestCase):
     def _archive(self, members):
