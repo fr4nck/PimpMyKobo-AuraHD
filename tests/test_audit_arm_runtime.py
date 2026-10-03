@@ -83,6 +83,15 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError): audit.target(self.root, '/lib/escape.so')
         self.assertEqual('failed', audit.audit(self.root)['status'])
 
+    def test_unreadable_subtree_is_reported_instead_of_silently_skipped(self):
+        def walk(*args, **kwargs):
+            kwargs['onerror'](PermissionError('synthetic inaccessible directory'))
+            return iter(())
+        with mock.patch.object(audit.os, 'walk', side_effect=walk):
+            report = audit.audit(self.root)
+        self.assertEqual('failed', report['status'])
+        self.assertIn('rootfs traversal', '\n'.join(report['errors']))
+
     def test_empty_root_and_special_file_are_refused(self):
         self.assertEqual('failed', audit.audit(self.root)['status'])
         if hasattr(os, 'mkfifo'):

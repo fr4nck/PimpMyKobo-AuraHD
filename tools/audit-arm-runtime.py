@@ -171,7 +171,7 @@ def audit(root, check_bootstrap=False, check_storage=False):
         raise ValueError('local extracted rootfs directory required')
     records, errors = [], []
     # os.walk does not follow directory links. File links resolve within guest /.
-    for directory, dirs, files in os.walk(root, followlinks=False):
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=lambda exc: errors.append(f'rootfs traversal: {exc}')):
         dirs.sort()
         for name in sorted(files):
             guest = '/' + (Path(directory) / name).relative_to(root).as_posix()

@@ -136,3 +136,7 @@ Voir la [roadmap actualisée](../docs/ROADMAP.fr.md) pour distinguer fonctionnal
 ## `audit-arm-runtime.py`
 
 Audit statique en lecture seule d'un rootfs extrait localement : ELF ARM32 little-endian, chargeur, dépendances et SHA-256. Disponible via `pmkb audit-arm-runtime`. Aucun ELF exécuté, aucun montage ni écriture. Voir [le contrat et ses limites](../docs/audit-arm-runtime-fr.md). L’option `--check-bootstrap` vérifie aussi les fichiers de lancement, permissions et actions `inittab` du prototype hors ligne (POSIX uniquement). L’option indépendante `--check-storage` contrôle les répertoires `/mnt` et `/mnt/onboard`, sans montage ni accès à P3. Ce contrôle ne qualifie pas le démarrage matériel ni une restauration physique.
+
+## `preflight-koreader.py`
+
+`pmkb preflight-koreader ROOTFS_OU_IMAGE_LOCALE` agrège les contrôles hors matériel existants, avec verdicts `PASS`, `FAIL`, `UNQUALIFIED`. Aucun montage ni restauration ; toutes les qualifications matérielles restent `UNQUALIFIED`. Voir [la portée exacte, le scanner Nickel optionnel et les limites des images](../docs/preflight-koreader-fr.md).
