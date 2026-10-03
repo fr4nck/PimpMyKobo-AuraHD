@@ -15,6 +15,8 @@ Le firmware inspecté contient une archive `KoboRoot.tgz` en attente qui changer
 
 ## État de validation et limites
 
+L'[audit statique du matériel](offline-hardware-audit-fr.md) précise les écarts identifiés avant tout essai : éclairage NTX, préparation du framebuffer, réglages Nickel encore actifs dans le paquet KOReader et différences entre cold-plug et udev. Cet audit ne modifie pas l'image expérimentale existante.
+
 BusyBox et LuaJIT ARM ont été exécutés sous QEMU user-mode, dans un espace réseau isolé ; les 36 bibliothèques ELF fournies dans `koreader/libs` se chargent avec le runtime choisi. Ce test utilise le noyau du PC, pas celui de l'Aura HD. Les tests synthétiques vérifient le refus des interfaces inconnues et la syntaxe des scripts sans exécuter les commandes matérielles.
 
 L'image locale de développement est contrôlée avec `e2fsck -f -n`. Son rapport est marqué `experimental`, `complete=false`, `physical_restore_eligible=false` et porte un nom de tool distinct. Ce rapport n'est pas un rapport de reconstruction recovery et ne doit jamais être présenté au pipeline existant comme une reconstruction qualifiée.
