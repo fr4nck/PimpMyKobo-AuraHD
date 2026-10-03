@@ -1,0 +1,22 @@
+[Unit]
+Description=PimpMyKobo Aura HD FIRST BOOT qualification
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=simple
+User=root
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/sbin/pmkb-qualification --menu
+Restart=always
+RestartSec=1
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target
