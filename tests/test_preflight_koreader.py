@@ -134,17 +134,18 @@ class TreeTests(unittest.TestCase):
         self.assertEqual('UNQUALIFIED', report['status'])
         self.assertIsNone(report['offline_checks_satisfied'])
 
-    def test_optional_builder_scanner_is_reused_without_write(self):
+    def test_optional_builder_scanner_is_reused_on_the_post_merge_tree(self):
+        # scan_tree_for_nickel (not the pre-merge _copy_tree/_scan_for_nickel
+        # pair) is the builder's dedicated entry point for an already
+        # assembled directory like the one preflight is given here.
         builder = mock.Mock()
-        builder._scan_for_nickel.return_value = []
+        builder.scan_tree_for_nickel.return_value = []
         with (mock.patch.object(pre.Path, 'is_file', return_value=True),
               mock.patch.object(pre, 'peer', return_value=builder)):
             result = pre.nickel(self.root)
         self.assertEqual('PASS', result['status'])
-        self.assertFalse(builder._copy_tree.call_args.kwargs['write'])
-        self.assertIsNone(builder._copy_tree.call_args.args[1])
-        builder._scan_for_nickel.assert_called_once()
-        builder._scan_for_nickel.return_value = ['/opt/koreader/defaults.lua: Nickel reference']
+        builder.scan_tree_for_nickel.assert_called_once_with(self.root)
+        builder.scan_tree_for_nickel.return_value = ['/opt/koreader/defaults.lua: Nickel reference']
         with (mock.patch.object(pre.Path, 'is_file', return_value=True),
               mock.patch.object(pre, 'peer', return_value=builder)):
             self.assertEqual('FAIL', pre.nickel(self.root)['status'])

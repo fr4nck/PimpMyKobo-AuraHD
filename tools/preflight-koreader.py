@@ -35,13 +35,20 @@ def item(status, reason, **evidence):
 
 
 def nickel(root):
-    """Reuse the builder's read-only scanner if installed alongside this tool."""
+    """Reuse the builder's read-only scanner if installed alongside this tool.
+
+    scan_tree_for_nickel is the builder's dedicated post-merge entry point: it
+    excludes the repository's own experimental/offline-rootfs overlay content
+    from the scan (recomputed from that checkout, not from pre-merge
+    provenance), which a direct call to the pre-merge _copy_tree/
+    _scan_for_nickel pair cannot do once this directory is already merged —
+    that combination permanently flagged usr/bin/pmkb-reader's own "bypassing
+    ... Nickel paths" comment on every build. See build-koreader-rootfs-spec.
+    """
     if not Path(__file__).with_name('build-koreader-rootfs.py').is_file():
         return item('UNQUALIFIED', 'Builder Nickel scanner not present in this checkout; no duplicate scanner')
     builder = peer('build-koreader-rootfs')
-    manifest, sources = {}, {}
-    builder._copy_tree(root, None, manifest, sources, write=False)
-    hits = builder._scan_for_nickel(manifest, sources)
+    hits = builder.scan_tree_for_nickel(root)
     return item('FAIL' if hits else 'PASS',
                 'Existing builder signature scan; hits require review, absence is not exhaustive proof',
                 findings=hits)

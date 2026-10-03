@@ -31,6 +31,25 @@ def binary(needed=None, interpreter=None):
     return bytes(data)
 
 
+def binary_with_runpath(needed, runpath):
+    """A minimal ELF with both a DT_NEEDED and a DT_RUNPATH entry."""
+    data = bytearray(512)
+    data[:7] = b'\x7fELF\x01\x01\x01'
+    struct.pack_into('<HHIIIIIHHHHHH', data, 16, 3, 40, 1, 0, 52, 0, 0x5000000, 52, 32, 2, 0, 0, 0)
+    struct.pack_into('<IIIIIIII', data, 52, 1, 0, 0x1000, 0, 512, 512, 5, 4096)  # PT_LOAD
+    struct.pack_into('<IIIIIIII', data, 84, 2, 200, 0x1000 + 200, 0, 40, 40, 4, 4)  # PT_DYNAMIC (5 entries)
+    needed_off = 0
+    runpath_off = len(needed) + 1
+    strsz = runpath_off + len(runpath) + 1
+    entries = ((5, 0x1000 + 300), (10, strsz), (1, needed_off), (29, runpath_off), (0, 0))
+    for i, pair in enumerate(entries):
+        struct.pack_into('<iI', data, 200 + i * 8, *pair)
+    data[300:300 + len(needed) + 1] = needed.encode() + b'\0'
+    start = 300 + runpath_off
+    data[start:start + len(runpath) + 1] = runpath.encode() + b'\0'
+    return bytes(data)
+
+
 class RuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -53,15 +72,50 @@ class RuntimeTests(unittest.TestCase):
         (self.root / 'lib/libc.so').unlink()
         self.assertIn('libc.so', '\n'.join(audit.audit(self.root)['errors']))
 
-    def test_invalid_first_library_and_search_paths_fail_closed(self):
+    def test_invalid_first_library_wins_even_if_a_later_copy_is_valid(self):
         (self.root / 'bin/reader').write_bytes(binary('libc.so'))
         (self.root / 'opt/koreader/libs/libc.so').write_bytes(b'not ELF')
         (self.root / 'lib/libc.so').write_bytes(binary())
         self.assertEqual('failed', audit.audit(self.root)['status'])
-        data = bytearray(binary('/lib'))
-        struct.pack_into('<i', data, 216, 29)
-        (self.root / 'bin/reader').write_bytes(data)
-        self.assertIn('RPATH/RUNPATH', '\n'.join(audit.audit(self.root)['errors']))
+
+    def test_absolute_runpath_entry_extends_the_search_outside_the_defaults(self):
+        # A plain absolute RPATH/RUNPATH entry (no dynamic string token) is
+        # unambiguous and should extend the search, not be refused outright.
+        (self.root / 'custom/libs').mkdir(parents=True)
+        (self.root / 'bin/reader').write_bytes(binary_with_runpath('extra.so', '/custom/libs'))
+        (self.root / 'custom/libs/extra.so').write_bytes(binary())
+        report = audit.audit(self.root)
+        self.assertEqual('ok', report['status'], report)
+
+    def test_origin_token_resolves_to_the_elfs_own_directory(self):
+        (self.root / 'opt/koreader/vendor').mkdir(parents=True)
+        (self.root / 'opt/koreader/vendor/plugin.so').write_bytes(binary_with_runpath('helper.so', '$ORIGIN'))
+        (self.root / 'opt/koreader/vendor/helper.so').write_bytes(binary())
+        report = audit.audit(self.root)
+        self.assertEqual('ok', report['status'], report)
+        self.assertFalse(any('RUNPATH' in e for e in report['errors']), report['errors'])
+
+    def test_origin_token_does_not_search_outside_its_own_directory(self):
+        (self.root / 'opt/koreader/vendor').mkdir(parents=True)
+        (self.root / 'opt/koreader/vendor/plugin.so').write_bytes(binary_with_runpath('helper.so', '$ORIGIN'))
+        # helper.so is absent from vendor/ and from every default search dir.
+        report = audit.audit(self.root)
+        self.assertEqual('failed', report['status'])
+        self.assertTrue(any('missing or invalid ARM dependency helper.so' in e for e in report['errors']), report['errors'])
+
+    def test_unsupported_dynamic_string_tokens_are_refused(self):
+        (self.root / 'opt/koreader/vendor').mkdir(parents=True)
+        (self.root / 'opt/koreader/vendor/plugin.so').write_bytes(binary_with_runpath('helper.so', '$LIB/extra'))
+        report = audit.audit(self.root)
+        self.assertEqual('failed', report['status'])
+        self.assertTrue(any('unsupported dynamic string token' in e for e in report['errors']), report['errors'])
+
+    def test_relative_runpath_without_origin_is_refused(self):
+        (self.root / 'opt/koreader/vendor').mkdir(parents=True)
+        (self.root / 'opt/koreader/vendor/plugin.so').write_bytes(binary_with_runpath('helper.so', 'relative/dir'))
+        report = audit.audit(self.root)
+        self.assertEqual('failed', report['status'])
+        self.assertTrue(any('unsupported or unresolved RPATH/RUNPATH entry' in e for e in report['errors']), report['errors'])
 
     def test_wrong_architecture_truncation_and_invalid_string_table(self):
         data = bytearray(binary('libc.so'))
@@ -117,7 +171,10 @@ class BootstrapTests(unittest.TestCase):
             path.write_bytes(b'#!/bin/sh\nexit 0\n')
             path.chmod(0o755)
         (self.root / 'etc/inittab').write_text('\n'.join(audit.BOOT_ACTIONS) + '\n')
-        (self.root / 'opt/koreader/reader.lua').write_text('-- synthetic Lua fixture\n')
+        for guest in audit.BOOT_DATA_FILES:
+            path = self.root / guest.lstrip('/')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('-- synthetic Lua fixture\n')
 
     def test_bootstrap_contract_is_opt_in_and_does_not_mutate_files(self):
         before = {p: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
@@ -126,14 +183,15 @@ class BootstrapTests(unittest.TestCase):
         report = audit.audit(self.root, check_bootstrap=True)
         self.assertEqual('ok', report['status'], report)
         self.assertTrue(report['bootstrap_checked'])
-        self.assertEqual(10, len(report['bootstrap_files']))
+        self.assertEqual(len(audit.BOOT_ELFS) + len(audit.BOOT_SCRIPTS) + 1 + len(audit.BOOT_DATA_FILES),
+                         len(report['bootstrap_files']))
         self.assertFalse(report['hardware_qualified'])
         self.assertFalse(report['physical_restore_eligible'])
         self.assertEqual(before, {p: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
                                   for p in before})
 
     def test_missing_boot_files_fail_even_when_other_elfs_are_valid(self):
-        for guest in (*audit.BOOT_ELFS, *audit.BOOT_SCRIPTS, '/etc/inittab', '/opt/koreader/reader.lua'):
+        for guest in (*audit.BOOT_ELFS, *audit.BOOT_SCRIPTS, '/etc/inittab', *audit.BOOT_DATA_FILES):
             path = self.root / guest.lstrip('/')
             data = path.read_bytes()
             mode = path.stat().st_mode
@@ -158,6 +216,20 @@ class BootstrapTests(unittest.TestCase):
         reader.write_bytes(b'#!/bin/sh\nexit 0\n')
         (self.root / 'bin/sh').write_bytes(b'not an ARM shell')
         self.assertIn('/bin/sh:', '\n'.join(audit.audit(self.root, True)['errors']))
+
+    def test_pmkb_check_onboard_is_covered_by_the_bootstrap_contract(self):
+        self.assertIn('/usr/bin/pmkb-check-onboard', audit.BOOT_SCRIPTS)
+        guard = self.root / 'usr/bin/pmkb-check-onboard'
+        guard.chmod(0o644)
+        self.assertIn('no execute bit', '\n'.join(audit.audit(self.root, True)['errors']))
+        guard.chmod(0o755)
+        self.assertEqual('ok', audit.audit(self.root, True)['status'])
+
+    def test_defaults_custom_lua_is_required_and_checked_non_empty(self):
+        self.assertIn('/opt/koreader/defaults.custom.lua', audit.BOOT_DATA_FILES)
+        profile = self.root / 'opt/koreader/defaults.custom.lua'
+        profile.write_bytes(b'')
+        self.assertIn('empty bootstrap file', '\n'.join(audit.audit(self.root, True)['errors']))
 
     def test_inittab_rejects_missing_duplicate_and_extra_actions(self):
         path = self.root / 'etc/inittab'

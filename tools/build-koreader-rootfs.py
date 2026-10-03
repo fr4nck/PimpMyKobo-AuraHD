@@ -28,6 +28,12 @@ from typing import Any
 
 TOOL_ROOT = Path(__file__).resolve().parent.parent
 OVERLAY_ROOT = TOOL_ROOT / "experimental" / "offline-rootfs"
+# Reviewed, first-party KOReader defaults profile (docs/offline-hardware-
+# qualification-fr.md): demonstrated necessary so startup never reads/writes
+# Kobo's own "Kobo eReader.conf" against a read-only P3. Not user-supplied,
+# so treated like the overlay for the Nickel content scan.
+READER_PROFILE_FILE = TOOL_ROOT / "experimental" / "offline-audit" / "defaults.custom.lua"
+READER_PROFILE_REL = "opt/koreader/defaults.custom.lua"
 
 _REBUILD_SPEC = importlib.util.spec_from_file_location(
     "pmkb_rebuild_rootfs_internal", Path(__file__).with_name("rebuild-rootfs.py")
@@ -44,7 +50,7 @@ SKELETON_DIRS = ("proc", "sys", "dev", "dev/input", "dev/pts", "run", "tmp",
 REQUIRED_ENTRYPOINTS = (
     "etc/init.d/rcS", "etc/inittab", "usr/bin/pmkb-check-offline",
     "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
-    "opt/koreader/reader.lua", "opt/koreader/luajit",
+    "opt/koreader/reader.lua", "opt/koreader/luajit", READER_PROFILE_REL,
 )
 
 # Best-effort, bounded scan: a hit means "look at this", not a hard proof.
@@ -155,6 +161,36 @@ def _add_skeleton_dirs(manifest: dict[str, dict], destination_root: Path | None,
             (destination_root / rel).mkdir(parents=True, exist_ok=True)
 
 
+def _place_reader_profile(destination_root: Path | None, manifest: dict[str, dict], *, write: bool) -> None:
+    """Install the reviewed, Nickel-config-avoiding KOReader defaults profile.
+
+    Demonstrated necessary, not merely proposed (see
+    docs/offline-hardware-qualification-fr.md): without
+    KOBO_LIGHT_ON_START=-1 and KOBO_SYNC_BRIGHTNESS_WITH_NICKEL=false,
+    KOReader's startup frontlight sync reads, and on a missing setting can
+    try to write, Kobo's own "Kobo eReader.conf" - a real failure risk
+    against this prototype's read-only P3. Placed before koreader_dir is
+    merged, so a koreader_dir that already ships its own
+    defaults.custom.lua collides (and fails loudly) instead of silently
+    overriding this safety setting.
+    """
+    if READER_PROFILE_REL in manifest:
+        raise _AssemblyError(f"path collision while assembling rootfs: /{READER_PROFILE_REL}")
+    if not READER_PROFILE_FILE.is_file():
+        raise _AssemblyError("experimental/offline-audit/defaults.custom.lua is missing from this checkout")
+    manifest[READER_PROFILE_REL] = {
+        "kind": "file", "mode": 0o644,
+        "size": READER_PROFILE_FILE.stat().st_size,
+        "sha256": _rebuild.sha256_file(READER_PROFILE_FILE),
+    }
+    if write:
+        assert destination_root is not None
+        dest = destination_root / READER_PROFILE_REL
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(READER_PROFILE_FILE, dest)
+        os.chmod(dest, 0o644)
+
+
 def _scan_for_nickel(manifest: dict[str, dict], sources: dict[str, Path]) -> list[str]:
     hits = [f"/{rel}: path name matches a Nickel/Kobo-userspace pattern"
             for rel in manifest if NICKEL_NAME_PATTERN.search(rel)]
@@ -170,10 +206,16 @@ def _scan_for_nickel(manifest: dict[str, dict], sources: dict[str, Path]) -> lis
     return hits
 
 
-def _overlay_file_paths() -> set[str]:
+def _first_party_file_paths() -> set[str]:
+    """Relative paths of this checkout's own reviewed content: the overlay
+    plus the KOReader defaults profile. Neither is user-supplied, so neither
+    is content-scanned for Nickel references once merged (see
+    scan_tree_for_nickel)."""
     manifest: dict[str, dict] = {}
     _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
-    return {rel for rel, entry in manifest.items() if entry["kind"] == "file"}
+    paths = {rel for rel, entry in manifest.items() if entry["kind"] == "file"}
+    paths.add(READER_PROFILE_REL)
+    return paths
 
 
 def scan_tree_for_nickel(root: Path) -> list[str]:
@@ -188,13 +230,14 @@ def scan_tree_for_nickel(root: Path) -> list[str]:
     origin is no longer recoverable from the tree alone, so a naive re-scan
     would always flag this repository's own ``usr/bin/pmkb-reader`` comment
     ("bypassing ... Nickel paths") as a false positive. This function instead
-    recomputes the overlay's own file set (from ``experimental/offline-rootfs``
-    in this checkout) and excludes exactly those relative paths from the
-    content scan, while still name-scanning every path including the overlay's.
+    recomputes this checkout's own first-party content (the overlay plus the
+    KOReader defaults profile, see ``_first_party_file_paths``) and excludes
+    exactly those relative paths from the content scan, while still
+    name-scanning every path including theirs.
     Read-only: never mounts, executes or modifies anything under ``root``.
     """
     root = Path(root).resolve(strict=True)
-    excluded = _overlay_file_paths()
+    excluded = _first_party_file_paths()
     hits: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames.sort()
@@ -247,6 +290,7 @@ def plan_rootfs(koreader_dir: Path, runtime_dir: Path) -> tuple[dict[str, Any], 
         # references (its comments may legitimately describe bypassing Nickel).
         _copy_tree(OVERLAY_ROOT, None, manifest, {}, write=False, force_mode=0o755)
         _add_skeleton_dirs(manifest, None, write=False)
+        _place_reader_profile(None, manifest, write=False)
         _copy_tree(koreader_dir, None, manifest, sources, base="opt/koreader", write=False)
         _copy_tree(runtime_dir, None, manifest, sources, write=False)
     except _AssemblyError as exc:
@@ -350,6 +394,7 @@ def build_rootfs(koreader_dir: Path, runtime_dir: Path, reference_recovery: Path
             build_manifest: dict[str, dict] = {}
             _copy_tree(OVERLAY_ROOT, root, build_manifest, {}, write=True, force_mode=0o755)
             _add_skeleton_dirs(build_manifest, root, write=True)
+            _place_reader_profile(root, build_manifest, write=True)
             _copy_tree(koreader_dir, root, build_manifest, {}, base="opt/koreader", write=True)
             _copy_tree(runtime_dir, root, build_manifest, {}, write=True)
             conf = td_path / "mke2fs.conf"

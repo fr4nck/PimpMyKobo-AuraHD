@@ -75,7 +75,8 @@ class PlanRootfsTests(unittest.TestCase):
         for expected in ("etc/init.d/rcS", "etc/inittab", "usr/bin/pmkb-check-offline",
                          "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
                          "opt/koreader/reader.lua", "opt/koreader/luajit",
-                         "opt/koreader/libs/libfoo.so", "bin/busybox"):
+                         "opt/koreader/libs/libfoo.so", "bin/busybox",
+                         "opt/koreader/defaults.custom.lua"):
             self.assertIn(expected, manifest, expected)
         self.assertEqual("file", manifest["opt/koreader/luajit"]["kind"])
         if os.name == "posix":
@@ -152,6 +153,64 @@ class PlanRootfsTests(unittest.TestCase):
         json.dumps(report)  # must not raise
         self.assertFalse(report["physical_restore_eligible"])
         self.assertFalse(report["hardware_qualified"])
+
+
+class ReaderProfileTests(unittest.TestCase):
+    """Covers the demonstrated-necessary KOReader defaults profile integration."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.root = Path(self._td.name)
+        self.addCleanup(self._td.cleanup)
+
+    def test_profile_is_required_and_has_the_demonstrated_necessary_settings(self):
+        koreader = make_koreader_dir(self.root)
+        runtime = make_runtime_dir(self.root)
+        report, manifest = mod.plan_rootfs(koreader, runtime)
+        self.assertEqual("assembled", report["status"], report)
+        self.assertIn(mod.READER_PROFILE_REL, manifest)
+        content = mod.READER_PROFILE_FILE.read_text(encoding="utf-8")
+        self.assertIn("KOBO_LIGHT_ON_START = -1", content)
+        self.assertIn("KOBO_SYNC_BRIGHTNESS_WITH_NICKEL = false", content)
+
+    def test_profile_is_excluded_from_nickel_content_scan_despite_its_name(self):
+        # KOBO_SYNC_BRIGHTNESS_WITH_NICKEL legitimately contains "NICKEL";
+        # this file is first-party/reviewed like the overlay, not external
+        # content, so it must not itself trigger a scan hit.
+        content = mod.READER_PROFILE_FILE.read_text(encoding="utf-8")
+        self.assertIn("NICKEL", content)
+        koreader = make_koreader_dir(self.root)
+        runtime = make_runtime_dir(self.root)
+        report, _manifest = mod.plan_rootfs(koreader, runtime)
+        self.assertEqual("assembled", report["status"], report)
+        self.assertEqual([], report["nickel_scan"])
+        dest = self.root / "assembled"
+        dest.mkdir()
+        build_manifest: dict = {}
+        mod._copy_tree(mod.OVERLAY_ROOT, dest, build_manifest, {}, write=True, force_mode=0o755)
+        mod._add_skeleton_dirs(build_manifest, dest, write=True)
+        mod._place_reader_profile(dest, build_manifest, write=True)
+        mod._copy_tree(koreader, dest, build_manifest, {}, base="opt/koreader", write=True)
+        mod._copy_tree(runtime, dest, build_manifest, {}, write=True)
+        self.assertEqual([], mod.scan_tree_for_nickel(dest))
+
+    def test_koreader_provided_profile_collides_instead_of_silently_overriding(self):
+        koreader = make_koreader_dir(self.root)
+        (koreader / "defaults.custom.lua").write_text(
+            "return { KOBO_SYNC_BRIGHTNESS_WITH_NICKEL = true }\n", encoding="utf-8")
+        report, manifest = mod.plan_rootfs(koreader, make_runtime_dir(self.root))
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(any("defaults.custom.lua" in e for e in report["errors"]), report["errors"])
+        self.assertEqual({}, manifest)
+
+    def test_missing_profile_file_fails_closed(self):
+        koreader = make_koreader_dir(self.root)
+        runtime = make_runtime_dir(self.root)
+        with mock.patch.object(mod, "READER_PROFILE_FILE", self.root / "absent.lua"):
+            report, manifest = mod.plan_rootfs(koreader, runtime)
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(any("defaults.custom.lua is missing" in e for e in report["errors"]), report["errors"])
+        self.assertEqual({}, manifest)
 
 
 class ScanTreeForNickelTests(unittest.TestCase):

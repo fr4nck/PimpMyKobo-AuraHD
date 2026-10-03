@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import struct
 from pathlib import Path
@@ -98,12 +99,14 @@ def elf(data):
             'search_paths': [s for t, s in strings if t in (15, 29)], 'flags': header[6]}
 
 
-# Contract of the offline prototype at bec7fd5 / 6522092, not a new init.
+# Contract of the offline prototype at bec7fd5 / 6522092 / fd76434, not a new init.
 BOOT_ELFS = ('/sbin/init', '/bin/sh', '/bin/busybox', '/opt/koreader/luajit')
-BOOT_SCRIPTS = ('/etc/init.d/rcS', '/usr/bin/pmkb-check-offline',
+BOOT_SCRIPTS = ('/etc/init.d/rcS', '/usr/bin/pmkb-check-offline', '/usr/bin/pmkb-check-onboard',
                 '/usr/bin/pmkb-reader', '/bin/kobo_config.sh')
 BOOT_ACTIONS = ('::sysinit:/etc/init.d/rcS', '::once:/usr/bin/pmkb-reader',
                 '::shutdown:/bin/umount -a -r')
+# Non-script, non-ELF files whose presence/non-emptiness is still required.
+BOOT_DATA_FILES = ('/opt/koreader/reader.lua', '/opt/koreader/defaults.custom.lua')
 
 
 def bootstrap(root):
@@ -111,7 +114,7 @@ def bootstrap(root):
     if os.name != 'posix':
         raise ValueError('bootstrap permissions require a POSIX extracted rootfs')
     records, errors = [], []
-    for guest in (*BOOT_ELFS, *BOOT_SCRIPTS, '/etc/inittab', '/opt/koreader/reader.lua'):
+    for guest in (*BOOT_ELFS, *BOOT_SCRIPTS, '/etc/inittab', *BOOT_DATA_FILES):
         try:
             path = target(root, guest)
             mode = stat.S_IMODE(path.stat().st_mode)
@@ -137,6 +140,30 @@ def bootstrap(root):
         except (OSError, ValueError) as exc:
             errors.append(f'{guest}: {exc}')
     return records, errors
+
+
+ORIGIN_TOKEN = re.compile(r'\$(?:ORIGIN|\{ORIGIN\})')
+UNSUPPORTED_TOKEN = re.compile(r'\$(?:LIB|\{LIB\}|PLATFORM|\{PLATFORM\})')
+
+
+def resolve_rpath(guest, search_paths):
+    """Expand ``$ORIGIN``/``${ORIGIN}`` (the directory containing this ELF,
+    within the guest rootfs) in RPATH/RUNPATH entries. Any other dynamic
+    string token, or an entry that is still not rootfs-absolute after
+    expansion, is rejected rather than guessed at."""
+    origin = guest.rsplit('/', 1)[0] or '/'
+    resolved = []
+    for entry in search_paths:
+        for part in entry.split(':'):
+            if not part:
+                continue
+            if UNSUPPORTED_TOKEN.search(part):
+                raise ValueError(f'unsupported dynamic string token in RPATH/RUNPATH: {part}')
+            part = ORIGIN_TOKEN.sub(origin, part)
+            if '$' in part or not part.startswith('/'):
+                raise ValueError(f'unsupported or unresolved RPATH/RUNPATH entry: {part}')
+            resolved.append(part.rstrip('/') or '/')
+    return resolved
 
 
 def storage(root):
@@ -185,11 +212,12 @@ def audit(root, check_bootstrap=False, check_storage=False):
                 info = elf(data)
                 record = {'path': guest, 'sha256': hashlib.sha256(data).hexdigest(), **info}
                 records.append(record)
-                if info['search_paths']:
-                    errors.append(f'{guest}: RPATH/RUNPATH requires a separate loader audit')
+                # RPATH/RUNPATH apply only to this ELF's own dependency lookups,
+                # searched before the default library directories.
+                rpath_dirs = resolve_rpath(guest, info['search_paths']) if info['search_paths'] else []
                 for dep in ([info['interpreter']] if info['interpreter'] else []) + info['needed']:
                     candidates = [dep] if dep.startswith('/') else [base + '/' + dep for base in
-                                  ('/opt/koreader/libs', '/lib', '/usr/lib')]
+                                  (*rpath_dirs, '/opt/koreader/libs', '/lib', '/usr/lib')]
                     if '/' in dep and not dep.startswith('/'):
                         raise ValueError('relative dependency path unsupported')
                     found = False
