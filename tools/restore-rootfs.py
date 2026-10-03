@@ -49,7 +49,8 @@ def hash_region(handle: BinaryIO, offset: int, size: int) -> str:
 
 
 def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Path,
-              output: Path, *, accept_legacy_import: bool = False) -> dict[str, Any]:
+              output: Path, *, accept_legacy_import: bool = False,
+              require_copy_space: bool = True) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": 1, "tool": "restore-rootfs", "mode": "disk_image_simulation",
         "status": "refused", "complete": False, "physical_restore_eligible": False,
@@ -119,7 +120,7 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
             raise ValueError("missing rebuild MD5 check")
         if md5["present"] and (type(md5.get("entries")) is not int or md5["entries"] <= 0 or type(md5.get("matched")) is not int or md5["matched"] != md5["entries"] or md5.get("missing") != [] or md5.get("mismatched") != []):
             raise ValueError("rebuild MD5 verification is incomplete")
-        if shutil.disk_usage(output.parent).free < size:
+        if require_copy_space and shutil.disk_usage(output.parent).free < size:
             raise ValueError("insufficient space for a full disk-image copy")
         result.update(
             status="ready", input_provenance=manifest["provenance"],

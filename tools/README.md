@@ -79,6 +79,10 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 - [Français](../docs/restore-rootfs-simulation-fr.md)
 - [English](../docs/restore-rootfs-simulation-en.md)
 
+## Plan local avant restauration P1
+
+`prepare-p1-restore.py` relie la sauvegarde complète, la reconstruction et la simulation par leurs empreintes et produit un plan sans autoriser d'écriture physique. Voir [la procédure](../docs/prepare-p1-restore-fr.md).
+
 ## Tests
 
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
