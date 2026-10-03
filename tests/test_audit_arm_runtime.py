@@ -78,6 +78,20 @@ class RuntimeTests(unittest.TestCase):
         (self.root / 'lib/libc.so').write_bytes(binary())
         self.assertEqual('failed', audit.audit(self.root)['status'])
 
+    def test_bootstrap_elf_transitive_nickel_dependency_is_refused(self):
+        luajit = self.root / 'opt/koreader/luajit'
+        luajit.write_bytes(binary('libbridge.so'))
+        bridge = self.root / 'opt/koreader/libs/libbridge.so'
+        bridge.write_bytes(binary('libnickel.so'))
+        nickel = self.root / 'opt/koreader/libs/libnickel.so'
+        nickel.write_bytes(binary())
+        report = audit.audit(self.root)
+        self.assertEqual('failed', report['status'], report)
+        self.assertTrue(report['nickel_dependencies'], report)
+        self.assertTrue(any(item['bootstrap'] == '/opt/koreader/luajit'
+                            and item['name'] == 'libnickel.so'
+                            for item in report['nickel_dependencies']), report)
+
     def test_absolute_runpath_entry_extends_the_search_outside_the_defaults(self):
         # A plain absolute RPATH/RUNPATH entry (no dynamic string token) is
         # unambiguous and should extend the search, not be refused outright.
@@ -174,7 +188,12 @@ class BootstrapTests(unittest.TestCase):
         for guest in audit.BOOT_DATA_FILES:
             path = self.root / guest.lstrip('/')
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('-- synthetic Lua fixture\n')
+            if guest == '/opt/koreader/defaults.custom.lua':
+                path.write_text(
+                    'return { KOBO_LIGHT_ON_START = -1, '
+                    'KOBO_SYNC_BRIGHTNESS_WITH_NICKEL = false }\n')
+            else:
+                path.write_text('-- synthetic Lua fixture\n')
 
     def test_bootstrap_contract_is_opt_in_and_does_not_mutate_files(self):
         before = {p: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
