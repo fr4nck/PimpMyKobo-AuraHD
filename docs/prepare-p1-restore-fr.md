@@ -13,6 +13,6 @@ L'outil recalcule les empreintes des fichiers, revalide le contrat legacy et le 
 
 Le plan décrit l'empreinte complète exigée de la future carte cible, les bornes exactes de P1, l'empreinte de remplacement et les régions à préserver. La sauvegarde complète constitue la source du retour arrière de P1. La provenance legacy reste inchangée ; `write_authorized` et `physical_restore_eligible` restent faux. Le plan ne contourne pas les refus de l'import ou du simulateur.
 
-Un futur exécuteur devra identifier et verrouiller exclusivement la carte, refuser les volumes utilisés, comparer sa totalité à la sauvegarde avant écriture, conserver un journal durable et la P1 d'origine, ne modifier que P1 puis relire les zones modifiées et conservées. Son utilisation exige une autorisation explicite distincte. Aucune commande d'écriture physique n'est fournie ici.
+L'[exécuteur Linux Live séparé](restore-p1-linux-fr.md) identifie et verrouille exclusivement la carte, refuse les volumes utilisés, compare sa totalité à la sauvegarde avant écriture, conserve un journal durable et la P1 d'origine, ne modifie que P1 puis relit les zones modifiées et conservées. Son utilisation en écriture exige une autorisation explicite distincte. Préparer ce plan ne donne pas cette autorisation.
 
 La sortie est créée sans écrasement. Les chemins de périphériques et fichiers spéciaux sont refusés. Aucun espace pour une seconde copie complète n'est exigé : cette étape ne produit que du JSON.

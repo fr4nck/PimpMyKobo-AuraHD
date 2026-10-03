@@ -27,7 +27,7 @@ Les scripts sont dans [`../tools/`](../tools/).
 - `inspect-aura-hd.py` : identification et cartographie d'une microSD complète ;
 - `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0.
 
-Les deux outils actuels sont conçus pour ne jamais écrire sur la microSD.
+Ces deux outils n'écrivent jamais sur la microSD. La reconstruction et la simulation locale sont décrites dans le [catalogue des outils](../tools/README.md). La [première restauration P1 sous Linux Live](restore-p1-linux-fr.md) utilise un exécuteur séparé et nécessite une autorisation d'écriture explicite.
 
 ## Données non publiées
 

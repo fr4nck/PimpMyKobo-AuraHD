@@ -50,7 +50,7 @@ class PrepareP1Tests(unittest.TestCase):
         self.setup_plan()
         original = self.acquisition.read_text()
         for key, value in (("complete", False), ("source_reread_sha256", "0" * 64),
-                           ("source_open_mode", "r+b"), ("image_size", 1)):
+                           ("source_open_mode", "r+b"), ("image_size", 1), ("checks", None)):
             data = json.loads(original); data[key] = value
             self.acquisition.write_text(json.dumps(data))
             self.assertEqual("refused", prepare.prepare(*self.args)["status"])

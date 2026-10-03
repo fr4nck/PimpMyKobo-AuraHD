@@ -1,6 +1,6 @@
 # Outils / Tools
 
-Les outils publics du projet privilégient la **lecture seule**. Toute opération future d'écriture sur une microSD devra être séparée, explicite et protégée par des garde-fous supplémentaires.
+Les outils publics du projet privilégient la **lecture seule**. L'exécuteur Linux de restauration P1 est séparé, explicite et protégé par des garde-fous supplémentaires ; préparer son code n'autorise aucune écriture physique.
 
 ## `inspect-aura-hd.py`
 
@@ -85,6 +85,8 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 
 ## Tests
 
+La première restauration physique dispose d'un exécuteur Linux Live distinct : `restore-p1-linux.py`. Son mode par défaut vérifie uniquement les fichiers locaux. Voir [Français](../docs/restore-p1-linux-fr.md) / [English](../docs/restore-p1-linux-en.md) pour les refus, l'autorisation séparée et les limites.
+
 Des tests unitaires synthétiques sans firmware Kobo sont présents dans `tests/`.
 
 Ils peuvent être exécutés avec la bibliothèque standard Python uniquement :
@@ -99,4 +101,4 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 
 - `backup-aura-hd` : produire des sauvegardes locales avec empreintes ;
 - `rebuild-rootfs` : reconstruire P1 depuis le `fs.tgz` de sa propre liseuse ;
-- `restore-rootfs` physique : contrat distinct encore à concevoir ; l'outil actuel simule uniquement sur fichiers locaux.
+- Retour arrière physique automatisé : non implémenté. `restore-rootfs.py` reste un simulateur local ; la première écriture P1 relève de l'exécuteur Linux Live séparé.

@@ -27,7 +27,7 @@ Scripts live in [`../tools/`](../tools/).
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
 - `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files.
 
-Both current tools are designed so they never write to the microSD source.
+These two tools never write to the microSD source. See the [tool catalogue](../tools/README.md) for local reconstruction and simulation. The [first P1 restore on native Linux Live](restore-p1-linux-en.md) uses a separate executor and requires explicit write authorization.
 
 ## Data intentionally not published
 

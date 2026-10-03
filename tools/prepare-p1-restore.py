@@ -34,7 +34,8 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
             raise ValueError("local evidence refused: " + "; ".join(check["errors"]))
         acquired = simulation.read_json(acquisition)
         sha = check["target_sha256"]
-        if (acquired.get("schema_version") != 1
+        if (not isinstance(acquired.get("checks"), dict)
+                or acquired.get("schema_version") != 1
                 or acquired.get("tool") != "read-only-full-card-acquisition"
                 or acquired.get("status") != "ok" or acquired.get("complete") is not True
                 or acquired.get("errors") != [] or acquired.get("source_open_mode") != "rb"
