@@ -205,52 +205,112 @@ def validate_local(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path,
     return plan
 
 
-def execute(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
-            acquisition: Path, simulated: Path, simulation_report: Path, journal: Path,
-            *, device: Path | None = None, check_device: bool = False, write_p1: bool = False,
-            ack_linux_live: bool = False, authorize_plan_sha256: str | None = None) -> dict:
+def _valid_sha256(value) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
+def validate_sealed_plan(plan_path: Path, rootfs: Path, expected_plan_sha256: str) -> tuple[dict, str]:
+    """Validate a reviewed plan whose exact SHA-256 is sealed into the Live image."""
+    legacy.regular(plan_path)
+    legacy.regular(rootfs)
+    if not _valid_sha256(expected_plan_sha256):
+        raise ValueError("expected sealed plan SHA-256 is invalid")
+    plan_sha = legacy.digest(plan_path)
+    if plan_sha != expected_plan_sha256:
+        raise ValueError("sealed plan SHA-256 differs from the reviewed plan")
+    plan = simulation.read_json(plan_path)
+    required = {
+        "schema_version", "tool", "status", "input_provenance",
+        "required_target_full_sha256", "disk_size", "p1_offset", "p1_size",
+        "replacement_sha256", "preserved_sha256", "evidence_sha256",
+        "rollback", "physical_restore_eligible", "write_authorized",
+    }
+    missing = sorted(required - plan.keys())
+    if missing:
+        raise ValueError("sealed plan missing fields: " + ", ".join(missing))
+    if (plan.get("schema_version") != 1 or plan.get("tool") != "prepare-p1-restore"
+            or plan.get("status") != "prepared"
+            or plan.get("input_provenance") != legacy.PROVENANCE
+            or plan.get("physical_restore_eligible") is not False
+            or plan.get("write_authorized") is not False):
+        raise ValueError("sealed plan contract/provenance is not the reviewed PMKB contract")
+    if type(plan["disk_size"]) is not int or type(plan["p1_offset"]) is not int or type(plan["p1_size"]) is not int:
+        raise ValueError("sealed plan geometry must use integer byte counts")
+    if plan["disk_size"] <= 0 or plan["p1_offset"] < 0 or plan["p1_size"] <= 0:
+        raise ValueError("sealed plan geometry is invalid")
+    if plan["p1_offset"] + plan["p1_size"] > plan["disk_size"]:
+        raise ValueError("sealed plan P1 exceeds disk bounds")
+    if not _valid_sha256(plan["required_target_full_sha256"]) or not _valid_sha256(plan["replacement_sha256"]):
+        raise ValueError("sealed plan hashes are invalid")
+    preserved = plan["preserved_sha256"]
+    if not isinstance(preserved, dict) or any(not _valid_sha256(preserved.get(key))
+            for key in ("pre_p1", "suffix_after_p1", "p2", "p3")):
+        raise ValueError("sealed plan preserved-region hashes are invalid")
+    evidence = plan["evidence_sha256"]
+    if not isinstance(evidence, dict) or any(not _valid_sha256(evidence.get(key))
+            for key in ("legacy_manifest", "rebuild_report", "acquisition_report", "simulation_report")):
+        raise ValueError("sealed plan evidence hashes are invalid")
+    rollback = plan["rollback"]
+    if (not isinstance(rollback, dict) or rollback.get("source") != "verified_full_backup"
+            or rollback.get("offset") != plan["p1_offset"] or rollback.get("size") != plan["p1_size"]):
+        raise ValueError("sealed plan rollback contract is invalid")
+    if rootfs.stat().st_size != plan["p1_size"] or legacy.digest(rootfs) != plan["replacement_sha256"]:
+        raise ValueError("candidate image differs from the sealed plan")
+    return plan, plan_sha
+
+
+def _execute_physical_plan(plan: dict, plan_sha256: str, rootfs: Path, journal: Path,
+                           *, device: Path | None = None, check_device: bool = False,
+                           write_p1: bool = False, ack_linux_live: bool = False,
+                           authorize_plan_sha256: str | None = None,
+                           evidence_revalidated: bool = False) -> dict:
+    """Single physical backend for both the legacy CLI and the PMKB Live UI."""
     result = {"tool": "restore-p1-linux", "schema_version": 1, "status": "refused",
-              "complete": False, "device_write_attempted": False, "errors": []}
+              "complete": False, "device_write_attempted": False, "errors": [],
+              "plan_sha256": plan_sha256, "input_provenance": plan["input_provenance"],
+              "bootability": "not_tested", "physical_restore_eligible": False,
+              "evidence_revalidated": evidence_revalidated}
     disk = None
     log = None
     try:
-        # Authorization and environment refusals precede even local staging/device opens.
-        if write_p1 and (not authorize_plan_sha256 or authorize_plan_sha256 != legacy.digest(plan_path)):
+        if write_p1 and (not authorize_plan_sha256 or authorize_plan_sha256 != plan_sha256):
             raise ValueError("--write-p1 requires --authorize-plan-sha256 matching the reviewed plan")
-        if (check_device or write_p1):
+        if check_device or write_p1:
             require_native_linux(ack_linux_live)
             if device is None:
                 raise ValueError("explicit --device required; no discovery or default target")
-        plan = validate_local(plan_path, manifest, rebuild, rootfs, backup, acquisition,
-                              simulated, simulation_report, journal)
-        result.update(plan_sha256=legacy.digest(plan_path), input_provenance=plan["input_provenance"],
-                      bootability="not_tested", physical_restore_eligible=False)
-        if write_p1 and authorize_plan_sha256 != result["plan_sha256"]:
-            raise ValueError("reviewed plan changed during validation")
         if not (check_device or write_p1):
             result.update(status="local_ready", complete=True)
             return result
+
+        replacement = Path(str(journal) + ".replacement.img")
+        rollback = Path(str(journal) + ".original-p1.img")
         if write_p1:
+            legacy.reject_device(journal)
+            if not journal.parent.is_dir():
+                raise ValueError("journal parent must exist on separate persistent storage")
+            for path in (journal, replacement, rollback):
+                if path.exists() or path.is_symlink():
+                    raise ValueError("journal/staging/rollback collision; never overwrite")
             persistent_storage(journal.parent, inspect_device(device))
-            # No dependency on files on the target: mounted target partitions are refused.
             if shutil.disk_usage(journal.parent).free < 2 * plan["p1_size"] + CHUNK:
                 raise ValueError("insufficient local space for staged replacement and original P1")
-            replacement = Path(str(journal) + ".replacement.img")
-            rollback = Path(str(journal) + ".original-p1.img")
             with rootfs.open("rb") as source, replacement.open("xb") as out:
                 sha = copy_range(source, out, 0, plan["p1_size"])
                 if source.read(1) or sha != plan["replacement_sha256"]:
                     raise ValueError("replacement changed during staging")
-                out.flush(); os.fsync(out.fileno())
+                out.flush()
+                os.fsync(out.fileno())
             if legacy.digest(replacement) != plan["replacement_sha256"]:
                 raise ValueError("staged replacement failed readback")
             filesystem_check = check_staged_filesystem(replacement)
             if legacy.digest(replacement) != plan["replacement_sha256"]:
                 raise ValueError("staged replacement changed during read-only filesystem check")
             log = journal.open("x", encoding="utf-8")
-            append_event(log, phase="local_verified", plan=plan, plan_sha256=result["plan_sha256"],
+            append_event(log, phase="local_verified", plan=plan, plan_sha256=plan_sha256,
                          staged_filesystem_check=filesystem_check)
             durable_directory(journal.parent)
+
         disk = LinuxDisk(device, write_p1)
         if write_p1:
             persistent_storage(journal.parent, disk.identity)
@@ -264,21 +324,23 @@ def execute(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path, backup
         if not write_p1:
             result.update(status="device_ready_read_only", complete=True)
             return result
-        with backup.open("rb") as source:
-            old_sha = simulation.hash_region(source, plan["p1_offset"], plan["p1_size"])
+
+        old_sha = simulation.hash_region(handle, plan["p1_offset"], plan["p1_size"])
         with rollback.open("xb") as out:
             if copy_range(handle, out, plan["p1_offset"], plan["p1_size"]) != old_sha:
                 raise ValueError("physical P1 changed during rollback acquisition")
-            out.flush(); os.fsync(out.fileno())
+            out.flush()
+            os.fsync(out.fileno())
         if legacy.digest(rollback) != old_sha:
             raise ValueError("original P1 rollback failed readback")
         durable_directory(journal.parent)
+
         with replacement.open("rb") as source:
-            # Retain this exact descriptor. Verify again before the durable write intent.
             if simulation.hash_region(source, 0, plan["p1_size"]) != plan["replacement_sha256"]:
                 raise ValueError("staged replacement changed before write")
             disk.recheck()
-            if disk.size() != plan["disk_size"] or simulation.hash_region(handle, 0, plan["disk_size"]) != plan["required_target_full_sha256"]:
+            if (disk.size() != plan["disk_size"]
+                    or simulation.hash_region(handle, 0, plan["disk_size"]) != plan["required_target_full_sha256"]):
                 raise ValueError("target changed before write")
             append_event(log, phase="writing_p1", device=disk.identity, original_p1_sha256=old_sha,
                          rollback=str(rollback), offset=plan["p1_offset"], size=plan["p1_size"],
@@ -287,11 +349,14 @@ def execute(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path, backup
             handle.seek(plan["p1_offset"])
             if copy_range(source, handle, 0, plan["p1_size"]) != plan["replacement_sha256"]:
                 raise ValueError("replacement changed during write")
+
         disk.flush_and_invalidate()
         disk.recheck()
         end = plan["p1_offset"] + plan["p1_size"]
-        preserved = {"pre_p1": simulation.hash_region(handle, 0, plan["p1_offset"]),
-                     "suffix_after_p1": simulation.hash_region(handle, end, plan["disk_size"] - end)}
+        preserved = {
+            "pre_p1": simulation.hash_region(handle, 0, plan["p1_offset"]),
+            "suffix_after_p1": simulation.hash_region(handle, end, plan["disk_size"] - end),
+        }
         if (disk.size() != plan["disk_size"]
                 or simulation.hash_region(handle, plan["p1_offset"], plan["p1_size"]) != plan["replacement_sha256"]
                 or any(value != plan["preserved_sha256"][key] for key, value in preserved.items())):
@@ -322,6 +387,88 @@ def execute(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path, backup
                 result.update(status="failed", complete=False)
                 result["errors"].append(f"journal close failed: {exc}")
     return result
+
+
+def execute_sealed_plan(plan_path: Path, rootfs: Path, journal: Path,
+                        *, expected_plan_sha256: str, device: Path | None = None,
+                        check_device: bool = False, write_p1: bool = False,
+                        ack_linux_live: bool = False,
+                        authorize_plan_sha256: str | None = None) -> dict:
+    """Run the common backend from a plan sealed into the qualification Live image."""
+    try:
+        plan, plan_sha = validate_sealed_plan(plan_path, rootfs, expected_plan_sha256)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        return {"tool": "restore-p1-linux", "schema_version": 1, "status": "refused",
+                "complete": False, "device_write_attempted": False,
+                "errors": [str(exc)], "p1_may_be_partial": False}
+    return _execute_physical_plan(
+        plan, plan_sha, rootfs, journal, device=device, check_device=check_device,
+        write_p1=write_p1, ack_linux_live=ack_linux_live,
+        authorize_plan_sha256=authorize_plan_sha256, evidence_revalidated=False,
+    )
+
+
+def verify_written_sealed_plan(plan_path: Path, rootfs: Path, *,
+                               expected_plan_sha256: str, device: Path) -> dict:
+    """Read-only post-write verification of P1 and every byte outside P1."""
+    result = {"tool": "restore-p1-linux", "schema_version": 1, "status": "refused",
+              "complete": False, "device_write_attempted": False, "errors": []}
+    disk = None
+    try:
+        plan, plan_sha = validate_sealed_plan(plan_path, rootfs, expected_plan_sha256)
+        require_native_linux(True)
+        disk = LinuxDisk(device, False)
+        handle = disk.handle
+        if disk.size() != plan["disk_size"]:
+            raise ValueError("physical capacity differs from sealed plan")
+        end = plan["p1_offset"] + plan["p1_size"]
+        p1_sha = simulation.hash_region(handle, plan["p1_offset"], plan["p1_size"])
+        pre_sha = simulation.hash_region(handle, 0, plan["p1_offset"])
+        suffix_sha = simulation.hash_region(handle, end, plan["disk_size"] - end)
+        if p1_sha != plan["replacement_sha256"]:
+            raise ValueError("P1 does not match the sealed candidate")
+        if pre_sha != plan["preserved_sha256"]["pre_p1"] or suffix_sha != plan["preserved_sha256"]["suffix_after_p1"]:
+            raise ValueError("bytes outside P1 differ from the reviewed plan")
+        result.update(status="verified", complete=True, plan_sha256=plan_sha,
+                      p1_reread_sha256=p1_sha, outside_p1_unchanged=True,
+                      device=disk.identity)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        result["errors"] = [str(exc)]
+    finally:
+        if disk is not None:
+            try:
+                disk.close()
+            except OSError as exc:
+                result.update(status="failed", complete=False)
+                result["errors"].append(f"device close failed: {exc}")
+    return result
+
+
+def execute(plan_path: Path, manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
+            acquisition: Path, simulated: Path, simulation_report: Path, journal: Path,
+            *, device: Path | None = None, check_device: bool = False, write_p1: bool = False,
+            ack_linux_live: bool = False, authorize_plan_sha256: str | None = None) -> dict:
+    try:
+        if write_p1 and (not authorize_plan_sha256 or authorize_plan_sha256 != legacy.digest(plan_path)):
+            raise ValueError("--write-p1 requires --authorize-plan-sha256 matching the reviewed plan")
+        if check_device or write_p1:
+            require_native_linux(ack_linux_live)
+            if device is None:
+                raise ValueError("explicit --device required; no discovery or default target")
+        plan = validate_local(plan_path, manifest, rebuild, rootfs, backup, acquisition,
+                              simulated, simulation_report, journal)
+        plan_sha = legacy.digest(plan_path)
+        if write_p1 and authorize_plan_sha256 != plan_sha:
+            raise ValueError("reviewed plan changed during validation")
+    except (OSError, ValueError, TypeError, KeyError, KeyboardInterrupt) as exc:
+        return {"tool": "restore-p1-linux", "schema_version": 1, "status": "refused",
+                "complete": False, "device_write_attempted": False,
+                "errors": [str(exc) or "interrupted"], "p1_may_be_partial": False}
+    return _execute_physical_plan(
+        plan, plan_sha, rootfs, journal, device=device, check_device=check_device,
+        write_p1=write_p1, ack_linux_live=ack_linux_live,
+        authorize_plan_sha256=authorize_plan_sha256, evidence_revalidated=True,
+    )
 
 
 def main() -> int:
