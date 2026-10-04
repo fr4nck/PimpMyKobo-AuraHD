@@ -141,6 +141,7 @@ lb config \
   --binary-images iso-hybrid \
   --debian-installer none \
   --archive-areas "main" \
+  --security false \
   --apt-recommends false \
   --bootappend-live "boot=live components hostname=pmkb-qualification"
 
