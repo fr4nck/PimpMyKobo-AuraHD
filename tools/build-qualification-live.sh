@@ -24,9 +24,9 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 CANDIDATE=$(readlink -f "$1")
 PLAN=$(readlink -f "$2")
-OUTPUT_DIR=\${3:-"$REPO_DIR/private/qualification-usb"}
+OUTPUT_DIR=${3:-"$REPO_DIR/private/qualification-usb"}
 OUTPUT_DIR=$(mkdir -p "$OUTPUT_DIR" && readlink -f "$OUTPUT_DIR")
-MANIFEST=\${4:-"$REPO_DIR/live/pmkb-qualification/candidate.json"}
+MANIFEST=${4:-"$REPO_DIR/live/pmkb-qualification/candidate.json"}
 MANIFEST=$(readlink -f "$MANIFEST")
 
 UI="$REPO_DIR/tools/pmkb-qualification-usb.py"
