@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 import test_rebuild_rootfs as rebuild_tests
 
@@ -145,6 +146,72 @@ class RestoreSimulationTests(unittest.TestCase):
         self.rootfs.write_bytes(before)
         self.pre.write_bytes(b"tampered")
         self.assertEqual("refused", self.preflight()["status"])
+
+    def make_koreader_report(self):
+        ext4 = {"label": "rootfs", "block_size": 1024, "inode_size": 128,
+                "blocks": 4, "unused_tail_bytes": 0, "features": ["extent"]}
+        report = {
+            "schema_version": 1, "tool": "build-koreader-rootfs", "status": "experimental",
+            "complete": True, "errors": [], "physical_restore_eligible": False,
+            "hardware_qualified": False, "device": "E606C0",
+            "rootfs_size": self.rootfs.stat().st_size,
+            "rootfs_sha256": legacy.digest(self.rootfs), "ext4": ext4,
+        }
+        self.report.write_text(json.dumps(report))
+        # This unit fixture has no filesystem. Real filesystem coverage is below.
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(mod, "read_candidate_ext4", return_value=dict(ext4)).start()
+        mock.patch.object(mod.rebuild, "read_ext_parameters", return_value=dict(ext4)).start()
+        mock.patch.object(mod.shutil, "which", return_value="/usr/sbin/e2fsck").start()
+        return report
+
+    def test_build_koreader_report_is_typed_and_ext4_is_rechecked_read_only(self):
+        report_data = self.make_koreader_report()
+        with mock.patch.object(mod.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="clean")) as run:
+            result = self.preflight()
+        self.assertEqual("ready", result["status"], result)
+        self.assertEqual("build-koreader-rootfs", result["rootfs_report_tool"])
+        self.assertFalse(result["write_authorized"])
+        self.assertEqual("revalidated_locally_read_only_e2fsck", result["checks"]["filesystem_checks"])
+        self.assertEqual(["/usr/sbin/e2fsck", "-f", "-n", str(self.rootfs.resolve())], run.call_args.args[0])
+        self.assertEqual("clean", result["filesystem_validation"]["e2fsck"])
+        for key, value in (("tool", "forged-tool"), ("device", "N905"),
+                           ("rootfs_sha256", "0" * 64), ("rootfs_size", 1),
+                           ("complete", False), ("errors", ["failure"]),
+                           ("physical_restore_eligible", True), ("hardware_qualified", True),
+                           ("status", "ok")):
+            bad = dict(report_data); bad[key] = value
+            self.report.write_text(json.dumps(bad))
+            with self.subTest(key=key):
+                self.assertEqual("refused", self.preflight()["status"])
+        self.report.write_text(json.dumps(report_data))
+        self.rootfs.write_bytes(b"different image" + bytes(4096 - len(b"different image")))
+        self.assertEqual("refused", self.preflight()["status"])
+
+    def test_koreader_ext4_report_and_recovery_must_match_actual_image(self):
+        report = self.make_koreader_report()
+        for key, value in (("label", "recoveryfs"), ("block_size", 4096),
+                           ("inode_size", 256), ("blocks", 5),
+                           ("unused_tail_bytes", 512), ("features", ["extent", "64bit"])):
+            bad = copy.deepcopy(report); bad["ext4"][key] = value
+            self.report.write_text(json.dumps(bad))
+            with self.subTest(key=key):
+                self.assertEqual("refused", self.preflight()["status"])
+        self.report.write_text(json.dumps(report))
+        for key, value in (("block_size", 4096), ("inode_size", 256), ("features", [])):
+            reference = dict(report["ext4"]); reference[key] = value
+            with mock.patch.object(mod.rebuild, "read_ext_parameters", return_value=reference):
+                self.assertEqual("refused", self.preflight()["status"])
+
+    def test_build_koreader_report_refuses_failed_or_unavailable_read_only_e2fsck(self):
+        self.make_koreader_report()
+        for code in (1, 4, 8):
+            with mock.patch.object(mod.subprocess, "run", return_value=SimpleNamespace(returncode=code, stdout="bad fs")):
+                self.assertEqual("refused", self.preflight()["status"])
+        with mock.patch.object(mod.shutil, "which", return_value=None):
+            self.assertEqual("refused", self.preflight()["status"])
+        with mock.patch.object(mod.rebuild, "read_ext_parameters", side_effect=subprocess.CalledProcessError(1, "dumpe2fs")):
+            self.assertEqual("refused", self.preflight()["status"])
 
     def test_inconsistent_unsigned_reports_are_refused(self):
         original = json.loads(self.report.read_text())

@@ -96,6 +96,7 @@ def main() -> int:
         "physical_restore_eligible": False,
         "input_provenance": provenance,
         "required_target_full_sha256": full_sha,
+        "simulation_sha256": digest(pre + candidate + p2 + p3),
         "disk_size": len(full),
         "p1_offset": len(pre),
         "p1_size": len(candidate),
@@ -108,10 +109,11 @@ def main() -> int:
         },
         "evidence_sha256": {
             "legacy_manifest": fake_hash("legacy"),
-            "rebuild_report": fake_hash("rebuild"),
+            "rootfs_report": fake_hash("rebuild"),
             "acquisition_report": fake_hash("acquisition"),
             "simulation_report": fake_hash("simulation"),
         },
+        "candidate_source": {"tool": "rebuild-rootfs", "report_sha256": fake_hash("rebuild")},
         "rollback": {
             "source": "verified_full_backup",
             "offset": len(pre),
