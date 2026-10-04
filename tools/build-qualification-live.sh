@@ -138,6 +138,7 @@ lb config \
   --mode debian \
   --distribution bookworm \
   --architectures amd64 \
+  --linux-flavours amd64 \
   --binary-images iso-hybrid \
   --debian-installer none \
   --archive-areas "main" \
