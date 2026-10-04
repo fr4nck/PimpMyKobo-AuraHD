@@ -55,7 +55,12 @@ jobs:
       - name: Install real Debian Live build backend
         run: |
           sudo apt-get update
-          sudo apt-get install -y live-build xorriso squashfs-tools
+          sudo apt-get install -y debootstrap xorriso squashfs-tools curl
+          curl -fsSLo "$RUNNER_TEMP/live-build.deb" \
+            https://deb.debian.org/debian/pool/main/l/live-build/live-build_20230502_all.deb
+          echo "a863905724e7b69d45066ebab113cb6de12a11984349847ad49f6151c10f017d  $RUNNER_TEMP/live-build.deb" | sha256sum -c -
+          sudo dpkg -i "$RUNNER_TEMP/live-build.deb"
+          lb --version
       - name: Create synthetic qualification bundle
         run: |
           python tests/make_qualification_live_fixture.py "$RUNNER_TEMP/pmkb-live-fixture"
