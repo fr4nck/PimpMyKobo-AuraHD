@@ -1,5 +1,9 @@
 import importlib.util
 import json
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,6 +56,56 @@ class FakeBackend:
 
 
 class QualificationUsbTests(unittest.TestCase):
+    def test_iso_staged_backend_imports_and_validates_sealed_fixture(self):
+        # Stage exactly the backend install lines from the builder, without
+        # access to sibling scripts left behind in the repository.
+        source = (ROOT / "tools" / "build-qualification-live.sh").read_text(encoding="utf-8")
+        variables = dict(re.findall(r'^(\w+)="\$REPO_DIR/(tools/[^"\n]+)"$', source, re.MULTILINE))
+        installs = re.findall(
+            r'^install -m 0644 "\$(\w+)" config/includes.chroot/(opt/pmkb/tools/[^\s]+)$',
+            source, re.MULTILINE,
+        )
+        self.assertTrue(installs, "no backend payload found in builder")
+        with tempfile.TemporaryDirectory() as td:
+            payload = Path(td)
+            for variable, destination in installs:
+                target = payload / destination
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / variables[variable], target)
+            ui = payload / "usr/local/sbin/pmkb-qualification"
+            ui.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / variables["UI"], ui)
+            fixture = payload / "fixture"
+            generated = subprocess.run(
+                [sys.executable, "-I", "-B", str(ROOT / "tests/make_qualification_live_fixture.py"), str(fixture)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(0, generated.returncode, generated.stderr)
+            checked = subprocess.run(
+                [sys.executable, "-I", "-B", "-c", """
+import hashlib, importlib.machinery, importlib.util, sys
+from pathlib import Path
+ui, backend_path, fixture = map(Path, sys.argv[1:])
+loader = importlib.machinery.SourceFileLoader("payload_ui", str(ui))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+backend = module.load_backend(backend_path)
+inspector = backend.legacy.load_inspector()
+assert Path(inspector.__file__).parent == backend_path.parent
+assert Path(backend.simulation.rebuild.__file__).parent == backend_path.parent
+plan_path = fixture / "plan.json"
+sha = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+plan, actual = backend.validate_sealed_plan(plan_path, fixture / "fixture.img", sha)
+assert actual == sha
+assert plan["write_authorized"] is False
+assert plan["physical_restore_eligible"] is False
+""", str(ui), str(payload / "opt/pmkb/tools/restore-p1-linux.py"), str(fixture)],
+                cwd=payload, capture_output=True, text=True,
+            )
+            self.assertEqual(0, checked.returncode, checked.stdout + checked.stderr)
+
     def test_manifest_is_still_pinned_to_frozen_candidate(self):
         self.assertEqual(268435968, MANIFEST["image_size"])
         self.assertEqual(

@@ -33,6 +33,7 @@ UI="$REPO_DIR/tools/pmkb-qualification-usb.py"
 BACKEND="$REPO_DIR/tools/restore-p1-linux.py"
 PREPARE="$REPO_DIR/tools/prepare-p1-restore.py"
 SIMULATION="$REPO_DIR/tools/restore-rootfs.py"
+REBUILD="$REPO_DIR/tools/rebuild-rootfs.py"
 LEGACY="$REPO_DIR/tools/import-legacy-backup.py"
 INSPECTOR="$REPO_DIR/tools/inspect-aura-hd.py"
 SERVICE="$REPO_DIR/live/pmkb-qualification/pmkb-qualification.service"
@@ -42,7 +43,7 @@ LOGO="$REPO_DIR/assets/branding/pmkb-logo-original.png"
 for tool in lb xorriso mksquashfs sha256sum stat python3; do
     command -v "$tool" >/dev/null 2>&1 || { echo "STOP: outil requis absent: $tool" >&2; exit 2; }
 done
-for file in "$CANDIDATE" "$PLAN" "$MANIFEST" "$UI" "$BACKEND" "$PREPARE" "$SIMULATION" "$LEGACY" "$INSPECTOR" "$SERVICE"; do
+for file in "$CANDIDATE" "$PLAN" "$MANIFEST" "$UI" "$BACKEND" "$PREPARE" "$SIMULATION" "$REBUILD" "$LEGACY" "$INSPECTOR" "$SERVICE"; do
     [ -f "$file" ] || { echo "STOP: fichier PMKB absent: $file" >&2; exit 2; }
 done
 
@@ -170,6 +171,7 @@ install -m 0755 "$UI" config/includes.chroot/usr/local/sbin/pmkb-qualification
 install -m 0644 "$BACKEND" config/includes.chroot/opt/pmkb/tools/restore-p1-linux.py
 install -m 0644 "$PREPARE" config/includes.chroot/opt/pmkb/tools/prepare-p1-restore.py
 install -m 0644 "$SIMULATION" config/includes.chroot/opt/pmkb/tools/restore-rootfs.py
+install -m 0644 "$REBUILD" config/includes.chroot/opt/pmkb/tools/rebuild-rootfs.py
 install -m 0644 "$LEGACY" config/includes.chroot/opt/pmkb/tools/import-legacy-backup.py
 install -m 0644 "$INSPECTOR" config/includes.chroot/opt/pmkb/tools/inspect-aura-hd.py
 install -m 0644 "$MANIFEST" config/includes.chroot/opt/pmkb/candidate.json

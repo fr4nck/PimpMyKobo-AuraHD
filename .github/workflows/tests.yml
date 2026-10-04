@@ -86,3 +86,26 @@ jobs:
           grep -F "opt/pmkb/BUILD-IDENTITY.json" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/fixture.img" "$RUNNER_TEMP/squashfs.list"
           grep -F "etc/systemd/system/pmkb-qualification.service" "$RUNNER_TEMP/squashfs.list"
+          # Import the backend from the actual ISO payload, without repository fallbacks.
+          unsquashfs -no-progress -d "$RUNNER_TEMP/pmkb-live-extracted" \
+            "$RUNNER_TEMP/filesystem.squashfs" usr/local/sbin/pmkb-qualification opt/pmkb
+          python -I -B - "$RUNNER_TEMP/pmkb-live-extracted" <<'PY'
+          import importlib.machinery, importlib.util, json, sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          ui = root / "usr/local/sbin/pmkb-qualification"
+          loader = importlib.machinery.SourceFileLoader("iso_qualification_ui", str(ui))
+          spec = importlib.util.spec_from_loader(loader.name, loader)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          backend = module.load_backend(root / "opt/pmkb/tools/restore-p1-linux.py")
+          backend.legacy.load_inspector()
+          identity = json.loads((root / "opt/pmkb/BUILD-IDENTITY.json").read_text())
+          plan, sha = backend.validate_sealed_plan(
+              root / "opt/pmkb/restore-plan.json",
+              root / "opt/pmkb" / identity["image_name"], identity["plan_sha256"])
+          assert sha == identity["plan_sha256"]
+          assert plan["write_authorized"] is False
+          assert plan["physical_restore_eligible"] is False
+          PY
