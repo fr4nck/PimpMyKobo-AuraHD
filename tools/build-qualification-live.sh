@@ -136,7 +136,7 @@ cd "$WORK"
 
 lb config \
   --mode debian \
-  --distribution trixie \
+  --distribution bookworm \
   --architectures amd64 \
   --binary-images iso-hybrid \
   --debian-installer none \
