@@ -55,7 +55,7 @@ jobs:
       - name: Install real Debian Live build backend
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap xorriso squashfs-tools curl
+          sudo apt-get install -y debootstrap debian-archive-keyring xorriso squashfs-tools curl
           curl -fsSLo "$RUNNER_TEMP/live-build.deb" \
             https://deb.debian.org/debian/pool/main/l/live-build/live-build_20230502_all.deb
           echo "a863905724e7b69d45066ebab113cb6de12a11984349847ad49f6151c10f017d  $RUNNER_TEMP/live-build.deb" | sha256sum -c -
