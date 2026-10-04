@@ -43,3 +43,41 @@ jobs:
         run: python -m pip install PySide6-Essentials==6.10.2
       - name: Run local GUI tests
         run: python -m unittest discover -s tests -p test_gui.py -v
+
+
+  qualification-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real Debian Live build backend
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y live-build xorriso squashfs-tools
+      - name: Create synthetic qualification bundle
+        run: |
+          python tests/make_qualification_live_fixture.py "$RUNNER_TEMP/pmkb-live-fixture"
+      - name: Build real bootable qualification ISO
+        run: |
+          mkdir -p "$RUNNER_TEMP/pmkb-live-out"
+          sudo tools/build-qualification-live.sh \
+            "$RUNNER_TEMP/pmkb-live-fixture/fixture.img" \
+            "$RUNNER_TEMP/pmkb-live-fixture/plan.json" \
+            "$RUNNER_TEMP/pmkb-live-out" \
+            "$RUNNER_TEMP/pmkb-live-fixture/candidate.json"
+      - name: Verify ISO and embedded PMKB payload
+        run: |
+          ISO="$RUNNER_TEMP/pmkb-live-out/PMKB-Qualification-USB-cafebabe.iso"
+          test -s "$ISO"
+          sha256sum -c "$ISO.sha256"
+          xorriso -osirrox on -indev "$ISO" \
+            -extract /live/filesystem.squashfs "$RUNNER_TEMP/filesystem.squashfs"
+          unsquashfs -ll "$RUNNER_TEMP/filesystem.squashfs" > "$RUNNER_TEMP/squashfs.list"
+          grep -F "usr/local/sbin/pmkb-qualification" "$RUNNER_TEMP/squashfs.list"
+          grep -F "opt/pmkb/tools/restore-p1-linux.py" "$RUNNER_TEMP/squashfs.list"
+          grep -F "opt/pmkb/restore-plan.json" "$RUNNER_TEMP/squashfs.list"
+          grep -F "opt/pmkb/BUILD-IDENTITY.json" "$RUNNER_TEMP/squashfs.list"
+          grep -F "opt/pmkb/fixture.img" "$RUNNER_TEMP/squashfs.list"
+          grep -F "etc/systemd/system/pmkb-qualification.service" "$RUNNER_TEMP/squashfs.list"

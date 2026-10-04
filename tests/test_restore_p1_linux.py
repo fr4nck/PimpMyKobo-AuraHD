@@ -263,6 +263,50 @@ class LinuxRestoreTests(unittest.TestCase):
         self.assertEqual([], self.writes)
 
 
+class SealedPlanTests(unittest.TestCase):
+    setUp = plan_fixtures.PrepareP1Tests.setUp
+    setup_plan = plan_fixtures.PrepareP1Tests.setup_plan
+
+    def fixture(self):
+        self.setup_plan()
+        result = plan_fixtures.prepare.prepare(*self.args)
+        self.assertEqual("prepared", result["status"], result)
+        return result
+
+    def test_sealed_plan_requires_exact_reviewed_hash_and_candidate(self):
+        plan_data = self.fixture()
+        plan_sha = legacy.digest(self.plan)
+        loaded, actual = mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+        self.assertEqual(plan_data, loaded)
+        self.assertEqual(plan_sha, actual)
+        with self.assertRaisesRegex(ValueError, "sealed plan SHA"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, "0" * 64)
+        original = self.rootfs.read_bytes()
+        self.rootfs.write_bytes(b"X" + original[1:])
+        with self.assertRaisesRegex(ValueError, "candidate image"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+
+    def test_sealed_live_path_delegates_to_common_physical_backend(self):
+        self.fixture()
+        plan_sha = legacy.digest(self.plan)
+        expected = {"status": "device_ready_read_only", "complete": True}
+        with mock.patch.object(mod, "_execute_physical_plan", return_value=expected) as common:
+            result = mod.execute_sealed_plan(
+                self.plan,
+                self.rootfs,
+                self.root / "unused-journal.jsonl",
+                expected_plan_sha256=plan_sha,
+                device=Path("/dev/sdz"),
+                check_device=True,
+                ack_linux_live=True,
+            )
+        self.assertEqual(expected, result)
+        self.assertEqual(1, common.call_count)
+        self.assertTrue(common.call_args.kwargs["check_device"])
+        self.assertFalse(common.call_args.kwargs["write_p1"])
+        self.assertEqual(Path("/dev/sdz"), common.call_args.kwargs["device"])
+
+
 class FilesystemCheckTests(unittest.TestCase):
     def test_only_read_only_flags_are_passed_to_fsck(self):
         with tempfile.TemporaryDirectory() as temp:

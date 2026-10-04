@@ -1,419 +1,334 @@
 #!/usr/bin/env python3
-"""PMKB FIRST BOOT physical qualification helper.
+"""PMKB FIRST BOOT qualification UI.
 
-The default mode is read-only. Physical writes are restricted to the already
-identified P1 block partition and require a fresh preflight plus a typed local
-confirmation. The whole-disk device is never opened for writing.
+This module is deliberately not a physical writer. Every physical device open,
+full-card comparison, rollback capture, durable journal and bounded P1 write is
+performed by tools/restore-p1-linux.py, the single PMKB physical backend.
 """
-
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
-import os
-import platform
-import stat
-import subprocess
 import sys
-from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable
 
 DEFAULT_MANIFEST = Path("/opt/pmkb/candidate.json")
-DEFAULT_IMAGE = Path("/opt/pmkb/PMKB-FIRST-BOOT-1-0b00d858.img")
-CHUNK = 4 * 1024 * 1024
+DEFAULT_PLAN = Path("/opt/pmkb/restore-plan.json")
+DEFAULT_IDENTITY = Path("/opt/pmkb/BUILD-IDENTITY.json")
+DEFAULT_BACKEND = Path("/opt/pmkb/tools/restore-p1-linux.py")
+LOCAL_BACKEND = Path(__file__).with_name("restore-p1-linux.py")
+DEFAULT_IMAGE_DIR = Path("/opt/pmkb")
 
 
 class QualificationError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
-class Partition:
-    number: int
-    path: str
-    offset: int
-    size: int
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        while block := handle.read(4 * 1024 * 1024):
+            h.update(block)
+    return h.hexdigest()
 
 
-@dataclass(frozen=True)
-class Target:
-    disk_path: str
-    size: int
-    model: str
-    serial: str
-    partitions: tuple[Partition, ...]
-
-    def partition(self, number: int) -> Partition:
-        for item in self.partitions:
-            if item.number == number:
-                return item
-        raise QualificationError(f"partition P{number} absente")
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
 
 
-def run_json(argv: list[str]) -> dict[str, Any]:
-    proc = subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if proc.returncode != 0:
-        raise QualificationError(f"commande échouée ({proc.returncode}): {' '.join(argv)}\n{proc.stderr.strip()}")
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise QualificationError(f"JSON invalide depuis {' '.join(argv)}: {exc}") from exc
-
-
-def load_manifest(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    required = {"image_name", "image_size", "image_sha256", "disk", "pre_p1", "partitions"}
-    missing = sorted(required - data.keys())
-    if missing:
-        raise QualificationError(f"manifest incomplet: {', '.join(missing)}")
-    if data["disk"].get("partition_table") != "dos":
-        raise QualificationError("manifest: partition_table doit être dos/MBR")
+def load_json(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise QualificationError(f"{path}: la racine JSON doit être un objet")
     return data
 
 
-def sha256_file(path: Path, length: int | None = None) -> str:
-    h = hashlib.sha256()
-    remaining = length
-    with path.open("rb", buffering=0) as handle:
-        while True:
-            if remaining is not None and remaining <= 0:
-                break
-            want = CHUNK if remaining is None else min(CHUNK, remaining)
-            block = handle.read(want)
-            if not block:
-                break
-            h.update(block)
-            if remaining is not None:
-                remaining -= len(block)
-    if remaining not in (None, 0):
-        raise QualificationError(f"lecture courte de {path}: {remaining} octets manquants")
-    return h.hexdigest()
+def load_manifest(path: Path) -> dict[str, Any]:
+    data = load_json(path)
+    required = {"image_name", "image_size", "image_sha256", "disk", "pre_p1", "partitions"}
+    missing = sorted(required - data.keys())
+    if missing:
+        raise QualificationError("manifest incomplet: " + ", ".join(missing))
+    name = data["image_name"]
+    if not isinstance(name, str) or not name or Path(name).name != name:
+        raise QualificationError("manifest: image_name doit être un nom de fichier simple")
+    if not _is_sha256(data["image_sha256"]):
+        raise QualificationError("manifest: image_sha256 invalide")
+    if data["disk"].get("partition_table") != "dos" or int(data["disk"].get("sector_size") or 0) != 512:
+        raise QualificationError("manifest: géométrie disque PMKB invalide")
+    return data
 
 
-def sha256_region(path: Path, offset: int, length: int) -> str:
-    h = hashlib.sha256()
-    remaining = length
-    with path.open("rb", buffering=0) as handle:
-        handle.seek(offset)
-        while remaining:
-            block = handle.read(min(CHUNK, remaining))
-            if not block:
-                raise QualificationError(f"lecture courte de {path} à l'offset {offset}")
-            h.update(block)
-            remaining -= len(block)
-    return h.hexdigest()
+def load_identity(path: Path) -> dict[str, Any]:
+    data = load_json(path)
+    for key in ("head", "image_name", "image_sha256", "plan_sha256", "manifest_sha256"):
+        if key not in data:
+            raise QualificationError(f"identité Live incomplète: {key}")
+    if not _is_sha256(data["image_sha256"]) or not _is_sha256(data["plan_sha256"]) or not _is_sha256(data["manifest_sha256"]):
+        raise QualificationError("identité Live: empreinte SHA-256 invalide")
+    return data
 
 
-def _flatten_lsblk(nodes: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for node in nodes:
-        out.append(node)
-        out.extend(_flatten_lsblk(node.get("children") or []))
-    return out
+def load_backend(path: Path):
+    selected = path
+    if not selected.exists() and LOCAL_BACKEND.exists():
+        selected = LOCAL_BACKEND
+    if not selected.is_file():
+        raise QualificationError(f"backend PMKB absent: {selected}")
+    spec = importlib.util.spec_from_file_location("pmkb_restore_backend", selected)
+    if spec is None or spec.loader is None:
+        raise QualificationError(f"backend PMKB non chargeable: {selected}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    for name in ("validate_sealed_plan", "execute_sealed_plan", "verify_written_sealed_plan"):
+        if not hasattr(module, name):
+            raise QualificationError(f"backend PMKB incomplet: {name}")
+    return module
 
 
-def lsblk_snapshot() -> list[dict[str, Any]]:
-    data = run_json([
-        "lsblk", "-J", "-b", "-o",
-        "PATH,NAME,TYPE,SIZE,TRAN,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,PKNAME",
-    ])
-    return _flatten_lsblk(data.get("blockdevices") or [])
+def image_path(manifest: dict[str, Any], override: Path | None = None) -> Path:
+    return override if override is not None else DEFAULT_IMAGE_DIR / manifest["image_name"]
 
 
-def sfdisk_snapshot(disk_path: str) -> dict[str, Any]:
-    return run_json(["sfdisk", "--json", disk_path])
-
-
-def _partition_number(path: str, disk_path: str) -> int | None:
-    if not path.startswith(disk_path):
-        return None
-    suffix = path[len(disk_path):]
-    if suffix.startswith("p"):
-        suffix = suffix[1:]
-    return int(suffix) if suffix.isdigit() else None
-
-
-def validate_layout(disk_path: str, sfdisk: dict[str, Any], manifest: dict[str, Any]) -> tuple[Partition, ...]:
-    table = sfdisk.get("partitiontable") or {}
-    if table.get("label") not in {"dos", "mbr"}:
-        raise QualificationError(f"{disk_path}: table attendue MBR/dos, trouvée {table.get('label')!r}")
-    sector_size = int(table.get("sectorsize") or manifest["disk"].get("sector_size") or 512)
-    expected = {int(p["number"]): p for p in manifest["partitions"]}
-    found: dict[int, Partition] = {}
-    for item in table.get("partitions") or []:
-        node = str(item.get("node") or "")
-        number = _partition_number(node, disk_path)
-        if number is None:
-            continue
-        found[number] = Partition(
-            number=number,
-            path=node,
-            offset=int(item["start"]) * sector_size,
-            size=int(item["size"]) * sector_size,
-        )
-    if set(found) != set(expected):
-        raise QualificationError(f"{disk_path}: partitions {sorted(found)} != attendues {sorted(expected)}")
-    for number, spec in expected.items():
-        got = found[number]
-        if got.offset != int(spec["offset"]) or got.size != int(spec["size"]):
-            raise QualificationError(
-                f"{disk_path} P{number}: offset/taille {got.offset}/{got.size} != "
-                f"{spec['offset']}/{spec['size']}"
-            )
-    return tuple(found[n] for n in sorted(found))
-
-
-def discover_target(manifest: dict[str, Any]) -> Target:
-    wanted_size = int(manifest["disk"]["size"])
-    candidates: list[Target] = []
-    for node in lsblk_snapshot():
-        if node.get("type") != "disk" or int(node.get("size") or 0) != wanted_size:
-            continue
-        path = str(node.get("path") or "")
-        if not path.startswith("/dev/") or path.startswith("/dev/loop"):
-            continue
-        try:
-            parts = validate_layout(path, sfdisk_snapshot(path), manifest)
-        except QualificationError:
-            continue
-        candidates.append(Target(
-            disk_path=path,
-            size=wanted_size,
-            model=str(node.get("model") or "").strip(),
-            serial=str(node.get("serial") or "").strip(),
-            partitions=parts,
-        ))
-    if not candidates:
-        raise QualificationError("aucune microSD ne correspond exactement à la géométrie Aura HD attendue")
-    if len(candidates) != 1:
-        names = ", ".join(c.disk_path for c in candidates)
-        raise QualificationError(f"cible ambiguë: {len(candidates)} disques correspondent ({names})")
-    return candidates[0]
-
-
-def ensure_block_device(path: str) -> None:
-    mode = os.stat(path).st_mode
-    if not stat.S_ISBLK(mode):
-        raise QualificationError(f"{path}: la cible d'écriture n'est pas un périphérique bloc")
-
-
-def mounted_partitions(target: Target) -> list[str]:
-    rows = {str(x.get("path")): x for x in lsblk_snapshot()}
-    mounted: list[str] = []
-    for part in target.partitions:
-        entry = rows.get(part.path, {})
-        points = [p for p in (entry.get("mountpoints") or []) if p]
-        if points:
-            mounted.append(f"{part.path} -> {', '.join(points)}")
-    return mounted
-
-
-def verify_candidate(image: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+def validate_bundle(manifest_path: Path, plan_path: Path, identity_path: Path,
+                    image: Path, backend) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    manifest = load_manifest(manifest_path)
+    identity = load_identity(identity_path)
     if not image.is_file():
-        raise QualificationError(f"image candidate absente: {image}")
-    size = image.stat().st_size
-    expected_size = int(manifest["image_size"])
-    if size != expected_size:
-        raise QualificationError(f"image: taille {size} != {expected_size}")
-    digest = sha256_file(image)
-    if digest != manifest["image_sha256"]:
-        raise QualificationError(f"image: SHA-256 {digest} != {manifest['image_sha256']}")
-    return {"size": size, "sha256": digest}
+        raise QualificationError(f"candidat absent: {image}")
+    if image.stat().st_size != int(manifest["image_size"]):
+        raise QualificationError("candidat: taille différente du manifest")
+    image_sha = _sha256(image)
+    if image_sha != manifest["image_sha256"]:
+        raise QualificationError(f"candidat: SHA-256 inattendu {image_sha}")
+    if identity["image_name"] != manifest["image_name"] or identity["image_sha256"] != image_sha:
+        raise QualificationError("identité Live et candidat divergent")
+    manifest_sha = _sha256(manifest_path)
+    if identity["manifest_sha256"] != manifest_sha:
+        raise QualificationError("manifest différent de celui scellé dans le Live")
+
+    try:
+        plan, plan_sha = backend.validate_sealed_plan(plan_path, image, identity["plan_sha256"])
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise QualificationError(str(exc)) from exc
+    if plan_sha != identity["plan_sha256"]:
+        raise QualificationError("plan scellé incohérent")
+
+    p1spec = next((p for p in manifest["partitions"] if int(p["number"]) == 1), None)
+    p2spec = next((p for p in manifest["partitions"] if int(p["number"]) == 2), None)
+    if p1spec is None or p2spec is None:
+        raise QualificationError("manifest: P1/P2 absentes")
+    if (plan["disk_size"] != int(manifest["disk"]["size"])
+            or plan["p1_offset"] != int(p1spec["offset"])
+            or plan["p1_size"] != int(p1spec["size"])
+            or plan["replacement_sha256"] != manifest["image_sha256"]
+            or plan["preserved_sha256"]["pre_p1"] != manifest["pre_p1"]["sha256"]
+            or plan["preserved_sha256"]["p2"] != p2spec.get("sha256")):
+        raise QualificationError("plan scellé et manifest Aura HD divergent")
+    return manifest, identity, plan
 
 
-def preflight(target: Target, image: Path, manifest: dict[str, Any], *, require_unmounted: bool) -> dict[str, Any]:
-    if target.size != int(manifest["disk"]["size"]):
-        raise QualificationError("taille disque modifiée depuis l'identification")
-    parts = validate_layout(target.disk_path, sfdisk_snapshot(target.disk_path), manifest)
-    if parts != target.partitions:
-        raise QualificationError("géométrie/chemins de partitions modifiés depuis l'identification")
-    image_info = verify_candidate(image, manifest)
-    pre = manifest["pre_p1"]
-    pre_hash = sha256_region(Path(target.disk_path), int(pre["offset"]), int(pre["size"]))
-    if pre_hash != pre["sha256"]:
-        raise QualificationError(f"PRE-P1 SHA-256 inattendu: {pre_hash}")
-    p2spec = next(p for p in manifest["partitions"] if int(p["number"]) == 2)
-    p2_hash = sha256_region(Path(target.disk_path), int(p2spec["offset"]), int(p2spec["size"]))
-    if p2_hash != p2spec["sha256"]:
-        raise QualificationError(f"P2/recoveryfs SHA-256 inattendu: {p2_hash}")
-    mounts = mounted_partitions(target)
-    if require_unmounted and mounts:
-        raise QualificationError("partitions montées: " + "; ".join(mounts))
-    return {
-        "disk": target.disk_path,
-        "model": target.model,
-        "serial": target.serial,
-        "image": image_info,
-        "pre_p1_sha256": pre_hash,
-        "p2_sha256": p2_hash,
-        "mounted": mounts,
-    }
+def confirmation_phrase(manifest: dict[str, Any], plan_sha256: str) -> str:
+    return f"ECRIRE P1 {manifest['image_sha256'][:8]} PLAN {plan_sha256[:8]}"
 
 
-def confirmation_phrase(manifest: dict[str, Any]) -> str:
-    return f"ECRIRE P1 {manifest['image_sha256'][:8]}"
+def _backend_error(result: dict[str, Any], expected_status: str) -> QualificationError:
+    errors = result.get("errors") or []
+    detail = "; ".join(str(x) for x in errors) or f"statut {result.get('status')!r}"
+    return QualificationError(f"backend PMKB: {detail}; attendu {expected_status}")
 
 
-def ensure_supported_write_host() -> None:
-    release = platform.release().lower()
-    if "microsoft" in release or "wsl" in release:
-        raise QualificationError("écriture physique refusée sous WSL; démarrez sur le Live USB PMKB")
-    if os.name != "posix" or not sys.platform.startswith("linux"):
-        raise QualificationError("écriture physique autorisée uniquement sous Linux natif/Live")
+def preflight_device(backend, plan_path: Path, image: Path, expected_plan_sha256: str,
+                     device: Path) -> dict[str, Any]:
+    result = backend.execute_sealed_plan(
+        plan_path, image, Path("/run/pmkb-readonly-unused.jsonl"),
+        expected_plan_sha256=expected_plan_sha256,
+        device=device, check_device=True, ack_linux_live=True,
+    )
+    if not result.get("complete") or result.get("status") != "device_ready_read_only":
+        raise _backend_error(result, "device_ready_read_only")
+    return result
 
 
-def write_partition(image: Path, partition_path: str, expected_size: int) -> None:
-    ensure_supported_write_host()
-    ensure_block_device(partition_path)
-    if image.stat().st_size != expected_size:
-        raise QualificationError("la taille du candidat ne correspond plus à P1")
-    written = 0
-    flags = os.O_RDWR | getattr(os, "O_EXCL", 0) | getattr(os, "O_SYNC", 0)
-    fd = os.open(partition_path, flags)
-    with image.open("rb", buffering=0) as src, os.fdopen(fd, "r+b", buffering=0) as dst:
-        while written < expected_size:
-            block = src.read(min(CHUNK, expected_size - written))
-            if not block:
-                raise QualificationError("fin prématurée du candidat pendant l'écriture")
-            count = dst.write(block)
-            if count != len(block):
-                raise QualificationError(f"écriture courte sur P1: {count}/{len(block)}")
-            written += count
-        if src.read(1):
-            raise QualificationError("le candidat contient des données au-delà de la taille de P1")
-        dst.flush()
-        os.fsync(dst.fileno())
-    os.sync()
-
-
-def _same_target(a: Target, b: Target) -> bool:
-    return a.disk_path == b.disk_path and a.size == b.size and a.partitions == b.partitions
-
-
-def perform_write(image: Path, manifest: dict[str, Any]) -> dict[str, Any]:
-    target = discover_target(manifest)
-    before = preflight(target, image, manifest, require_unmounted=True)
-    phrase = confirmation_phrase(manifest)
-    print("\nÉCRITURE — seule P1 sera modifiée.")
-    print(f"Cible : {target.disk_path} / {target.partition(1).path}")
-    print("PRE-P1 et P2 sont vérifiées. P2/recoveryfs restera en lecture seule.")
-    typed = input(f"Tapez exactement « {phrase} » pour autoriser l'écriture : ").strip()
+def perform_write(backend, plan_path: Path, image: Path, manifest: dict[str, Any],
+                  expected_plan_sha256: str, device: Path, journal_dir: Path,
+                  *, input_func: Callable[[str], str] = input) -> dict[str, Any]:
+    before = preflight_device(backend, plan_path, image, expected_plan_sha256, device)
+    phrase = confirmation_phrase(manifest, expected_plan_sha256)
+    print("\nÉCRITURE — le backend PMKB unique écrira uniquement la plage P1.")
+    print(f"Cible explicite : {device}")
+    print("La carte complète correspond à la sauvegarde vérifiée.")
+    print("Une copie durable de la P1 originale et un journal seront créés avant l'écriture.")
+    typed = input_func(f"Tapez exactement « {phrase} » : ").strip()
     if typed != phrase:
         raise QualificationError("confirmation refusée; aucune écriture effectuée")
 
-    again = discover_target(manifest)
-    if not _same_target(target, again):
-        raise QualificationError("la cible a changé après confirmation; STOP")
-    preflight(again, image, manifest, require_unmounted=True)
-    p1 = again.partition(1)
-    if p1.size != int(manifest["image_size"]):
-        raise QualificationError("P1 n'a pas exactement la taille du candidat")
+    if not journal_dir.is_dir():
+        raise QualificationError(f"répertoire de journal absent: {journal_dir}")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    journal = journal_dir / f"pmkb-first-boot-{stamp}.jsonl"
+    result = backend.execute_sealed_plan(
+        plan_path, image, journal,
+        expected_plan_sha256=expected_plan_sha256,
+        device=device, write_p1=True, ack_linux_live=True,
+        authorize_plan_sha256=expected_plan_sha256,
+    )
+    if not result.get("complete") or result.get("status") != "ok":
+        raise _backend_error(result, "ok")
+    result["preflight"] = before
+    result["journal"] = str(journal)
+    return result
 
-    write_partition(image, p1.path, p1.size)
 
-    p1_hash = sha256_file(Path(p1.path), p1.size)
-    if p1_hash != manifest["image_sha256"]:
-        raise QualificationError(f"P1 relue: SHA-256 inattendu {p1_hash}")
-    after = preflight(again, image, manifest, require_unmounted=True)
-    return {"before": before, "after": after, "p1_sha256": p1_hash}
+def verify_after_write(backend, plan_path: Path, image: Path, expected_plan_sha256: str,
+                       device: Path) -> dict[str, Any]:
+    result = backend.verify_written_sealed_plan(
+        plan_path, image, expected_plan_sha256=expected_plan_sha256, device=device,
+    )
+    if not result.get("complete") or result.get("status") != "verified":
+        raise _backend_error(result, "verified")
+    return result
 
 
-def print_header(manifest: dict[str, Any]) -> None:
-    print("=" * 66)
+def ask_device(input_func: Callable[[str], str] = input) -> Path:
+    value = input_func("Disque complet exact de la microSD (ex. /dev/sdb) : ").strip()
+    if not value.startswith("/dev/"):
+        raise QualificationError("cible explicite /dev/... obligatoire")
+    return Path(value)
+
+
+def ask_journal_dir(input_func: Callable[[str], str] = input) -> Path:
+    value = input_func("Répertoire PERSISTANT pour journal + sauvegarde P1 : ").strip()
+    if not value:
+        raise QualificationError("répertoire persistant obligatoire")
+    return Path(value)
+
+
+def print_header(manifest: dict[str, Any], identity: dict[str, Any]) -> None:
+    print("=" * 72)
     print(" PimpMyKobo — Aura HD E606C0 — FIRST BOOT #1 qualification")
-    print("=" * 66)
-    print(f" HEAD      {manifest.get('head', '?')}")
-    print(f" CANDIDAT  {manifest['image_sha256']}")
-    print(" P2/recoveryfs et les 9 961 472 premiers octets sont sacrés.")
+    print("=" * 72)
+    print(f" HEAD       {identity['head']}")
+    print(f" CANDIDAT   {manifest['image_sha256']}")
+    print(f" PLAN       {identity['plan_sha256']}")
+    print(" Backend    restore-p1-linux.py (unique moteur d'accès physique)")
     print()
 
 
-def human_preflight(image: Path, manifest: dict[str, Any], require_unmounted: bool = False) -> Target:
-    target = discover_target(manifest)
-    report = preflight(target, image, manifest, require_unmounted=require_unmounted)
-    print(f"[✓] Carte reconnue : {target.disk_path} ({target.size} octets)")
-    print("[✓] MBR et géométrie P1/P2/P3 conformes")
-    print(f"[✓] PRE-P1 : {report['pre_p1_sha256']}")
-    print(f"[✓] P2      : {report['p2_sha256']}")
-    print(f"[✓] Candidat: {report['image']['sha256']}")
-    if report["mounted"]:
-        print("[!] Partitions actuellement montées :")
-        for item in report["mounted"]:
-            print(f"    {item}")
-    else:
-        print("[✓] Aucune partition cible montée")
-    return target
-
-
-def menu(image: Path, manifest: dict[str, Any]) -> int:
+def menu(backend, manifest: dict[str, Any], identity: dict[str, Any],
+         plan_path: Path, image: Path) -> int:
     while True:
-        os.system("clear")
-        print_header(manifest)
-        print(" 1. Identifier et vérifier la microSD         [LECTURE SEULE]")
-        print(" 2. Écrire le candidat sur P1                 [ÉCRITURE]")
-        print(" 3. Vérifier P1 / PRE-P1 / P2 après écriture [LECTURE SEULE]")
+        print_header(manifest, identity)
+        print(" 1. Qualifier la microSD                       [LECTURE SEULE]")
+        print(" 2. Écrire FIRST BOOT sur P1                   [ÉCRITURE CONFIRMÉE]")
+        print(" 3. Vérifier P1 et tout l'extérieur de P1      [LECTURE SEULE]")
         print(" 4. Afficher les invariants")
         print(" 0. Quitter")
         choice = input("\nChoix : ").strip()
         try:
             if choice == "1":
-                human_preflight(image, manifest)
+                device = ask_device()
+                result = preflight_device(backend, plan_path, image, identity["plan_sha256"], device)
+                print(f"\n[✓] Cible qualifiée : {device}")
+                print("[✓] USB/removable, non montée, sans swap/holders")
+                print("[✓] Carte complète identique à la sauvegarde vérifiée")
+                print(f"[✓] Plan : {result['plan_sha256']}")
             elif choice == "2":
-                result = perform_write(image, manifest)
-                print("\n[✓] P1 écrite et relue")
-                print(f"[✓] P1 SHA-256 : {result['p1_sha256']}")
-                print("[✓] PRE-P1 toujours intact")
-                print("[✓] P2/recoveryfs toujours intacte")
+                device = ask_device()
+                journal_dir = ask_journal_dir()
+                result = perform_write(
+                    backend, plan_path, image, manifest, identity["plan_sha256"],
+                    device, journal_dir,
+                )
+                print("\n[✓] P1 écrite puis relue")
+                print("[✓] Toute la zone hors P1 est inchangée")
+                print(f"[✓] P1 originale : {result['rollback']}")
+                print(f"[✓] Journal : {result['journal']}")
                 print("\nPMKB FIRST BOOT #1 — READY FOR POWER")
             elif choice == "3":
-                target = human_preflight(image, manifest, require_unmounted=False)
-                digest = sha256_file(Path(target.partition(1).path), int(manifest["image_size"]))
-                marker = "✓" if digest == manifest["image_sha256"] else "✗"
-                print(f"[{marker}] P1 SHA-256 : {digest}")
-                if marker != "✓":
-                    raise QualificationError("P1 ne correspond pas au candidat figé")
+                device = ask_device()
+                result = verify_after_write(
+                    backend, plan_path, image, identity["plan_sha256"], device,
+                )
+                print(f"\n[✓] P1 : {result['p1_reread_sha256']}")
+                print("[✓] PRE-P1, P2, P3, gaps et octets hors P1 inchangés")
             elif choice == "4":
-                print("PRE-P1 : 0..9 961 471 — jamais écrit")
-                print("P1     : seule partition autorisée à l'écriture")
-                print("P2     : recoveryfs — jamais écrit")
-                print("P3     : KOBOeReader — jamais écrit par cet outil")
+                print("\n- aucune découverte automatique de cible")
+                print("- Linux natif/Live root uniquement; WSL et conteneurs refusés")
+                print("- disque complet amovible via USB uniquement")
+                print("- carte complète comparée à la sauvegarde avant écriture")
+                print("- sauvegarde P1 + journal durables avant write intent")
+                print("- e2fsck -f -n du candidat staged")
+                print("- aucune écriture hors plage P1")
+                print("- aucun retry/rollback automatique")
             elif choice == "0":
                 return 0
             else:
                 print("Choix invalide")
-        except (QualificationError, OSError, subprocess.SubprocessError) as exc:
+        except (QualificationError, OSError, ValueError) as exc:
             print(f"\n[STOP] {exc}")
-        input("\nEntrée pour continuer…")
+        input("\nEntrée pour continuer…\n")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--image", type=Path, default=DEFAULT_IMAGE)
-    parser.add_argument("--preflight", action="store_true", help="lecture seule, puis quitte")
-    parser.add_argument("--write-p1", action="store_true", help="écriture P1 après garde-fous et confirmation")
-    parser.add_argument("--menu", action="store_true", help="interface texte interactive")
+    parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
+    parser.add_argument("--identity", type=Path, default=DEFAULT_IDENTITY)
+    parser.add_argument("--backend", type=Path, default=DEFAULT_BACKEND)
+    parser.add_argument("--image", type=Path)
+    parser.add_argument("--device", type=Path)
+    parser.add_argument("--journal-dir", type=Path)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--preflight", action="store_true")
+    modes.add_argument("--write-p1", action="store_true")
+    modes.add_argument("--verify-after", action="store_true")
+    modes.add_argument("--menu", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
+        backend = load_backend(args.backend)
         manifest = load_manifest(args.manifest)
-        verify_candidate(args.image, manifest)
-        if args.write_p1:
-            print_header(manifest)
-            result = perform_write(args.image, manifest)
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-            return 0
+        image = image_path(manifest, args.image)
+        manifest, identity, _plan = validate_bundle(
+            args.manifest, args.plan, args.identity, image, backend,
+        )
         if args.preflight:
-            print_header(manifest)
-            human_preflight(args.image, manifest)
+            if args.device is None:
+                raise QualificationError("--preflight exige --device /dev/...")
+            print_header(manifest, identity)
+            print(json.dumps(preflight_device(
+                backend, args.plan, image, identity["plan_sha256"], args.device,
+            ), indent=2, ensure_ascii=False))
             return 0
-        return menu(args.image, manifest)
-    except (QualificationError, OSError, json.JSONDecodeError) as exc:
+        if args.write_p1:
+            if args.device is None or args.journal_dir is None:
+                raise QualificationError("--write-p1 exige --device et --journal-dir")
+            print_header(manifest, identity)
+            print(json.dumps(perform_write(
+                backend, args.plan, image, manifest, identity["plan_sha256"],
+                args.device, args.journal_dir,
+            ), indent=2, ensure_ascii=False))
+            return 0
+        if args.verify_after:
+            if args.device is None:
+                raise QualificationError("--verify-after exige --device")
+            print_header(manifest, identity)
+            print(json.dumps(verify_after_write(
+                backend, args.plan, image, identity["plan_sha256"], args.device,
+            ), indent=2, ensure_ascii=False))
+            return 0
+        return menu(backend, manifest, identity, args.plan, image)
+    except (QualificationError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"STOP: {exc}", file=sys.stderr)
         return 2
 
