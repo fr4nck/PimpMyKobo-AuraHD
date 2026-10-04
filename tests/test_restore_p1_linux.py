@@ -306,6 +306,18 @@ class SealedPlanTests(unittest.TestCase):
         self.assertFalse(common.call_args.kwargs["write_p1"])
         self.assertEqual(Path("/dev/sdz"), common.call_args.kwargs["device"])
 
+    def test_sealed_plan_accepts_explicit_pmkb_candidate_source_contract(self):
+        plan_data = self.fixture()
+        plan_data["candidate_source"]["tool"] = "build-koreader-rootfs"
+        self.plan.write_text(json.dumps(plan_data))
+        plan_sha = legacy.digest(self.plan)
+        loaded, _ = mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+        self.assertEqual("build-koreader-rootfs", loaded["candidate_source"]["tool"])
+        plan_data["evidence_sha256"]["rootfs_report"] = "0" * 64
+        self.plan.write_text(json.dumps(plan_data))
+        with self.assertRaisesRegex(ValueError, "evidence hashes"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+
 
 class FilesystemCheckTests(unittest.TestCase):
     def test_only_read_only_flags_are_passed_to_fsck(self):

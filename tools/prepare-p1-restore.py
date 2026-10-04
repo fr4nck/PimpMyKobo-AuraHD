@@ -47,14 +47,17 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
                         "destination_readback", "whole_source_reread"))):
             raise ValueError("complete acquisition report inconsistent with full backup")
         report = simulation.read_json(simulation_report)
+        report_tool = report.get("rootfs_report_tool")
         if (report.get("tool") != "restore-rootfs" or report.get("schema_version") != 1
                 or report.get("mode") != "disk_image_simulation" or report.get("status") != "ok"
                 or report.get("complete") is not True or report.get("errors") != []
                 or report.get("input_provenance") != legacy.PROVENANCE
                 or report.get("physical_restore_eligible") is not False
                 or any(report.get(key) != check[key] for key in
-                       ("disk_size", "partitions", "p1_offset", "p1_size", "rootfs_sha256",
-                        "target_sha256", "backup_manifest_sha256", "rebuild_report_sha256"))
+                        ("disk_size", "partitions", "p1_offset", "p1_size", "rootfs_sha256",
+                        "target_sha256", "backup_manifest_sha256", "rootfs_report_sha256",
+                        "rootfs_report_tool"))
+                or report_tool not in ("rebuild-rootfs", "build-koreader-rootfs")
                 or simulated.stat().st_size != check["disk_size"]
                 or report.get("output_sha256") != legacy.digest(simulated)):
             raise ValueError("simulation report inconsistent with local inputs")
@@ -71,8 +74,9 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
                       required_target_full_sha256=sha, disk_size=check["disk_size"],
                       p1_offset=p1["offset"], p1_size=p1["size"],
                       replacement_sha256=check["rootfs_sha256"], preserved_sha256=after,
+                      candidate_source={"tool": report_tool, "report_sha256": legacy.digest(rebuild)},
                       evidence_sha256={"legacy_manifest": legacy.digest(manifest),
-                                       "rebuild_report": legacy.digest(rebuild),
+                                       "rootfs_report": legacy.digest(rebuild),
                                        "acquisition_report": legacy.digest(acquisition),
                                        "simulation_report": legacy.digest(simulation_report)},
                       rollback={"source": "verified_full_backup", "offset": p1["offset"], "size": p1["size"]},

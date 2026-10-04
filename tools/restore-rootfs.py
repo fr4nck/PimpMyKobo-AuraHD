@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -46,6 +47,47 @@ def hash_region(handle: BinaryIO, offset: int, size: int) -> str:
         h.update(chunk)
         remaining -= len(chunk)
     return h.hexdigest()
+
+
+def validate_rootfs_report(report: dict[str, Any], report_path: Path, rootfs: Path,
+                           p1_size: int) -> tuple[str, str]:
+    """Validate a typed P1 producer report and independently check PMKB ext4."""
+    digest = legacy.digest(rootfs)
+    tool = report.get("tool")
+    common = (type(report.get("schema_version")) is int and report.get("schema_version") == 1
+              and report.get("complete") is True
+              and report.get("errors") == [] and report.get("physical_restore_eligible") is False
+              and report.get("hardware_qualified") is False and report.get("device") == "E606C0"
+              and type(report.get("rootfs_size")) is int and report.get("rootfs_size") == p1_size
+              and rootfs.stat().st_size == p1_size
+              and report.get("rootfs_sha256") == digest)
+    if not common:
+        raise ValueError("rootfs build report is incomplete or inconsistent with E606C0 P1 image")
+    if tool == "rebuild-rootfs":
+        checks = report.get("checks", {})
+        if (report.get("status") != "ok" or report.get("target_fingerprint") is not None
+                or not isinstance(checks, dict) or checks.get("size") is not True
+                or checks.get("ext4_parameters") is not True or checks.get("e2fsck") != "clean"):
+            raise ValueError("rebuild-rootfs report has no successful size/ext4/e2fsck checks")
+        return tool, digest
+    if tool != "build-koreader-rootfs":
+        raise ValueError("unsupported P1 producer report tool")
+    if report.get("status") != "experimental":
+        raise ValueError("build-koreader-rootfs report status is not experimental")
+    ext4 = report.get("ext4")
+    if (not isinstance(ext4, dict) or ext4.get("label") != "rootfs"
+            or type(ext4.get("block_size")) is not int or ext4["block_size"] <= 0
+            or type(ext4.get("inode_size")) is not int or ext4["inode_size"] <= 0):
+        raise ValueError("build-koreader-rootfs report has invalid ext4 metadata")
+    executable = shutil.which("e2fsck", path="/usr/sbin:/usr/bin:/sbin:/bin")
+    if not executable:
+        raise ValueError("e2fsck is required to revalidate build-koreader-rootfs images")
+    checked = subprocess.run([executable, "-f", "-n", str(rootfs.resolve())],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, env={**os.environ, "LC_ALL": "C"})
+    if checked.returncode != 0:
+        raise ValueError(f"read-only e2fsck rejected PMKB P1 (exit {checked.returncode}): {checked.stdout}")
+    return tool, digest
 
 
 def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Path,
@@ -98,7 +140,9 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
         rebuilt = read_json(rebuild_path)
         root_sha = legacy.digest(rootfs)
         checks = rebuilt.get("checks", {})
-        if (rebuilt.get("schema_version") != 1 or rebuilt.get("tool") != "rebuild-rootfs"
+        report_tool = rebuilt.get("tool")
+        if report_tool == "rebuild-rootfs":
+            if (rebuilt.get("schema_version") != 1 or rebuilt.get("tool") != "rebuild-rootfs"
                 or rebuilt.get("status") != "ok" or rebuilt.get("complete") is not True
                 or rebuilt.get("device") != "E606C0" or rebuilt.get("errors") != []
                 or rebuilt.get("backup_manifest_sha256") != legacy.digest(manifest_path)
@@ -108,29 +152,36 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
                 or rebuilt.get("input_provenance") != legacy.PROVENANCE
                 or rebuilt.get("physical_restore_eligible") is not False
                 or rebuilt.get("target_fingerprint") is not None):
-            raise ValueError("rebuilt image/report is inconsistent with the legacy evidence")
-        if not isinstance(checks, dict) or checks.get("size") is not True or checks.get("ext4_parameters") is not True or checks.get("e2fsck") != "clean":
-            raise ValueError("rebuild report has no successful size/ext4/e2fsck checks")
-        for key, count in (("metadata", "entries"), ("content", "files")):
-            check = checks.get(key, {})
-            if not isinstance(check, dict) or type(check.get(count)) is not int or check[count] <= 0 or type(check.get("verified")) is not int or check["verified"] != check[count]:
-                raise ValueError(f"rebuild {key} verification is incomplete")
-        md5 = checks.get("fs_md5sum", {})
-        if not isinstance(md5, dict) or type(md5.get("present")) is not bool:
-            raise ValueError("missing rebuild MD5 check")
-        if md5["present"] and (type(md5.get("entries")) is not int or md5["entries"] <= 0 or type(md5.get("matched")) is not int or md5["matched"] != md5["entries"] or md5.get("missing") != [] or md5.get("mismatched") != []):
-            raise ValueError("rebuild MD5 verification is incomplete")
+                raise ValueError("rebuilt image/report is inconsistent with the legacy evidence")
+            if not isinstance(checks, dict) or checks.get("size") is not True or checks.get("ext4_parameters") is not True or checks.get("e2fsck") != "clean":
+                raise ValueError("rebuild report has no successful size/ext4/e2fsck checks")
+            for key, count in (("metadata", "entries"), ("content", "files")):
+                check = checks.get(key, {})
+                if not isinstance(check, dict) or type(check.get(count)) is not int or check[count] <= 0 or type(check.get("verified")) is not int or check["verified"] != check[count]:
+                    raise ValueError(f"rebuild {key} verification is incomplete")
+            md5 = checks.get("fs_md5sum", {})
+            if not isinstance(md5, dict) or type(md5.get("present")) is not bool:
+                raise ValueError("missing rebuild MD5 check")
+            if md5["present"] and (type(md5.get("entries")) is not int or md5["entries"] <= 0 or type(md5.get("matched")) is not int or md5["matched"] != md5["entries"] or md5.get("missing") != [] or md5.get("mismatched") != []):
+                raise ValueError("rebuild MD5 verification is incomplete")
+            filesystem_check = "reported_by_rebuild_rootfs"
+        elif report_tool == "build-koreader-rootfs":
+            validate_rootfs_report(rebuilt, rebuild_path, rootfs, p1["size"])
+            filesystem_check = "revalidated_locally_read_only_e2fsck"
+        else:
+            raise ValueError("unsupported P1 producer report tool")
         if require_copy_space and shutil.disk_usage(output.parent).free < size:
             raise ValueError("insufficient space for a full disk-image copy")
         result.update(
             status="ready", input_provenance=manifest["provenance"],
             disk_size=size, p1_offset=p1["offset"], p1_size=p1["size"], partitions=parts,
             rootfs_sha256=root_sha, target_sha256=legacy.digest(target),
-            backup_manifest_sha256=legacy.digest(manifest_path), rebuild_report_sha256=legacy.digest(rebuild_path),
+            backup_manifest_sha256=legacy.digest(manifest_path), rootfs_report_sha256=legacy.digest(rebuild_path),
+            rootfs_report_tool=report_tool,
             preserved_before={"pre_p1": prefix_sha, "suffix_after_p1": suffix_sha, "p2": p2_sha, "p3": p3_sha},
             checks={"target_geometry": True, "target_pre_p1_p2": True,
-                    "rootfs_matches_rebuild_report": True, "filesystem_checks": "reported_by_rebuild_not_repeated"},
-            warnings=[*manifest["warnings"], "Unsigned rebuild report: consistency checked; filesystem/bootability are not independently revalidated by this simulator."],
+                    "rootfs_matches_build_report": True, "filesystem_checks": filesystem_check},
+            warnings=[*manifest["warnings"], "Unsigned producer report: consistency checked; report authenticity and bootability are not established."],
         )
     except (OSError, ValueError, TypeError, KeyError) as exc:
         result["errors"] = [str(exc)]

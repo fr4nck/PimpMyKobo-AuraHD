@@ -44,6 +44,9 @@ class PrepareP1Tests(unittest.TestCase):
         self.assertFalse(result["write_authorized"])
         self.assertFalse(result["physical_restore_eligible"])
         self.assertEqual(legacy.PROVENANCE, result["input_provenance"])
+        self.assertEqual("rebuild-rootfs", result["candidate_source"]["tool"])
+        self.assertEqual(result["candidate_source"]["report_sha256"],
+                         result["evidence_sha256"]["rootfs_report"])
         self.assertEqual(before, {p: legacy.digest(p) for p in before})
 
     def test_acquisition_incomplete_or_different_is_refused(self):

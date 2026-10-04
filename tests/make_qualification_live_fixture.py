@@ -108,10 +108,11 @@ def main() -> int:
         },
         "evidence_sha256": {
             "legacy_manifest": fake_hash("legacy"),
-            "rebuild_report": fake_hash("rebuild"),
+            "rootfs_report": fake_hash("rebuild"),
             "acquisition_report": fake_hash("acquisition"),
             "simulation_report": fake_hash("simulation"),
         },
+        "candidate_source": {"tool": "rebuild-rootfs", "report_sha256": fake_hash("rebuild")},
         "rollback": {
             "source": "verified_full_backup",
             "offset": len(pre),
