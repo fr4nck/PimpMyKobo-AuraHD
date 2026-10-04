@@ -96,6 +96,7 @@ def main() -> int:
         "physical_restore_eligible": False,
         "input_provenance": provenance,
         "required_target_full_sha256": full_sha,
+        "simulation_sha256": digest(pre + candidate + p2 + p3),
         "disk_size": len(full),
         "p1_offset": len(pre),
         "p1_size": len(candidate),

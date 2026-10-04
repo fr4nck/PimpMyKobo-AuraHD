@@ -25,6 +25,7 @@ def load_peer(script: str):
 
 
 legacy = load_peer("import-legacy-backup.py")
+rebuild = load_peer("rebuild-rootfs.py")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -49,36 +50,48 @@ def hash_region(handle: BinaryIO, offset: int, size: int) -> str:
     return h.hexdigest()
 
 
-def validate_rootfs_report(report: dict[str, Any], report_path: Path, rootfs: Path,
-                           p1_size: int) -> tuple[str, str]:
-    """Validate a typed P1 producer report and independently check PMKB ext4."""
-    digest = legacy.digest(rootfs)
-    tool = report.get("tool")
-    common = (type(report.get("schema_version")) is int and report.get("schema_version") == 1
-              and report.get("complete") is True
-              and report.get("errors") == [] and report.get("physical_restore_eligible") is False
-              and report.get("hardware_qualified") is False and report.get("device") == "E606C0"
-              and type(report.get("rootfs_size")) is int and report.get("rootfs_size") == p1_size
-              and rootfs.stat().st_size == p1_size
-              and report.get("rootfs_sha256") == digest)
-    if not common:
-        raise ValueError("rootfs build report is incomplete or inconsistent with E606C0 P1 image")
-    if tool == "rebuild-rootfs":
-        checks = report.get("checks", {})
-        if (report.get("status") != "ok" or report.get("target_fingerprint") is not None
-                or not isinstance(checks, dict) or checks.get("size") is not True
-                or checks.get("ext4_parameters") is not True or checks.get("e2fsck") != "clean"):
-            raise ValueError("rebuild-rootfs report has no successful size/ext4/e2fsck checks")
-        return tool, digest
-    if tool != "build-koreader-rootfs":
-        raise ValueError("unsupported P1 producer report tool")
-    if report.get("status") != "experimental":
-        raise ValueError("build-koreader-rootfs report status is not experimental")
+def read_candidate_ext4(rootfs: Path) -> dict[str, Any]:
+    """Read parameters and filesystem length without opening the image writable."""
+    params = rebuild.read_ext_parameters(rootfs)
+    with rootfs.open("rb") as handle:
+        handle.seek(1024)
+        sb = handle.read(1024)
+    if len(sb) != 1024 or sb[56:58] != b"\x53\xef":
+        raise ValueError("candidate has no ext4 superblock")
+    u32 = lambda offset: int.from_bytes(sb[offset:offset + 4], "little")
+    blocks = u32(4) + ((u32(336) << 32) if u32(96) & 0x80 else 0)
+    params.update(blocks=blocks, unused_tail_bytes=rootfs.stat().st_size - blocks * params["block_size"])
+    if blocks <= 0 or params["unused_tail_bytes"] < 0:
+        raise ValueError("candidate ext4 exceeds P1 image")
+    return params
+
+
+def validate_koreader_report(report: dict[str, Any], rootfs: Path,
+                             recovery: Path, p1_size: int) -> dict[str, Any]:
+    """Validate the PMKB producer, its actual ext4 layout, and read-only fsck."""
+    if (type(report.get("schema_version")) is not int or report.get("schema_version") != 1
+            or report.get("tool") != "build-koreader-rootfs"
+            or report.get("status") != "experimental" or report.get("complete") is not True
+            or report.get("errors") != [] or report.get("physical_restore_eligible") is not False
+            or report.get("hardware_qualified") is not False or report.get("device") != "E606C0"
+            or type(report.get("rootfs_size")) is not int or report.get("rootfs_size") != p1_size
+            or rootfs.stat().st_size != p1_size or report.get("rootfs_sha256") != legacy.digest(rootfs)):
+        raise ValueError("PMKB build report is incomplete or inconsistent with E606C0 P1 image")
     ext4 = report.get("ext4")
-    if (not isinstance(ext4, dict) or ext4.get("label") != "rootfs"
-            or type(ext4.get("block_size")) is not int or ext4["block_size"] <= 0
-            or type(ext4.get("inode_size")) is not int or ext4["inode_size"] <= 0):
+    if not isinstance(ext4, dict):
         raise ValueError("build-koreader-rootfs report has invalid ext4 metadata")
+    actual = read_candidate_ext4(rootfs)
+    reference = rebuild.read_ext_parameters(recovery)
+    for key in ("block_size", "inode_size", "blocks", "unused_tail_bytes"):
+        if type(ext4.get(key)) is not int or ext4[key] != actual[key]:
+            raise ValueError(f"PMKB ext4 {key} differs from producer report")
+    if ext4.get("label") != "rootfs" or actual["label"] != "rootfs":
+        raise ValueError("PMKB ext4 label is not rootfs")
+    if ext4.get("features") != actual["features"]:
+        raise ValueError("PMKB ext4 features differ from producer report")
+    for key in ("block_size", "inode_size", "features"):
+        if actual[key] != reference[key]:
+            raise ValueError(f"PMKB ext4 {key} differs from preserved recovery reference")
     executable = shutil.which("e2fsck", path="/usr/sbin:/usr/bin:/sbin:/bin")
     if not executable:
         raise ValueError("e2fsck is required to revalidate build-koreader-rootfs images")
@@ -87,21 +100,23 @@ def validate_rootfs_report(report: dict[str, Any], report_path: Path, rootfs: Pa
                              text=True, env={**os.environ, "LC_ALL": "C"})
     if checked.returncode != 0:
         raise ValueError(f"read-only e2fsck rejected PMKB P1 (exit {checked.returncode}): {checked.stdout}")
-    return tool, digest
+    return {"ext4": actual, "e2fsck": "clean", "e2fsck_exit_code": 0,
+            "e2fsck_mode": "-f -n", "e2fsck_output": checked.stdout}
 
 
-def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Path,
+def preflight(manifest_path: Path, rootfs_report_path: Path, rootfs: Path, target: Path,
               output: Path, *, accept_legacy_import: bool = False,
               require_copy_space: bool = True) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": 1, "tool": "restore-rootfs", "mode": "disk_image_simulation",
         "status": "refused", "complete": False, "physical_restore_eligible": False,
+        "write_authorized": False,
         "errors": [], "warnings": [],
     }
     try:
         if not accept_legacy_import:
             raise ValueError("this simulation requires --accept-legacy-import")
-        for path in (manifest_path, rebuild_path, rootfs, target):
+        for path in (manifest_path, rootfs_report_path, rootfs, target):
             legacy.regular(path)
         for path in (output, Path(str(output) + ".part"), Path(str(output) + ".simulation.json")):
             legacy.reject_device(path)
@@ -137,21 +152,22 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
             # The entire complement of P1 includes gaps and trailing bytes too.
             suffix_sha = hash_region(handle, p1["end"], size - p1["end"])
             p3_sha = hash_region(handle, p3["offset"], p3["size"])
-        rebuilt = read_json(rebuild_path)
+        producer = read_json(rootfs_report_path)
         root_sha = legacy.digest(rootfs)
-        checks = rebuilt.get("checks", {})
-        report_tool = rebuilt.get("tool")
+        checks = producer.get("checks", {})
+        report_tool = producer.get("tool")
+        filesystem_validation = None
         if report_tool == "rebuild-rootfs":
-            if (rebuilt.get("schema_version") != 1 or rebuilt.get("tool") != "rebuild-rootfs"
-                or rebuilt.get("status") != "ok" or rebuilt.get("complete") is not True
-                or rebuilt.get("device") != "E606C0" or rebuilt.get("errors") != []
-                or rebuilt.get("backup_manifest_sha256") != legacy.digest(manifest_path)
-                or rebuilt.get("recovery_sha256") != components[1]["sha256"]
-                or rebuilt.get("rootfs_sha256") != root_sha
-                or rebuilt.get("rootfs_size") != p1["size"] or rootfs.stat().st_size != p1["size"]
-                or rebuilt.get("input_provenance") != legacy.PROVENANCE
-                or rebuilt.get("physical_restore_eligible") is not False
-                or rebuilt.get("target_fingerprint") is not None):
+            if (producer.get("schema_version") != 1 or producer.get("tool") != "rebuild-rootfs"
+                or producer.get("status") != "ok" or producer.get("complete") is not True
+                or producer.get("device") != "E606C0" or producer.get("errors") != []
+                or producer.get("backup_manifest_sha256") != legacy.digest(manifest_path)
+                or producer.get("recovery_sha256") != components[1]["sha256"]
+                or producer.get("rootfs_sha256") != root_sha
+                or producer.get("rootfs_size") != p1["size"] or rootfs.stat().st_size != p1["size"]
+                or producer.get("input_provenance") != legacy.PROVENANCE
+                or producer.get("physical_restore_eligible") is not False
+                or producer.get("target_fingerprint") is not None):
                 raise ValueError("rebuilt image/report is inconsistent with the legacy evidence")
             if not isinstance(checks, dict) or checks.get("size") is not True or checks.get("ext4_parameters") is not True or checks.get("e2fsck") != "clean":
                 raise ValueError("rebuild report has no successful size/ext4/e2fsck checks")
@@ -166,7 +182,7 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
                 raise ValueError("rebuild MD5 verification is incomplete")
             filesystem_check = "reported_by_rebuild_rootfs"
         elif report_tool == "build-koreader-rootfs":
-            validate_rootfs_report(rebuilt, rebuild_path, rootfs, p1["size"])
+            filesystem_validation = validate_koreader_report(producer, rootfs, recovery, p1["size"])
             filesystem_check = "revalidated_locally_read_only_e2fsck"
         else:
             raise ValueError("unsupported P1 producer report tool")
@@ -176,21 +192,21 @@ def preflight(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Pat
             status="ready", input_provenance=manifest["provenance"],
             disk_size=size, p1_offset=p1["offset"], p1_size=p1["size"], partitions=parts,
             rootfs_sha256=root_sha, target_sha256=legacy.digest(target),
-            backup_manifest_sha256=legacy.digest(manifest_path), rootfs_report_sha256=legacy.digest(rebuild_path),
-            rootfs_report_tool=report_tool,
+            backup_manifest_sha256=legacy.digest(manifest_path), rootfs_report_sha256=legacy.digest(rootfs_report_path),
+            rootfs_report_tool=report_tool, filesystem_validation=filesystem_validation,
             preserved_before={"pre_p1": prefix_sha, "suffix_after_p1": suffix_sha, "p2": p2_sha, "p3": p3_sha},
             checks={"target_geometry": True, "target_pre_p1_p2": True,
                     "rootfs_matches_build_report": True, "filesystem_checks": filesystem_check},
             warnings=[*manifest["warnings"], "Unsigned producer report: consistency checked; report authenticity and bootability are not established."],
         )
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError, subprocess.SubprocessError) as exc:
         result["errors"] = [str(exc)]
     return result
 
 
-def simulate(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Path,
+def simulate(manifest_path: Path, rootfs_report_path: Path, rootfs: Path, target: Path,
              output: Path, *, accept_legacy_import: bool = False) -> dict[str, Any]:
-    result = preflight(manifest_path, rebuild_path, rootfs, target, output, accept_legacy_import=accept_legacy_import)
+    result = preflight(manifest_path, rootfs_report_path, rootfs, target, output, accept_legacy_import=accept_legacy_import)
     if result["status"] != "ready":
         return result
     part = Path(str(output) + ".part")
@@ -247,13 +263,13 @@ def simulate(manifest_path: Path, rebuild_path: Path, rootfs: Path, target: Path
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("legacy_manifest", "rebuild_report", "rootfs", "disk_image", "output_image"):
+    for name in ("legacy_manifest", "rootfs_report", "rootfs", "disk_image", "output_image"):
         parser.add_argument(name, type=Path)
     parser.add_argument("--accept-legacy-import", action="store_true")
     parser.add_argument("--simulate", action="store_true", help="create a new disk-image copy; default is a read-only plan")
     args = parser.parse_args()
     function = simulate if args.simulate else preflight
-    result = function(args.legacy_manifest, args.rebuild_report, args.rootfs, args.disk_image,
+    result = function(args.legacy_manifest, args.rootfs_report, args.rootfs, args.disk_image,
                       args.output_image, accept_legacy_import=args.accept_legacy_import)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if result["status"] == "interrupted":

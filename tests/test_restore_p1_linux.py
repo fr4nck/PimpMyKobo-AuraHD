@@ -306,6 +306,19 @@ class SealedPlanTests(unittest.TestCase):
         self.assertFalse(common.call_args.kwargs["write_p1"])
         self.assertEqual(Path("/dev/sdz"), common.call_args.kwargs["device"])
 
+    def test_sealed_plan_requires_whole_simulation_hash_and_producer(self):
+        original = self.fixture()
+        for key, value in (("simulation_sha256", "invalid"), ("candidate_source", None)):
+            changed = dict(original); changed[key] = value
+            self.plan.write_text(json.dumps(changed))
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+        for key in ("simulation_sha256", "candidate_source"):
+            changed = dict(original); changed.pop(key)
+            self.plan.write_text(json.dumps(changed))
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+
     def test_sealed_plan_accepts_explicit_pmkb_candidate_source_contract(self):
         plan_data = self.fixture()
         plan_data["candidate_source"]["tool"] = "build-koreader-rootfs"

@@ -53,3 +53,5 @@ exercises an actual synthetic import → ext4 rebuild → disk-image simulation.
 Separate prefix/P1/P2 backups are not a complete historical disk image:
 P3 contents and actual card capacity are unverified. A synthetic demo must
 be labeled accordingly, never treated as a real backup with invented P3.
+
+For PMKB candidates, actual ext4 parameters are compared with the typed producer report and preserved recovery reference before read-only e2fsck. The prepared plan binds `simulation_sha256` to the whole simulated image, records the filesystem validation and retains `write_authorized=false`. Sealing checks the exact plan SHA-256; it does not grant physical write approval.

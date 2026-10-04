@@ -222,7 +222,7 @@ def validate_sealed_plan(plan_path: Path, rootfs: Path, expected_plan_sha256: st
     required = {
         "schema_version", "tool", "status", "input_provenance",
         "required_target_full_sha256", "disk_size", "p1_offset", "p1_size",
-        "replacement_sha256", "preserved_sha256", "evidence_sha256", "candidate_source",
+        "replacement_sha256", "simulation_sha256", "preserved_sha256", "evidence_sha256", "candidate_source",
         "rollback", "physical_restore_eligible", "write_authorized",
     }
     missing = sorted(required - plan.keys())
@@ -240,7 +240,8 @@ def validate_sealed_plan(plan_path: Path, rootfs: Path, expected_plan_sha256: st
         raise ValueError("sealed plan geometry is invalid")
     if plan["p1_offset"] + plan["p1_size"] > plan["disk_size"]:
         raise ValueError("sealed plan P1 exceeds disk bounds")
-    if not _valid_sha256(plan["required_target_full_sha256"]) or not _valid_sha256(plan["replacement_sha256"]):
+    if any(not _valid_sha256(plan[key]) for key in
+           ("required_target_full_sha256", "replacement_sha256", "simulation_sha256")):
         raise ValueError("sealed plan hashes are invalid")
     preserved = plan["preserved_sha256"]
     if not isinstance(preserved, dict) or any(not _valid_sha256(preserved.get(key))

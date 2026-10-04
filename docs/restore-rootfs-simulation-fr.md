@@ -35,7 +35,7 @@ Le rapport n'est pas signé. Pour `rebuild-rootfs`, le simulateur vérifie ses
 contrôles filesystem déclarés. Pour `build-koreader-rootfs`, il exige le
 contrat typé E606C0 (taille et SHA de P1, `complete=true`, aucune erreur,
 `physical_restore_eligible=false`, `hardware_qualified=false`) et relance
-`e2fsck -f -n` sur le fichier image local. Aucun des deux chemins ne prouve
+`e2fsck -f -n` sur le fichier image local après comparaison des paramètres ext4 réels avec le rapport et la référence P2. Le rapport conserve le résultat de cette revalidation et `write_authorized=false`. Aucun des deux chemins ne prouve
 que l'image démarrera sur la liseuse.
 
 Après copie et remplacement, il relit P1 et compare son SHA à la nouvelle
