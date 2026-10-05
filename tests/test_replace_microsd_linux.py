@@ -81,8 +81,9 @@ class ReplacementMicroSdTests(unittest.TestCase):
         manifest, _pre, _p2 = synthetic_manifest()
         layout = mod.target_layout(manifest, 8192, min_p3_bytes=1024)
         self.assertEqual(2560, layout["p3_offset"])
-        self.assertEqual(5632, layout["p3_size"])
-        self.assertEqual(11, layout["p3_sectors"])
+        self.assertEqual(5120, layout["p3_size"])
+        self.assertEqual(10, layout["p3_sectors"])
+        self.assertEqual(512, layout["unused_tail"])
         # KiB block count requires an even sector count, so target_layout trims one.
         # Re-run with an aligned size to validate the production invariant.
         layout = mod.target_layout(manifest, 8704, min_p3_bytes=1024)
