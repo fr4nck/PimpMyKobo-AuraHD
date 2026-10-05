@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """PMKB FIRST BOOT qualification UI.
 
-This module is deliberately not a physical writer. Every physical device open,
-full-card comparison, rollback capture, durable journal and bounded P1 write is
-performed by tools/restore-p1-linux.py, the single PMKB physical backend.
+This module is deliberately not a physical writer. In-place P1 restoration is
+delegated to tools/restore-p1-linux.py. Replacement-card creation is delegated
+to tools/replace-microsd-linux.py, which reuses restore-p1-linux.py's guarded
+native-Linux device access. The two write contracts remain intentionally separate.
 """
 from __future__ import annotations
 
@@ -518,7 +519,7 @@ def print_header(manifest: dict[str, Any], identity: dict[str, Any], *, language
     print(f" HEAD       {identity['head']}")
     print(f" CANDIDAT   {manifest['image_sha256']}")
     print(f" PLAN       {identity['plan_sha256']}")
-    print(" Backend    restore-p1-linux.py (unique moteur d'accès physique)")
+    print(" Backends   restore-p1-linux.py + replace-microsd-linux.py")
     if keymap is not None:
         print(f" Interface  {language.upper()}    Clavier {keymap}")
     print()
