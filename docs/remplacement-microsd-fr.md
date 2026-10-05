@@ -97,3 +97,12 @@ Si une erreur survient après le début de l'écriture :
 - on recommence la création de la nouvelle carte après diagnostic.
 
 Le FIRST BOOT matériel, l'écran, le tactile, le frontlight, le montage de P3 et l'USB restent **UNQUALIFIED** jusqu'au démarrage réel de l'Aura HD sur une carte ainsi créée.
+
+
+## Progression opérateur
+
+Les opérations longues restent volontairement sobres dans FIRST BOOT #1. Le Live affiche une progression texte pendant les lectures, copies et relectures importantes :
+
+`Lecture originale P2 recovery: 72% (184.3/256.0 MiB, 18.4 MiB/s)`
+
+Le même format est utilisé pour la capture PRE-P1/P2, l'écriture P1/P2 et leur vérification. Aucun effet graphique ou animation n'est requis avant la qualification matérielle de la Kobo.
