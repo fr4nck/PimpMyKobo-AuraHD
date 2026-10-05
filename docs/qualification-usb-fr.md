@@ -64,6 +64,32 @@ Le builder :
 
 Le Live démarre l'interface texte PMKB automatiquement sur tty1. L'option « Quitter » arrête réellement l'interface ; systemd ne la relance pas automatiquement.
 
+## Création de la clé USB sous Windows avec Rufus
+
+Une clé USB de **4 Go ou plus** suffit ; **8 Go** est confortable. Son contenu sera entièrement effacé par Rufus.
+
+Pour la qualification réelle actuellement préparée, l'ISO locale utilisée est :
+
+`private/qualification-iso-real-529c1e02-2026-10-04/PMKB-Qualification-USB-0b00d858.iso`
+
+SHA-256 attendu :
+
+`9f0790415097a16ad0fb8977e204d8334886a27fcc2864da081bdea8c7141822`
+
+Sous Windows :
+
+1. brancher la clé USB destinée à PMKB ;
+2. ouvrir Rufus ;
+3. sélectionner **PMKB-Qualification-USB-0b00d858.iso** comme image de démarrage ;
+4. vérifier très soigneusement que le périphérique sélectionné est bien la clé USB et non un autre disque ;
+5. conserver les paramètres proposés par Rufus pour l'image ISO hybride, sauf besoin matériel particulier ;
+6. lancer l'écriture et confirmer l'effacement de la clé ;
+7. attendre la fin de l'opération puis éjecter proprement la clé.
+
+Cette opération écrit uniquement la clé USB de qualification. **Elle ne doit jamais viser la microSD interne de la Kobo.**
+
+L'ISO réelle ci-dessus embarque le candidat FIRST BOOT et le plan scellé utilisés pour la qualification matérielle. Elle reste un artefact privé local et n'est pas publiée dans Git. Une future ISO publique légère devra exclure ces artefacts privés et tout composant dont la redistribution n'est pas explicitement qualifiée.
+
 ## Utilisation
 
 Pour une qualification en lecture seule, l'opérateur saisit explicitement le disque complet, par exemple `/dev/sdb`.
