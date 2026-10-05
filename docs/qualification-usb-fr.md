@@ -67,8 +67,9 @@ Le builder :
 2. valide le contrat du plan scellé et sa correspondance avec le candidat/manifest ;
 3. embarque l'interface PMKB, le backend physique unique et ses dépendances Python ;
 4. embarque localement le candidat et le plan ;
-5. inscrit dans `BUILD-IDENTITY.json` les SHA-256 du manifest, du candidat et du plan ;
-6. produit `private/qualification-usb/PMKB-Qualification-USB-0b00d858.iso` et son fichier `.sha256`.
+5. inscrit dans `BUILD-IDENTITY.json` les SHA-256 du manifest, du candidat et du plan, ainsi que deux identités Git distinctes : `candidate_head` pour l'image P1 figée et `live_head` pour le code du Live réellement embarqué ;
+6. refuse un checkout Git suivi modifié ;
+7. produit une ISO dont le nom contient les deux identités courtes, par exemple `PMKB-Qualification-USB-0b00d858-c2a8ae54.iso`, avec son fichier `.sha256`.
 
 Le Live démarre l'interface texte PMKB automatiquement sur tty1. Avant toute saisie d'un périphérique `/dev/...`, l'opérateur choisit la langue de l'interface (français par défaut ou anglais) puis le clavier console. Le français/AZERTY est proposé par défaut ; tous les keymaps présents dans l'image peuvent être affichés et sélectionnés. Le menu permet ensuite de changer langue/clavier, de redémarrer ou d'éteindre proprement le PC. Il n'existe plus d'option « Quitter » laissant tty1 sur un curseur sans interface.
 
@@ -80,11 +81,9 @@ Une clé USB de **4 Go ou plus** suffit ; **8 Go** est confortable. Son contenu 
 
 Pour la qualification réelle actuellement préparée, l'ISO locale utilisée est :
 
-`private/qualification-iso-real-529c1e02-2026-10-04/PMKB-Qualification-USB-0b00d858.iso`
+`private/qualification-iso-real-<LIVE_HEAD>-<date>/PMKB-Qualification-USB-0b00d858-<LIVE_SHORT>.iso`
 
-SHA-256 attendu :
-
-`9f0790415097a16ad0fb8977e204d8334886a27fcc2864da081bdea8c7141822`
+Le SHA-256 attendu doit être celui du fichier `.sha256` produit avec cette nouvelle ISO ; l'ancien SHA-256 `9f0790…1822` correspond uniquement au Live précédent et ne doit pas être réutilisé.
 
 Sous Windows :
 
