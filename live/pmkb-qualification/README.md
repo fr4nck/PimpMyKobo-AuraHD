@@ -37,3 +37,6 @@ Le premier choix du menu crée une **nouvelle microSD PMKB** :
 8. relecture et vérification.
 
 La carte originale n'est jamais ouverte en écriture par ce parcours.
+
+
+Les lectures/écritures longues du parcours de remplacement affichent une progression texte : pourcentage, MiB traités et débit. Aucun effet graphique n'est ajouté au Live FIRST BOOT.
