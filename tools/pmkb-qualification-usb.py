@@ -166,6 +166,11 @@ def load_identity(path: Path) -> dict[str, Any]:
             raise QualificationError(f"identité Live incomplète: {key}")
     if not _is_sha256(data["image_sha256"]) or not _is_sha256(data["plan_sha256"]) or not _is_sha256(data["manifest_sha256"]):
         raise QualificationError("identité Live: empreinte SHA-256 invalide")
+    if int(data.get("schema", 1)) >= 2:
+        if data.get("candidate_head") != data["head"]:
+            raise QualificationError("identité Live: candidate_head et head divergent")
+        if not _is_sha256(data.get("candidate_head")) or not _is_sha256(data.get("live_head")):
+            raise QualificationError("identité Live: HEAD candidat/Live invalide")
     return data
 
 
@@ -516,7 +521,11 @@ def print_header(manifest: dict[str, Any], identity: dict[str, Any], *, language
     print("=" * 72)
     print(" PimpMyKobo — Aura HD E606C0 — FIRST BOOT #1 qualification")
     print("=" * 72)
-    print(f" HEAD       {identity['head']}")
+    candidate_head = identity.get("candidate_head", identity["head"])
+    live_head = identity.get("live_head")
+    print(f" CAND.HEAD  {candidate_head}")
+    if live_head:
+        print(f" LIVE.HEAD  {live_head}")
     print(f" CANDIDAT   {manifest['image_sha256']}")
     print(f" PLAN       {identity['plan_sha256']}")
     print(" Backends   restore-p1-linux.py + replace-microsd-linux.py")
