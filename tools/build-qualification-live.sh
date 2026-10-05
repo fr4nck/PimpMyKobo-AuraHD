@@ -147,6 +147,17 @@ lb config \
   --apt-recommends false \
   --bootappend-live "boot=live components hostname=pmkb-qualification"
 
+# Replace Debian's stock GRUB splash with the PMKB artwork. The stock
+# grub-pc directory is created by live-build and is used by the boot menu seen
+# on the qualification USB. Do not create a partial bootloader tree.
+if [ -f "$LOGO" ]; then
+    [ -d config/bootloaders/grub-pc ] || {
+        echo "STOP: thème GRUB live-build introuvable." >&2
+        exit 2
+    }
+    install -m 0644 "$LOGO" config/bootloaders/grub-pc/splash.png
+fi
+
 mkdir -p config/package-lists
 cat > config/package-lists/pmkb.list.chroot <<'EOF'
 python3
@@ -158,6 +169,8 @@ parted
 udev
 systemd-sysv
 ca-certificates
+kbd
+console-data
 EOF
 
 mkdir -p \
