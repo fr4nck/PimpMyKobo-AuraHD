@@ -95,6 +95,10 @@ backend = module.load_backend(backend_path)
 inspector = backend.legacy.load_inspector()
 assert Path(inspector.__file__).parent == backend_path.parent
 assert Path(backend.simulation.rebuild.__file__).parent == backend_path.parent
+replacement = module.load_replacement_backend(
+    backend_path.parent / "replace-microsd-linux.py")
+assert replacement.restore.__file__ == str(backend_path)
+assert replacement.MIN_P3_BYTES >= 1024 * 1024 * 1024
 plan_path = fixture / "plan.json"
 sha = hashlib.sha256(plan_path.read_bytes()).hexdigest()
 plan, actual = backend.validate_sealed_plan(plan_path, fixture / "fixture.img", sha)
