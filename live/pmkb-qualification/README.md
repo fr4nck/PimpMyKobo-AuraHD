@@ -16,7 +16,7 @@ Le Live contient :
 - `/opt/pmkb/tools/restore-p1-linux.py` et ses dépendances : backend strict de restauration P1 sur la carte originale ;
 - `/opt/pmkb/tools/replace-microsd-linux.py` : backend séparé de création d'une nouvelle microSD à partir d'une donneuse lue uniquement.
 
-L'interface ne possède aucun moteur d'écriture propre. Toute opération physique est déléguée au backend renforcé commun.
+L'interface ne possède aucun moteur d'écriture propre. Toute opération physique est déléguée à l'un des deux backends renforcés selon le contrat choisi ; l'interface elle-même n'ouvre jamais un périphérique bloc.
 
 Au premier lancement, l'interface demande la langue (FR par défaut / EN) puis le clavier avant toute saisie de cible. Tous les keymaps embarqués sont sélectionnables. Le menu expose des actions explicites `Redémarrer` et `Éteindre` via systemd ; l'ancien `Quitter` sans console de reprise n'est plus proposé.
 
