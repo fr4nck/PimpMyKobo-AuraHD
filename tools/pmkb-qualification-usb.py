@@ -34,9 +34,9 @@ TEXT = {
         "language_en": "English",
         "language_prompt": "Choix [1] : ",
         "keyboard_title": "Clavier console",
-        "keyboard_all": "9. Afficher tous les claviers disponibles",
+        "keyboard_all": "99. Afficher tous les claviers disponibles",
         "keyboard_prompt": "Choix [défaut : {default}] : ",
-        "keyboard_invalid": "Clavier inconnu. Choisissez un numéro, un nom exact ou 9.",
+        "keyboard_invalid": "Clavier inconnu. Choisissez un numéro, un nom exact ou 99.",
         "keyboard_loaded": "Clavier actif : {keymap}",
         "device_prompt": "Disque complet exact de la microSD (ex. /dev/sdb) : ",
         "journal_prompt": "Répertoire PERSISTANT pour journal + sauvegarde P1 : ",
@@ -66,9 +66,9 @@ TEXT = {
         "language_en": "English",
         "language_prompt": "Choice [1]: ",
         "keyboard_title": "Console keyboard",
-        "keyboard_all": "9. Show every available keyboard layout",
+        "keyboard_all": "99. Show every available keyboard layout",
         "keyboard_prompt": "Choice [default: {default}]: ",
-        "keyboard_invalid": "Unknown keyboard. Choose a number, an exact name, or 9.",
+        "keyboard_invalid": "Unknown keyboard. Choose a number, an exact name, or 99.",
         "keyboard_loaded": "Active keyboard: {keymap}",
         "device_prompt": "Exact whole disk for the microSD (e.g. /dev/sdb): ",
         "journal_prompt": "PERSISTENT directory for journal + P1 backup: ",
@@ -294,7 +294,7 @@ def choose_keymap(language: str, input_func: Callable[[str], str] = input, *,
         choice = input_func(_t(language, "keyboard_prompt").format(default=Path(default).name)).strip()
         if choice == "":
             selected = default
-        elif choice == "9":
+        elif choice == "99":
             names = sorted(keymaps)
             for start in range(0, len(names), 3):
                 print("  " + " | ".join(names[start:start + 3]))
