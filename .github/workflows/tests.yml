@@ -86,6 +86,8 @@ jobs:
           grep -F "opt/pmkb/BUILD-IDENTITY.json" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/fixture.img" "$RUNNER_TEMP/squashfs.list"
           grep -F "etc/systemd/system/pmkb-qualification.service" "$RUNNER_TEMP/squashfs.list"
+          grep -F "bin/loadkeys" "$RUNNER_TEMP/squashfs.list"
+          grep -F "usr/share/keymaps/" "$RUNNER_TEMP/squashfs.list"
           # Import the backend from the actual ISO payload, without repository fallbacks.
           unsquashfs -no-progress -d "$RUNNER_TEMP/pmkb-live-extracted" \
             "$RUNNER_TEMP/filesystem.squashfs" usr/local/sbin/pmkb-qualification opt/pmkb

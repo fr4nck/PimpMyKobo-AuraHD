@@ -147,6 +147,20 @@ lb config \
   --apt-recommends false \
   --bootappend-live "boot=live components hostname=pmkb-qualification"
 
+# Replace Debian's stock GRUB splash with the PMKB artwork. live-build
+# does not materialize config/bootloaders/grub-pc during lb config, so copy the
+# complete stock tree first; a partial bootloader tree would break the menu.
+if [ -f "$LOGO" ]; then
+    STOCK_GRUB=/usr/share/live/build/bootloaders/grub-pc
+    [ -d "$STOCK_GRUB" ] || {
+        echo "STOP: thème GRUB live-build introuvable: $STOCK_GRUB" >&2
+        exit 2
+    }
+    mkdir -p config/bootloaders
+    cp -a "$STOCK_GRUB" config/bootloaders/grub-pc
+    install -m 0644 "$LOGO" config/bootloaders/grub-pc/splash.png
+fi
+
 mkdir -p config/package-lists
 cat > config/package-lists/pmkb.list.chroot <<'EOF'
 python3
@@ -158,6 +172,8 @@ parted
 udev
 systemd-sysv
 ca-certificates
+kbd
+console-data
 EOF
 
 mkdir -p \

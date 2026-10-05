@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,76 @@ DEFAULT_IDENTITY = Path("/opt/pmkb/BUILD-IDENTITY.json")
 DEFAULT_BACKEND = Path("/opt/pmkb/tools/restore-p1-linux.py")
 LOCAL_BACKEND = Path(__file__).with_name("restore-p1-linux.py")
 DEFAULT_IMAGE_DIR = Path("/opt/pmkb")
+KEYMAP_ROOT = Path("/usr/share/keymaps")
+
+COMMON_KEYMAPS = ("fr", "fr-latin9", "be", "ch-fr", "us", "uk", "de", "es", "it")
+
+TEXT = {
+    "fr": {
+        "language_title": "Langue de l’interface / Interface language",
+        "language_fr": "Français (défaut)",
+        "language_en": "English",
+        "language_prompt": "Choix [1] : ",
+        "keyboard_title": "Clavier console",
+        "keyboard_all": "99. Afficher tous les claviers disponibles",
+        "keyboard_prompt": "Choix [défaut : {default}] : ",
+        "keyboard_invalid": "Clavier inconnu. Choisissez un numéro, un nom exact ou 99.",
+        "keyboard_loaded": "Clavier actif : {keymap}",
+        "device_prompt": "Disque complet exact de la microSD (ex. /dev/sdb) : ",
+        "journal_prompt": "Répertoire PERSISTANT pour journal + sauvegarde P1 : ",
+        "menu_1": "Qualifier la microSD",
+        "menu_2": "Écrire FIRST BOOT sur P1",
+        "menu_3": "Vérifier P1 et tout l’extérieur de P1",
+        "menu_4": "Afficher les invariants",
+        "menu_5": "Changer langue / clavier",
+        "menu_6": "Redémarrer le PC",
+        "menu_7": "Éteindre le PC",
+        "choice": "Choix : ",
+        "confirm_reboot": "Confirmer le redémarrage ? [o/N] : ",
+        "confirm_poweroff": "Confirmer l’arrêt du PC ? [o/N] : ",
+        "invalid": "Choix invalide",
+        "continue": "Entrée pour continuer…",
+        "readonly_ok": "Cible qualifiée",
+        "readonly_usb": "USB/amovible, non montée, sans swap/holders",
+        "readonly_match": "Carte complète identique à la sauvegarde vérifiée",
+        "write_ok": "P1 écrite puis relue",
+        "write_outside": "Toute la zone hors P1 est inchangée",
+        "verify_outside": "PRE-P1, P2, P3, gaps et octets hors P1 inchangés",
+        "power_failed": "Commande systemd refusée",
+    },
+    "en": {
+        "language_title": "Interface language / Langue de l’interface",
+        "language_fr": "Français (default)",
+        "language_en": "English",
+        "language_prompt": "Choice [1]: ",
+        "keyboard_title": "Console keyboard",
+        "keyboard_all": "99. Show every available keyboard layout",
+        "keyboard_prompt": "Choice [default: {default}]: ",
+        "keyboard_invalid": "Unknown keyboard. Choose a number, an exact name, or 99.",
+        "keyboard_loaded": "Active keyboard: {keymap}",
+        "device_prompt": "Exact whole disk for the microSD (e.g. /dev/sdb): ",
+        "journal_prompt": "PERSISTENT directory for journal + P1 backup: ",
+        "menu_1": "Qualify the microSD",
+        "menu_2": "Write FIRST BOOT to P1",
+        "menu_3": "Verify P1 and everything outside P1",
+        "menu_4": "Show invariants",
+        "menu_5": "Change language / keyboard",
+        "menu_6": "Reboot the PC",
+        "menu_7": "Power off the PC",
+        "choice": "Choice: ",
+        "confirm_reboot": "Confirm reboot? [y/N]: ",
+        "confirm_poweroff": "Confirm power off? [y/N]: ",
+        "invalid": "Invalid choice",
+        "continue": "Press Enter to continue…",
+        "readonly_ok": "Target qualified",
+        "readonly_usb": "USB/removable, unmounted, without swap/holders",
+        "readonly_match": "Whole card is identical to the verified backup",
+        "write_ok": "P1 written and read back",
+        "write_outside": "Everything outside P1 is unchanged",
+        "verify_outside": "PRE-P1, P2, P3, gaps and all bytes outside P1 are unchanged",
+        "power_failed": "systemd command refused",
+    },
+}
 
 
 class QualificationError(RuntimeError):
@@ -134,6 +205,139 @@ def validate_bundle(manifest_path: Path, plan_path: Path, identity_path: Path,
     return manifest, identity, plan
 
 
+def _t(language: str, key: str) -> str:
+    return TEXT.get(language, TEXT["fr"])[key]
+
+
+def choose_language(input_func: Callable[[str], str] = input) -> str:
+    while True:
+        print("\n" + TEXT["fr"]["language_title"])
+        print(f" 1. {TEXT['fr']['language_fr']}")
+        print(f" 2. {TEXT['fr']['language_en']}")
+        choice = input_func(TEXT["fr"]["language_prompt"]).strip()
+        if choice in ("", "1"):
+            return "fr"
+        if choice == "2":
+            return "en"
+        print("Choix invalide / Invalid choice")
+
+
+def available_keymaps(root: Path = KEYMAP_ROOT) -> dict[str, Path]:
+    """Return every console keymap shipped in the Live image.
+
+    Identifiers are paths relative to /usr/share/keymaps without the compressed
+    keymap suffix, so duplicate basenames remain selectable without ambiguity.
+    """
+    found: dict[str, Path] = {}
+    if not root.is_dir():
+        return found
+    suffixes = (".map.gz", ".kmap.gz", ".map", ".kmap")
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        suffix = next((item for item in suffixes if rel.endswith(item)), None)
+        if suffix is None:
+            continue
+        found[rel[:-len(suffix)]] = path
+    return found
+
+
+def _find_keymap(keymaps: dict[str, Path], value: str) -> str | None:
+    if value in keymaps:
+        return value
+    matches = [name for name in keymaps if Path(name).name == value]
+    return matches[0] if len(matches) == 1 else None
+
+
+def apply_keymap(identifier: str, keymaps: dict[str, Path], *,
+                 run: Callable[..., Any] = subprocess.run) -> None:
+    resolved = _find_keymap(keymaps, identifier)
+    if resolved is None:
+        raise QualificationError(f"clavier inconnu: {identifier}")
+    result = run(
+        ["loadkeys", str(keymaps[resolved])],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "loadkeys failed").strip()
+        raise QualificationError(f"loadkeys {resolved}: {detail}")
+
+
+def choose_keymap(language: str, input_func: Callable[[str], str] = input, *,
+                  root: Path = KEYMAP_ROOT,
+                  run: Callable[..., Any] = subprocess.run) -> str:
+    keymaps = available_keymaps(root)
+    if not keymaps:
+        raise QualificationError("aucun clavier console disponible dans l'image Live")
+
+    common: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for basename in COMMON_KEYMAPS:
+        resolved = _find_keymap(keymaps, basename)
+        if resolved is not None and resolved not in seen:
+            common.append((basename, resolved))
+            seen.add(resolved)
+
+    default = (
+        _find_keymap(keymaps, "fr")
+        or _find_keymap(keymaps, "fr-latin9")
+        or _find_keymap(keymaps, "us")
+        or sorted(keymaps)[0]
+    )
+    while True:
+        print("\n" + _t(language, "keyboard_title"))
+        for index, (label, resolved) in enumerate(common, 1):
+            suffix = "" if label == resolved else f" ({resolved})"
+            print(f" {index}. {label}{suffix}")
+        print(" " + _t(language, "keyboard_all"))
+        choice = input_func(_t(language, "keyboard_prompt").format(default=Path(default).name)).strip()
+        if choice == "":
+            selected = default
+        elif choice == "99":
+            names = sorted(keymaps)
+            for start in range(0, len(names), 3):
+                print("  " + " | ".join(names[start:start + 3]))
+            continue
+        elif choice.isdigit() and 1 <= int(choice) <= len(common):
+            selected = common[int(choice) - 1][1]
+        else:
+            selected = _find_keymap(keymaps, choice)
+            if selected is None:
+                print(_t(language, "keyboard_invalid"))
+                continue
+        apply_keymap(selected, keymaps, run=run)
+        print(_t(language, "keyboard_loaded").format(keymap=selected))
+        return selected
+
+
+def configure_operator_environment(
+    input_func: Callable[[str], str] = input,
+    *,
+    root: Path = KEYMAP_ROOT,
+    run: Callable[..., Any] = subprocess.run,
+) -> tuple[str, str]:
+    language = choose_language(input_func=input_func)
+    keymap = choose_keymap(language, input_func=input_func, root=root, run=run)
+    return language, keymap
+
+
+def systemctl_action(action: str, *, run: Callable[..., Any] = subprocess.run) -> None:
+    if action not in ("reboot", "poweroff"):
+        raise QualificationError(f"action systemd interdite: {action}")
+    result = run(["systemctl", action], capture_output=True, text=True)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "systemctl failed").strip()
+        raise QualificationError(f"{_t('fr', 'power_failed')}: {detail}")
+
+
+def confirm_power(language: str, action: str,
+                  input_func: Callable[[str], str] = input) -> bool:
+    key = "confirm_reboot" if action == "reboot" else "confirm_poweroff"
+    answer = input_func(_t(language, key)).strip().lower()
+    return answer in {"o", "oui", "y", "yes"}
+
+
 def confirmation_phrase(manifest: dict[str, Any], plan_sha256: str) -> str:
     return f"ECRIRE P1 {manifest['image_sha256'][:8]} PLAN {plan_sha256[:8]}"
 
@@ -158,7 +362,8 @@ def preflight_device(backend, plan_path: Path, image: Path, expected_plan_sha256
 
 def perform_write(backend, plan_path: Path, image: Path, manifest: dict[str, Any],
                   expected_plan_sha256: str, device: Path, journal_dir: Path,
-                  *, input_func: Callable[[str], str] = input) -> dict[str, Any]:
+                  *, language: str = "fr",
+                  input_func: Callable[[str], str] = input) -> dict[str, Any]:
     before = preflight_device(backend, plan_path, image, expected_plan_sha256, device)
     phrase = confirmation_phrase(manifest, expected_plan_sha256)
     print("\nÉCRITURE — le backend PMKB unique écrira uniquement la plage P1.")
@@ -196,21 +401,21 @@ def verify_after_write(backend, plan_path: Path, image: Path, expected_plan_sha2
     return result
 
 
-def ask_device(input_func: Callable[[str], str] = input) -> Path:
-    value = input_func("Disque complet exact de la microSD (ex. /dev/sdb) : ").strip()
+def ask_device(input_func: Callable[[str], str] = input, *, language: str = "fr") -> Path:
+    value = input_func(_t(language, "device_prompt")).strip()
     if not value.startswith("/dev/"):
         raise QualificationError("cible explicite /dev/... obligatoire")
     return Path(value)
 
 
-def ask_journal_dir(input_func: Callable[[str], str] = input) -> Path:
-    value = input_func("Répertoire PERSISTANT pour journal + sauvegarde P1 : ").strip()
+def ask_journal_dir(input_func: Callable[[str], str] = input, *, language: str = "fr") -> Path:
+    value = input_func(_t(language, "journal_prompt")).strip()
     if not value:
         raise QualificationError("répertoire persistant obligatoire")
     return Path(value)
 
 
-def print_header(manifest: dict[str, Any], identity: dict[str, Any]) -> None:
+def print_header(manifest: dict[str, Any], identity: dict[str, Any], *, language: str = "fr", keymap: str | None = None) -> None:
     print("=" * 72)
     print(" PimpMyKobo — Aura HD E606C0 — FIRST BOOT #1 qualification")
     print("=" * 72)
@@ -218,62 +423,82 @@ def print_header(manifest: dict[str, Any], identity: dict[str, Any]) -> None:
     print(f" CANDIDAT   {manifest['image_sha256']}")
     print(f" PLAN       {identity['plan_sha256']}")
     print(" Backend    restore-p1-linux.py (unique moteur d'accès physique)")
+    if keymap is not None:
+        print(f" Interface  {language.upper()}    Clavier {keymap}")
     print()
 
 
 def menu(backend, manifest: dict[str, Any], identity: dict[str, Any],
-         plan_path: Path, image: Path) -> int:
+         plan_path: Path, image: Path, *, language: str, keymap: str) -> int:
     while True:
-        print_header(manifest, identity)
-        print(" 1. Qualifier la microSD                       [LECTURE SEULE]")
-        print(" 2. Écrire FIRST BOOT sur P1                   [ÉCRITURE CONFIRMÉE]")
-        print(" 3. Vérifier P1 et tout l'extérieur de P1      [LECTURE SEULE]")
-        print(" 4. Afficher les invariants")
-        print(" 0. Quitter")
-        choice = input("\nChoix : ").strip()
+        print_header(manifest, identity, language=language, keymap=keymap)
+        print(f" 1. {_t(language, 'menu_1'):<44} [LECTURE SEULE / READ ONLY]")
+        print(f" 2. {_t(language, 'menu_2'):<44} [ÉCRITURE / WRITE]")
+        print(f" 3. {_t(language, 'menu_3'):<44} [LECTURE SEULE / READ ONLY]")
+        print(f" 4. {_t(language, 'menu_4')}")
+        print(f" 5. {_t(language, 'menu_5')}")
+        print(f" 6. {_t(language, 'menu_6')}")
+        print(f" 7. {_t(language, 'menu_7')}")
+        choice = input("\n" + _t(language, "choice")).strip()
         try:
             if choice == "1":
-                device = ask_device()
+                device = ask_device(language=language)
                 result = preflight_device(backend, plan_path, image, identity["plan_sha256"], device)
-                print(f"\n[✓] Cible qualifiée : {device}")
-                print("[✓] USB/removable, non montée, sans swap/holders")
-                print("[✓] Carte complète identique à la sauvegarde vérifiée")
+                print(f"\n[✓] {_t(language, 'readonly_ok')} : {device}")
+                print(f"[✓] {_t(language, 'readonly_usb')}")
+                print(f"[✓] {_t(language, 'readonly_match')}")
                 print(f"[✓] Plan : {result['plan_sha256']}")
             elif choice == "2":
-                device = ask_device()
-                journal_dir = ask_journal_dir()
+                device = ask_device(language=language)
+                journal_dir = ask_journal_dir(language=language)
                 result = perform_write(
                     backend, plan_path, image, manifest, identity["plan_sha256"],
-                    device, journal_dir,
+                    device, journal_dir, language=language,
                 )
-                print("\n[✓] P1 écrite puis relue")
-                print("[✓] Toute la zone hors P1 est inchangée")
-                print(f"[✓] P1 originale : {result['rollback']}")
+                print(f"\n[✓] {_t(language, 'write_ok')}")
+                print(f"[✓] {_t(language, 'write_outside')}")
+                print(f"[✓] P1 originale / original P1 : {result['rollback']}")
                 print(f"[✓] Journal : {result['journal']}")
                 print("\nPMKB FIRST BOOT #1 — READY FOR POWER")
             elif choice == "3":
-                device = ask_device()
+                device = ask_device(language=language)
                 result = verify_after_write(
                     backend, plan_path, image, identity["plan_sha256"], device,
                 )
                 print(f"\n[✓] P1 : {result['p1_reread_sha256']}")
-                print("[✓] PRE-P1, P2, P3, gaps et octets hors P1 inchangés")
+                print(f"[✓] {_t(language, 'verify_outside')}")
             elif choice == "4":
-                print("\n- aucune découverte automatique de cible")
-                print("- Linux natif/Live root uniquement; WSL et conteneurs refusés")
-                print("- disque complet amovible via USB uniquement")
-                print("- carte complète comparée à la sauvegarde avant écriture")
-                print("- sauvegarde P1 + journal durables avant write intent")
-                print("- e2fsck -f -n du candidat staged")
-                print("- aucune écriture hors plage P1")
-                print("- aucun retry/rollback automatique")
-            elif choice == "0":
-                return 0
+                if language == "en":
+                    print("\n- no automatic target discovery")
+                    print("- native Linux/Live root only; WSL and containers refused")
+                    print("- whole removable USB disk only")
+                    print("- whole card compared with the backup before any write")
+                    print("- durable P1 backup + journal before write intent")
+                    print("- e2fsck -f -n on the staged candidate")
+                    print("- no write outside P1")
+                    print("- no automatic retry/rollback")
+                else:
+                    print("\n- aucune découverte automatique de cible")
+                    print("- Linux natif/Live root uniquement; WSL et conteneurs refusés")
+                    print("- disque complet amovible via USB uniquement")
+                    print("- carte complète comparée à la sauvegarde avant écriture")
+                    print("- sauvegarde P1 + journal durables avant write intent")
+                    print("- e2fsck -f -n du candidat staged")
+                    print("- aucune écriture hors plage P1")
+                    print("- aucun retry/rollback automatique")
+            elif choice == "5":
+                language, keymap = configure_operator_environment()
+            elif choice == "6":
+                if confirm_power(language, "reboot"):
+                    systemctl_action("reboot")
+            elif choice == "7":
+                if confirm_power(language, "poweroff"):
+                    systemctl_action("poweroff")
             else:
-                print("Choix invalide")
+                print(_t(language, "invalid"))
         except (QualificationError, OSError, ValueError) as exc:
             print(f"\n[STOP] {exc}")
-        input("\nEntrée pour continuer…\n")
+        input("\n" + _t(language, "continue") + "\n")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -327,7 +552,11 @@ def main(argv: list[str] | None = None) -> int:
                 backend, args.plan, image, identity["plan_sha256"], args.device,
             ), indent=2, ensure_ascii=False))
             return 0
-        return menu(backend, manifest, identity, args.plan, image)
+        language, keymap = configure_operator_environment()
+        return menu(
+            backend, manifest, identity, args.plan, image,
+            language=language, keymap=keymap,
+        )
     except (QualificationError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"STOP: {exc}", file=sys.stderr)
         return 2

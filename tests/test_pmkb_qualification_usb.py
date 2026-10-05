@@ -123,6 +123,54 @@ assert plan["physical_restore_eligible"] is False
             mod.confirmation_phrase(MANIFEST, PLAN_SHA),
         )
 
+    def test_language_defaults_to_french_and_can_select_english(self):
+        self.assertEqual("fr", mod.choose_language(input_func=lambda _prompt: ""))
+        self.assertEqual("en", mod.choose_language(input_func=lambda _prompt: "2"))
+
+    def test_console_keymaps_are_discovered_and_default_french_is_loaded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            fr = root / "i386" / "azerty" / "fr.kmap.gz"
+            us = root / "i386" / "qwerty" / "us.kmap.gz"
+            fr.parent.mkdir(parents=True)
+            us.parent.mkdir(parents=True)
+            fr.write_bytes(b"fixture")
+            us.write_bytes(b"fixture")
+            calls = []
+
+            def fake_run(args, **_kwargs):
+                calls.append(args)
+                return subprocess.CompletedProcess(args, 0, "", "")
+
+            keymaps = mod.available_keymaps(root)
+            self.assertEqual(fr, keymaps["i386/azerty/fr"])
+            self.assertEqual(us, keymaps["i386/qwerty/us"])
+            selected = mod.choose_keymap(
+                "fr", input_func=lambda _prompt: "", root=root, run=fake_run,
+            )
+            self.assertEqual("i386/azerty/fr", selected)
+            self.assertEqual(["loadkeys", str(fr)], calls[0])
+
+    def test_power_controls_delegate_to_systemd(self):
+        calls = []
+
+        def fake_run(args, **_kwargs):
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        mod.systemctl_action("reboot", run=fake_run)
+        mod.systemctl_action("poweroff", run=fake_run)
+        self.assertEqual([["systemctl", "reboot"], ["systemctl", "poweroff"]], calls)
+        with self.assertRaises(mod.QualificationError):
+            mod.systemctl_action("halt", run=fake_run)
+
+    def test_live_builder_ships_keymaps_and_pmkb_grub_splash(self):
+        source = (ROOT / "tools" / "build-qualification-live.sh").read_text(encoding="utf-8")
+        self.assertRegex(source, r"(?m)^kbd$")
+        self.assertRegex(source, r"(?m)^console-data$")
+        self.assertIn("config/bootloaders/grub-pc/splash.png", source)
+        self.assertIn('LOGO="$REPO_DIR/assets/branding/pmkb-logo-original.png"', source)
+
     def test_ui_contains_no_physical_writer(self):
         source = (ROOT / "tools" / "pmkb-qualification-usb.py").read_text(encoding="utf-8")
         self.assertNotIn("def write_partition", source)
@@ -196,7 +244,13 @@ assert plan["physical_restore_eligible"] is False
             mod.ask_device(input_func=lambda _prompt: "/dev/sdb"),
         )
 
-    def test_systemd_quit_does_not_restart_menu(self):
+    def test_menu_has_power_controls_instead_of_dead_quit(self):
+        source = (ROOT / "tools" / "pmkb-qualification-usb.py").read_text(encoding="utf-8")
+        self.assertIn('"menu_6": "Redémarrer le PC"', source)
+        self.assertIn('"menu_7": "Éteindre le PC"', source)
+        self.assertIn('systemctl_action("reboot")', source)
+        self.assertIn('systemctl_action("poweroff")', source)
+        self.assertNotIn('print(" 0. Quitter")', source)
         service = (
             ROOT / "live" / "pmkb-qualification" / "pmkb-qualification.service"
         ).read_text(encoding="utf-8")
