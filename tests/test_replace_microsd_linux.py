@@ -113,6 +113,34 @@ class ReplacementMicroSdTests(unittest.TestCase):
         disk[p2_spec["offset"]] ^= 0x01
         self.assertFalse(mod.target_looks_like_donor(io.BytesIO(disk), len(disk), manifest))
 
+    def test_text_progress_reports_percent_mib_and_rate(self):
+        data = b"A" * (2 * 1024 * 1024 + 123)
+        source = io.BytesIO(data)
+        destination = io.BytesIO()
+        stream = io.StringIO()
+        digest = mod.copy_range_with_progress(
+            source, destination, 0, len(data), "Lecture test", stream=stream,
+        )
+        output = stream.getvalue()
+        self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
+        self.assertEqual(data, destination.getvalue())
+        self.assertIn("Lecture test:", output)
+        self.assertIn("100%", output)
+        self.assertIn("MiB", output)
+        self.assertIn("MiB/s", output)
+        self.assertTrue(output.endswith("\n"))
+
+    def test_hash_progress_reports_completion_without_modifying_data(self):
+        data = b"B" * (1024 * 1024 + 17)
+        stream = io.StringIO()
+        handle = io.BytesIO(data)
+        digest = mod.hash_region_with_progress(
+            handle, 0, len(data), "Vérification test", stream=stream,
+        )
+        self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
+        self.assertIn("100%", stream.getvalue())
+        self.assertEqual(data, handle.getvalue())
+
     def test_target_fingerprint_binds_size_front_and_tail(self):
         a = io.BytesIO(b"A" * (2 * mod.FINGERPRINT_WINDOW + 512))
         b = io.BytesIO(b"A" * (2 * mod.FINGERPRINT_WINDOW + 511) + b"B")
