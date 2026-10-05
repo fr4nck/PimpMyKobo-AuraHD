@@ -449,15 +449,34 @@ def _load_plan(plan_path: Path, expected_sha256: str) -> dict[str, Any]:
     if not _is_sha256(expected_sha256) or _sha256_file(plan_path) != expected_sha256:
         raise ReplacementError("plan cible différent du plan autorisé")
     plan = _read_json(plan_path)
+    required = {
+        "schema_version", "tool", "status", "write_authorized", "model",
+        "target_path", "target_major_minor", "target_size",
+        "target_fingerprint_sha256", "candidate_sha256", "pre_p1_sha256",
+        "p2_sha256", "donor_stage_sha256", "layout", "p3",
+        "source_card_write_required",
+    }
+    missing = sorted(required - plan.keys())
+    if missing:
+        raise ReplacementError("plan cible incomplet: " + ", ".join(missing))
     if (
         plan.get("schema_version") != 1
         or plan.get("tool") != "prepare-replacement-microsd"
         or plan.get("status") != "prepared"
         or plan.get("write_authorized") is not False
+        or plan.get("source_card_write_required") is not False
+        or plan.get("model") != "Kobo Aura HD E606C0"
     ):
         raise ReplacementError("contrat du plan cible invalide")
-    if not _is_sha256(plan.get("target_fingerprint_sha256")):
-        raise ReplacementError("empreinte cible du plan invalide")
+    if not all(_is_sha256(plan.get(key)) for key in (
+        "target_fingerprint_sha256", "candidate_sha256", "pre_p1_sha256",
+        "p2_sha256", "donor_stage_sha256",
+    )):
+        raise ReplacementError("empreintes du plan cible invalides")
+    if not isinstance(plan.get("layout"), dict) or not isinstance(plan.get("p3"), dict):
+        raise ReplacementError("géométrie du plan cible invalide")
+    if type(plan.get("target_size")) is not int or plan["target_size"] <= 0:
+        raise ReplacementError("capacité du plan cible invalide")
     return plan
 
 
@@ -530,8 +549,20 @@ def execute_replacement(plan_path: Path, expected_plan_sha256: str,
         manifest = load_manifest(manifest_path)
         stage = load_stage(stage_dir, manifest)
         candidate_sha = validate_candidate(candidate, manifest)
-        if candidate_sha != plan.get("candidate_sha256"):
-            raise ReplacementError("candidat PMKB différent du plan")
+        donor_manifest = stage_dir / "donor.json"
+        expected_p3 = {
+            "filesystem": "fat32",
+            "label": FAT_LABEL,
+            "type": int(stage["p3_type"]),
+        }
+        if (
+            candidate_sha != plan.get("candidate_sha256")
+            or plan.get("pre_p1_sha256") != manifest["pre_p1"]["sha256"]
+            or plan.get("p2_sha256") != manifest["partitions"][1]["sha256"]
+            or plan.get("donor_stage_sha256") != _sha256_file(donor_manifest)
+            or plan.get("p3") != expected_p3
+        ):
+            raise ReplacementError("candidat/donneuse différents du plan autorisé")
         restore.require_native_linux(ack_linux_live)
 
         disk = restore.LinuxDisk(device, True)
