@@ -24,6 +24,7 @@ DEFAULT_IDENTITY = Path("/opt/pmkb/BUILD-IDENTITY.json")
 DEFAULT_BACKEND = Path("/opt/pmkb/tools/restore-p1-linux.py")
 DEFAULT_REPLACEMENT_BACKEND = Path("/opt/pmkb/tools/replace-microsd-linux.py")
 LOCAL_BACKEND = Path(__file__).with_name("restore-p1-linux.py")
+LOCAL_REPLACEMENT_BACKEND = Path(__file__).with_name("replace-microsd-linux.py")
 DEFAULT_IMAGE_DIR = Path("/opt/pmkb")
 KEYMAP_ROOT = Path("/usr/share/keymaps")
 
@@ -190,11 +191,14 @@ def image_path(manifest: dict[str, Any], override: Path | None = None) -> Path:
 
 
 def load_replacement_backend(path: Path = DEFAULT_REPLACEMENT_BACKEND):
-    if not path.is_file():
-        raise QualificationError(f"backend remplacement PMKB absent: {path}")
-    spec = importlib.util.spec_from_file_location("pmkb_replacement_backend", path)
+    selected = path
+    if not selected.exists() and LOCAL_REPLACEMENT_BACKEND.exists():
+        selected = LOCAL_REPLACEMENT_BACKEND
+    if not selected.is_file():
+        raise QualificationError(f"backend remplacement PMKB absent: {selected}")
+    spec = importlib.util.spec_from_file_location("pmkb_replacement_backend", selected)
     if spec is None or spec.loader is None:
-        raise QualificationError(f"backend remplacement PMKB non chargeable: {path}")
+        raise QualificationError(f"backend remplacement PMKB non chargeable: {selected}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
