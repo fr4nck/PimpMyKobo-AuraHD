@@ -11,13 +11,19 @@ Cette branche prépare un environnement Live dédié au candidat FIRST BOOT #1 f
 
 Le manifest public conserve la géométrie Aura HD, l'empreinte PRE-P1, l'empreinte P2/recoveryfs et l'identité du candidat.
 
-## Un seul backend physique
+## Deux contrats physiques séparés
 
 L'interface `tools/pmkb-qualification-usb.py` n'implémente plus d'écriture bloc.
 
-Toute ouverture de périphérique, qualification matérielle et éventuelle écriture P1 passe par le backend unique :
+La restauration conservatrice de P1 sur la carte originale passe par :
 
 `tools/restore-p1-linux.py`
+
+La création d'une carte de remplacement passe par :
+
+`tools/replace-microsd-linux.py`
+
+Ce second backend réutilise les contrôles Linux natifs et l'ouverture protégée de périphérique définis dans `restore-p1-linux.py`, mais garde un contrat d'écriture distinct : il construit volontairement une **nouvelle** carte et ne doit jamais assouplir le contrat « P1 seulement » de la carte originale.
 
 Le Live utilise un plan produit par `prepare-p1-restore.py`. Le SHA-256 exact de ce plan est scellé dans l'ISO lors de sa construction.
 
