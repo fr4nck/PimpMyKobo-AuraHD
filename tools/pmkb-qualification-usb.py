@@ -13,6 +13,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -21,6 +22,7 @@ DEFAULT_MANIFEST = Path("/opt/pmkb/candidate.json")
 DEFAULT_PLAN = Path("/opt/pmkb/restore-plan.json")
 DEFAULT_IDENTITY = Path("/opt/pmkb/BUILD-IDENTITY.json")
 DEFAULT_BACKEND = Path("/opt/pmkb/tools/restore-p1-linux.py")
+DEFAULT_REPLACEMENT_BACKEND = Path("/opt/pmkb/tools/replace-microsd-linux.py")
 LOCAL_BACKEND = Path(__file__).with_name("restore-p1-linux.py")
 DEFAULT_IMAGE_DIR = Path("/opt/pmkb")
 KEYMAP_ROOT = Path("/usr/share/keymaps")
@@ -40,13 +42,23 @@ TEXT = {
         "keyboard_loaded": "Clavier actif : {keymap}",
         "device_prompt": "Disque complet exact de la microSD (ex. /dev/sdb) : ",
         "journal_prompt": "Répertoire PERSISTANT pour journal + sauvegarde P1 : ",
-        "menu_1": "Qualifier la microSD",
-        "menu_2": "Écrire FIRST BOOT sur P1",
-        "menu_3": "Vérifier P1 et tout l’extérieur de P1",
-        "menu_4": "Afficher les invariants",
-        "menu_5": "Changer langue / clavier",
-        "menu_6": "Redémarrer le PC",
-        "menu_7": "Éteindre le PC",
+        "menu_1": "Créer / réparer une nouvelle microSD PMKB",
+        "menu_2": "Qualifier la microSD originale",
+        "menu_3": "Écrire FIRST BOOT sur P1 de l’originale (avancé)",
+        "menu_4": "Vérifier P1 et tout l’extérieur de P1",
+        "menu_5": "Afficher les invariants",
+        "menu_6": "Changer langue / clavier",
+        "menu_7": "Redémarrer le PC",
+        "menu_8": "Éteindre le PC",
+        "replacement_source": "Insérez la microSD ORIGINALE de la Kobo. Elle sera lue uniquement.",
+        "replacement_source_ok": "Éléments Kobo indispensables capturés en lecture seule.",
+        "replacement_swap": "Retirez maintenant la microSD originale puis insérez la NOUVELLE microSD.",
+        "replacement_target": "Nouvelle microSD cible (ex. /dev/sdb) : ",
+        "replacement_plan": "Nouvelle carte : {size_gib:.2f} GiB ; P3 KOBOeReader : {p3_gib:.2f} GiB",
+        "replacement_warning": "ATTENTION : la nouvelle microSD sera entièrement reconstruite.",
+        "replacement_confirm": "Tapez exactement « {phrase} » : ",
+        "replacement_done": "Nouvelle microSD PMKB créée et relue avec succès.",
+        "replacement_keep_source": "Conservez la microSD originale comme sauvegarde matérielle.",
         "choice": "Choix : ",
         "confirm_reboot": "Confirmer le redémarrage ? [o/N] : ",
         "confirm_poweroff": "Confirmer l’arrêt du PC ? [o/N] : ",
@@ -72,13 +84,23 @@ TEXT = {
         "keyboard_loaded": "Active keyboard: {keymap}",
         "device_prompt": "Exact whole disk for the microSD (e.g. /dev/sdb): ",
         "journal_prompt": "PERSISTENT directory for journal + P1 backup: ",
-        "menu_1": "Qualify the microSD",
-        "menu_2": "Write FIRST BOOT to P1",
-        "menu_3": "Verify P1 and everything outside P1",
-        "menu_4": "Show invariants",
-        "menu_5": "Change language / keyboard",
-        "menu_6": "Reboot the PC",
-        "menu_7": "Power off the PC",
+        "menu_1": "Create / repair a new PMKB microSD",
+        "menu_2": "Qualify the original microSD",
+        "menu_3": "Write FIRST BOOT to original P1 (advanced)",
+        "menu_4": "Verify P1 and everything outside P1",
+        "menu_5": "Show invariants",
+        "menu_6": "Change language / keyboard",
+        "menu_7": "Reboot the PC",
+        "menu_8": "Power off the PC",
+        "replacement_source": "Insert the ORIGINAL Kobo microSD. It will only be read.",
+        "replacement_source_ok": "Required Kobo data captured read-only.",
+        "replacement_swap": "Now remove the original microSD and insert the NEW microSD.",
+        "replacement_target": "New target microSD (e.g. /dev/sdb): ",
+        "replacement_plan": "New card: {size_gib:.2f} GiB; KOBOeReader P3: {p3_gib:.2f} GiB",
+        "replacement_warning": "WARNING: the new microSD will be completely rebuilt.",
+        "replacement_confirm": "Type exactly “{phrase}”: ",
+        "replacement_done": "New PMKB microSD created and read back successfully.",
+        "replacement_keep_source": "Keep the original microSD as a hardware backup.",
         "choice": "Choice: ",
         "confirm_reboot": "Confirm reboot? [y/N]: ",
         "confirm_poweroff": "Confirm power off? [y/N]: ",
@@ -165,6 +187,24 @@ def load_backend(path: Path):
 
 def image_path(manifest: dict[str, Any], override: Path | None = None) -> Path:
     return override if override is not None else DEFAULT_IMAGE_DIR / manifest["image_name"]
+
+
+def load_replacement_backend(path: Path = DEFAULT_REPLACEMENT_BACKEND):
+    if not path.is_file():
+        raise QualificationError(f"backend remplacement PMKB absent: {path}")
+    spec = importlib.util.spec_from_file_location("pmkb_replacement_backend", path)
+    if spec is None or spec.loader is None:
+        raise QualificationError(f"backend remplacement PMKB non chargeable: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    for name in (
+        "capture_donor", "prepare_target_plan", "execute_replacement",
+        "replacement_confirmation",
+    ):
+        if not hasattr(module, name):
+            raise QualificationError(f"backend remplacement PMKB incomplet: {name}")
+    return module
 
 
 def validate_bundle(manifest_path: Path, plan_path: Path, identity_path: Path,
@@ -401,6 +441,58 @@ def verify_after_write(backend, plan_path: Path, image: Path, expected_plan_sha2
     return result
 
 
+def replacement_flow(
+    replacement_backend,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    image: Path,
+    language: str,
+    *,
+    input_func: Callable[[str], str] = input,
+) -> dict[str, Any]:
+    print("\n" + _t(language, "replacement_source"))
+    source = ask_device(input_func=input_func, language=language)
+    stage_dir = Path(tempfile.mkdtemp(prefix="pmkb-replacement-", dir="/run"))
+    replacement_backend.capture_donor(
+        manifest_path, source, stage_dir, ack_linux_live=True,
+    )
+    print("[✓] " + _t(language, "replacement_source_ok"))
+    print("\n" + _t(language, "replacement_swap"))
+    input_func(_t(language, "continue"))
+    raw_target = input_func(_t(language, "replacement_target")).strip()
+    if not raw_target.startswith("/dev/"):
+        raise QualificationError("cible explicite /dev/... obligatoire")
+    target = Path(raw_target)
+    plan_path = stage_dir / "replacement-plan.json"
+    plan, plan_sha = replacement_backend.prepare_target_plan(
+        manifest_path, image, stage_dir, target, plan_path, ack_linux_live=True,
+    )
+    layout = plan["layout"]
+    print("\n" + _t(language, "replacement_plan").format(
+        size_gib=plan["target_size"] / (1024 ** 3),
+        p3_gib=layout["p3_size"] / (1024 ** 3),
+    ))
+    print(_t(language, "replacement_warning"))
+    phrase = replacement_backend.replacement_confirmation(plan_sha, plan)
+    typed = input_func(_t(language, "replacement_confirm").format(phrase=phrase)).strip()
+    if typed != phrase:
+        raise QualificationError("confirmation refusée; aucune écriture effectuée")
+    result = replacement_backend.execute_replacement(
+        plan_path, plan_sha, manifest_path, image, stage_dir, target,
+        authorize_plan_sha256=plan_sha,
+        ack_linux_live=True,
+    )
+    if not result.get("complete") or result.get("status") != "ok":
+        details = "; ".join(str(item) for item in result.get("errors") or [])
+        raise QualificationError("création de la nouvelle microSD échouée: " + (details or "statut incomplet"))
+    print("\n[✓] " + _t(language, "replacement_done"))
+    print("[✓] " + _t(language, "replacement_keep_source"))
+    print(f"[✓] P1 PMKB : {result['p1_sha256']}")
+    print(f"[✓] P2 recovery : {result['p2_sha256']}")
+    print(f"[✓] P3 KOBOeReader : {result['p3_size'] / (1024 ** 3):.2f} GiB")
+    return result
+
+
 def ask_device(input_func: Callable[[str], str] = input, *, language: str = "fr") -> Path:
     value = input_func(_t(language, "device_prompt")).strip()
     if not value.startswith("/dev/"):
@@ -428,27 +520,33 @@ def print_header(manifest: dict[str, Any], identity: dict[str, Any], *, language
     print()
 
 
-def menu(backend, manifest: dict[str, Any], identity: dict[str, Any],
+def menu(backend, replacement_backend, manifest_path: Path,
+         manifest: dict[str, Any], identity: dict[str, Any],
          plan_path: Path, image: Path, *, language: str, keymap: str) -> int:
     while True:
         print_header(manifest, identity, language=language, keymap=keymap)
-        print(f" 1. {_t(language, 'menu_1'):<44} [LECTURE SEULE / READ ONLY]")
-        print(f" 2. {_t(language, 'menu_2'):<44} [ÉCRITURE / WRITE]")
-        print(f" 3. {_t(language, 'menu_3'):<44} [LECTURE SEULE / READ ONLY]")
-        print(f" 4. {_t(language, 'menu_4')}")
+        print(f" 1. {_t(language, 'menu_1'):<52} [RECOMMANDÉ / RECOMMENDED]")
+        print(f" 2. {_t(language, 'menu_2'):<52} [LECTURE SEULE / READ ONLY]")
+        print(f" 3. {_t(language, 'menu_3'):<52} [ÉCRITURE / WRITE]")
+        print(f" 4. {_t(language, 'menu_4'):<52} [LECTURE SEULE / READ ONLY]")
         print(f" 5. {_t(language, 'menu_5')}")
         print(f" 6. {_t(language, 'menu_6')}")
         print(f" 7. {_t(language, 'menu_7')}")
+        print(f" 8. {_t(language, 'menu_8')}")
         choice = input("\n" + _t(language, "choice")).strip()
         try:
             if choice == "1":
+                replacement_flow(
+                    replacement_backend, manifest_path, manifest, image, language,
+                )
+            elif choice == "2":
                 device = ask_device(language=language)
                 result = preflight_device(backend, plan_path, image, identity["plan_sha256"], device)
                 print(f"\n[✓] {_t(language, 'readonly_ok')} : {device}")
                 print(f"[✓] {_t(language, 'readonly_usb')}")
                 print(f"[✓] {_t(language, 'readonly_match')}")
                 print(f"[✓] Plan : {result['plan_sha256']}")
-            elif choice == "2":
+            elif choice == "3":
                 device = ask_device(language=language)
                 journal_dir = ask_journal_dir(language=language)
                 result = perform_write(
@@ -460,14 +558,14 @@ def menu(backend, manifest: dict[str, Any], identity: dict[str, Any],
                 print(f"[✓] P1 originale / original P1 : {result['rollback']}")
                 print(f"[✓] Journal : {result['journal']}")
                 print("\nPMKB FIRST BOOT #1 — READY FOR POWER")
-            elif choice == "3":
+            elif choice == "4":
                 device = ask_device(language=language)
                 result = verify_after_write(
                     backend, plan_path, image, identity["plan_sha256"], device,
                 )
                 print(f"\n[✓] P1 : {result['p1_reread_sha256']}")
                 print(f"[✓] {_t(language, 'verify_outside')}")
-            elif choice == "4":
+            elif choice == "5":
                 if language == "en":
                     print("\n- no automatic target discovery")
                     print("- native Linux/Live root only; WSL and containers refused")
@@ -486,12 +584,12 @@ def menu(backend, manifest: dict[str, Any], identity: dict[str, Any],
                     print("- e2fsck -f -n du candidat staged")
                     print("- aucune écriture hors plage P1")
                     print("- aucun retry/rollback automatique")
-            elif choice == "5":
-                language, keymap = configure_operator_environment()
             elif choice == "6":
+                language, keymap = configure_operator_environment()
+            elif choice == "7":
                 if confirm_power(language, "reboot"):
                     systemctl_action("reboot")
-            elif choice == "7":
+            elif choice == "8":
                 if confirm_power(language, "poweroff"):
                     systemctl_action("poweroff")
             else:
@@ -522,6 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         backend = load_backend(args.backend)
+        replacement_backend = load_replacement_backend()
         manifest = load_manifest(args.manifest)
         image = image_path(manifest, args.image)
         manifest, identity, _plan = validate_bundle(
@@ -554,7 +653,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         language, keymap = configure_operator_environment()
         return menu(
-            backend, manifest, identity, args.plan, image,
+            backend, replacement_backend, args.manifest,
+            manifest, identity, args.plan, image,
             language=language, keymap=keymap,
         )
     except (QualificationError, OSError, ValueError, json.JSONDecodeError) as exc:
