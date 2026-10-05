@@ -40,3 +40,13 @@ La carte originale n'est jamais ouverte en écriture par ce parcours.
 
 
 Les lectures/écritures longues du parcours de remplacement affichent une progression texte : pourcentage, MiB traités et débit. Aucun effet graphique n'est ajouté au Live FIRST BOOT.
+
+
+## Identité de l'ISO
+
+Une ISO PMKB embarque désormais deux HEAD distincts dans `BUILD-IDENTITY.json` :
+
+- `candidate_head` : provenance du candidat P1 figé ;
+- `live_head` : commit exact du code Live et des backends embarqués.
+
+Le nom de l'ISO contient les deux identifiants courts afin qu'une reconstruction du Live ne puisse pas être confondue avec une ancienne ISO utilisant le même candidat P1.
