@@ -171,6 +171,20 @@ assert plan["physical_restore_eligible"] is False
         self.assertIn("config/bootloaders/grub-pc/splash.png", source)
         self.assertIn('LOGO="$REPO_DIR/assets/branding/pmkb-logo-original.png"', source)
 
+    def test_live_builder_embeds_replacement_backend_and_fat_tools(self):
+        source = (ROOT / "tools" / "build-qualification-live.sh").read_text(encoding="utf-8")
+        self.assertRegex(source, r"(?m)^dosfstools$")
+        self.assertIn("replace-microsd-linux.py", source)
+        self.assertIn('REPLACEMENT_BACKEND="$REPO_DIR/tools/replace-microsd-linux.py"', source)
+
+    def test_replacement_flow_is_primary_and_original_write_is_advanced(self):
+        source = (ROOT / "tools" / "pmkb-qualification-usb.py").read_text(encoding="utf-8")
+        self.assertIn('"menu_1": "Créer / réparer une nouvelle microSD PMKB"', source)
+        self.assertIn('"menu_3": "Écrire FIRST BOOT sur P1 de l’originale (avancé)"', source)
+        self.assertIn("replacement_backend.capture_donor(", source)
+        self.assertIn("replacement_backend.prepare_target_plan(", source)
+        self.assertIn("replacement_backend.execute_replacement(", source)
+
     def test_ui_contains_no_physical_writer(self):
         source = (ROOT / "tools" / "pmkb-qualification-usb.py").read_text(encoding="utf-8")
         self.assertNotIn("def write_partition", source)
@@ -246,8 +260,8 @@ assert plan["physical_restore_eligible"] is False
 
     def test_menu_has_power_controls_instead_of_dead_quit(self):
         source = (ROOT / "tools" / "pmkb-qualification-usb.py").read_text(encoding="utf-8")
-        self.assertIn('"menu_6": "Redémarrer le PC"', source)
-        self.assertIn('"menu_7": "Éteindre le PC"', source)
+        self.assertIn('"menu_7": "Redémarrer le PC"', source)
+        self.assertIn('"menu_8": "Éteindre le PC"', source)
         self.assertIn('systemctl_action("reboot")', source)
         self.assertIn('systemctl_action("poweroff")', source)
         self.assertNotIn('print(" 0. Quitter")', source)
