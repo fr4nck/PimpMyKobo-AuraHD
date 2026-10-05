@@ -82,12 +82,14 @@ jobs:
           unsquashfs -ll "$RUNNER_TEMP/filesystem.squashfs" > "$RUNNER_TEMP/squashfs.list"
           grep -F "usr/local/sbin/pmkb-qualification" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/tools/restore-p1-linux.py" "$RUNNER_TEMP/squashfs.list"
+          grep -F "opt/pmkb/tools/replace-microsd-linux.py" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/restore-plan.json" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/BUILD-IDENTITY.json" "$RUNNER_TEMP/squashfs.list"
           grep -F "opt/pmkb/fixture.img" "$RUNNER_TEMP/squashfs.list"
           grep -F "etc/systemd/system/pmkb-qualification.service" "$RUNNER_TEMP/squashfs.list"
           grep -F "bin/loadkeys" "$RUNNER_TEMP/squashfs.list"
           grep -F "usr/share/keymaps/" "$RUNNER_TEMP/squashfs.list"
+          grep -F "sbin/mkfs.fat" "$RUNNER_TEMP/squashfs.list"
           # Import the backend from the actual ISO payload, without repository fallbacks.
           unsquashfs -no-progress -d "$RUNNER_TEMP/pmkb-live-extracted" \
             "$RUNNER_TEMP/filesystem.squashfs" usr/local/sbin/pmkb-qualification opt/pmkb
@@ -103,6 +105,9 @@ jobs:
           spec.loader.exec_module(module)
           backend = module.load_backend(root / "opt/pmkb/tools/restore-p1-linux.py")
           backend.legacy.load_inspector()
+          replacement = module.load_replacement_backend(
+              root / "opt/pmkb/tools/replace-microsd-linux.py")
+          assert replacement.MIN_P3_BYTES >= 1024 * 1024 * 1024
           identity = json.loads((root / "opt/pmkb/BUILD-IDENTITY.json").read_text())
           plan, sha = backend.validate_sealed_plan(
               root / "opt/pmkb/restore-plan.json",

@@ -31,6 +31,7 @@ MANIFEST=$(readlink -f "$MANIFEST")
 
 UI="$REPO_DIR/tools/pmkb-qualification-usb.py"
 BACKEND="$REPO_DIR/tools/restore-p1-linux.py"
+REPLACEMENT_BACKEND="$REPO_DIR/tools/replace-microsd-linux.py"
 PREPARE="$REPO_DIR/tools/prepare-p1-restore.py"
 SIMULATION="$REPO_DIR/tools/restore-rootfs.py"
 REBUILD="$REPO_DIR/tools/rebuild-rootfs.py"
@@ -43,7 +44,7 @@ LOGO="$REPO_DIR/assets/branding/pmkb-logo-original.png"
 for tool in lb xorriso mksquashfs sha256sum stat python3; do
     command -v "$tool" >/dev/null 2>&1 || { echo "STOP: outil requis absent: $tool" >&2; exit 2; }
 done
-for file in "$CANDIDATE" "$PLAN" "$MANIFEST" "$UI" "$BACKEND" "$PREPARE" "$SIMULATION" "$REBUILD" "$LEGACY" "$INSPECTOR" "$SERVICE"; do
+for file in "$CANDIDATE" "$PLAN" "$MANIFEST" "$UI" "$BACKEND" "$REPLACEMENT_BACKEND" "$PREPARE" "$SIMULATION" "$REBUILD" "$LEGACY" "$INSPECTOR" "$SERVICE"; do
     [ -f "$file" ] || { echo "STOP: fichier PMKB absent: $file" >&2; exit 2; }
 done
 
@@ -174,6 +175,7 @@ systemd-sysv
 ca-certificates
 kbd
 console-data
+dosfstools
 EOF
 
 mkdir -p \
@@ -185,6 +187,7 @@ mkdir -p \
 
 install -m 0755 "$UI" config/includes.chroot/usr/local/sbin/pmkb-qualification
 install -m 0644 "$BACKEND" config/includes.chroot/opt/pmkb/tools/restore-p1-linux.py
+install -m 0644 "$REPLACEMENT_BACKEND" config/includes.chroot/opt/pmkb/tools/replace-microsd-linux.py
 install -m 0644 "$PREPARE" config/includes.chroot/opt/pmkb/tools/prepare-p1-restore.py
 install -m 0644 "$SIMULATION" config/includes.chroot/opt/pmkb/tools/restore-rootfs.py
 install -m 0644 "$REBUILD" config/includes.chroot/opt/pmkb/tools/rebuild-rootfs.py

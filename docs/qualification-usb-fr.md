@@ -11,13 +11,19 @@ Cette branche prépare un environnement Live dédié au candidat FIRST BOOT #1 f
 
 Le manifest public conserve la géométrie Aura HD, l'empreinte PRE-P1, l'empreinte P2/recoveryfs et l'identité du candidat.
 
-## Un seul backend physique
+## Deux contrats physiques séparés
 
 L'interface `tools/pmkb-qualification-usb.py` n'implémente plus d'écriture bloc.
 
-Toute ouverture de périphérique, qualification matérielle et éventuelle écriture P1 passe par le backend unique :
+La restauration conservatrice de P1 sur la carte originale passe par :
 
 `tools/restore-p1-linux.py`
+
+La création d'une carte de remplacement passe par :
+
+`tools/replace-microsd-linux.py`
+
+Ce second backend réutilise les contrôles Linux natifs et l'ouverture protégée de périphérique définis dans `restore-p1-linux.py`, mais garde un contrat d'écriture distinct : il construit volontairement une **nouvelle** carte et ne doit jamais assouplir le contrat « P1 seulement » de la carte originale.
 
 Le Live utilise un plan produit par `prepare-p1-restore.py`. Le SHA-256 exact de ce plan est scellé dans l'ISO lors de sa construction.
 
@@ -37,7 +43,9 @@ Avant une écriture, le backend impose notamment :
 - relecture de P1 et vérification de tous les octets hors P1 ;
 - aucun retry automatique et aucun rollback automatique implicite.
 
-P2/recoveryfs et P3 ne sont jamais des zones d'écriture.
+Dans le mode historique de restauration **sur la carte originale**, P2/recoveryfs et P3 ne sont jamais des zones d'écriture.
+
+Le Live possède désormais un second contrat, séparé, pour **créer une nouvelle microSD**. Dans ce mode, la carte originale est ouverte uniquement en lecture ; PRE-P1 et P2 sont capturés en staging Live, puis la nouvelle carte reçoit PRE-P1 adapté à sa capacité, P1 PMKB, une copie exacte de P2 et une P3 FAT32 `KOBOeReader` neuve. Voir `docs/remplacement-microsd-fr.md`.
 
 ## Construction locale de l'ISO
 
@@ -93,6 +101,8 @@ Cette opération écrit uniquement la clé USB de qualification. **Elle ne doit 
 L'ISO réelle ci-dessus embarque le candidat FIRST BOOT et le plan scellé utilisés pour la qualification matérielle. Elle reste un artefact privé local et n'est pas publiée dans Git. Une future ISO publique légère devra exclure ces artefacts privés et tout composant dont la redistribution n'est pas explicitement qualifiée.
 
 ## Utilisation
+
+Le parcours recommandé est **Créer / réparer une nouvelle microSD PMKB** : carte originale comme donneuse en lecture seule, retrait de la donneuse, insertion d'une autre microSD, plan lié à cette cible, confirmation destructive explicite, puis construction et relecture de la nouvelle carte. La capacité de la cible n'a pas besoin d'être identique à celle de l'originale ; le backend adapte P3 au reste disponible et impose actuellement au moins 1 Gio de P3 (soit environ 1,51 Gio de capacité minimale théorique totale).
 
 Pour une qualification en lecture seule, l'opérateur saisit explicitement le disque complet, par exemple `/dev/sdb`.
 
