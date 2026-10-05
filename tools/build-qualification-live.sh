@@ -41,12 +41,24 @@ SERVICE="$REPO_DIR/live/pmkb-qualification/pmkb-qualification.service"
 LOGO="$REPO_DIR/assets/branding/pmkb-logo-original.png"
 
 [ "$(id -u)" -eq 0 ] || { echo "STOP: lancez ce builder avec sudo." >&2; exit 2; }
-for tool in lb xorriso mksquashfs sha256sum stat python3; do
+for tool in lb xorriso mksquashfs sha256sum stat python3 git; do
     command -v "$tool" >/dev/null 2>&1 || { echo "STOP: outil requis absent: $tool" >&2; exit 2; }
 done
 for file in "$CANDIDATE" "$PLAN" "$MANIFEST" "$UI" "$BACKEND" "$REPLACEMENT_BACKEND" "$PREPARE" "$SIMULATION" "$REBUILD" "$LEGACY" "$INSPECTOR" "$SERVICE"; do
     [ -f "$file" ] || { echo "STOP: fichier PMKB absent: $file" >&2; exit 2; }
 done
+
+git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    echo "STOP: dépôt Git PMKB introuvable." >&2
+    exit 2
+}
+if ! git -C "$REPO_DIR" diff --quiet -- . || ! git -C "$REPO_DIR" diff --cached --quiet -- .; then
+    echo "STOP: checkout PMKB modifié; committez ou restaurez les fichiers suivis avant de construire le Live." >&2
+    exit 2
+fi
+LIVE_HEAD=$(git -C "$REPO_DIR" rev-parse HEAD)
+LIVE_SHORT=$(printf '%s' "$LIVE_HEAD" | cut -c1-8 | tr -cd 'A-Za-z0-9._-')
+[ -n "$LIVE_SHORT" ] || { echo "STOP: identifiant HEAD Live inutilisable" >&2; exit 2; }
 
 IMAGE_NAME=$(python3 - "$MANIFEST" <<'PY'
 import json, sys
@@ -206,9 +218,11 @@ fi
 
 cat > config/includes.chroot/opt/pmkb/BUILD-IDENTITY.json <<EOF
 {
-  "schema": 1,
+  "schema": 2,
   "project": "PimpMyKobo-AuraHD",
   "head": "$HEAD",
+  "candidate_head": "$HEAD",
+  "live_head": "$LIVE_HEAD",
   "image_name": "$IMAGE_NAME",
   "image_sha256": "$EXPECTED_SHA",
   "manifest_sha256": "$MANIFEST_SHA",
@@ -219,9 +233,9 @@ EOF
 lb build
 ISO=$(find . -maxdepth 1 -type f \( -name 'live-image-*.hybrid.iso' -o -name 'live-image-*.iso' \) | head -n 1)
 [ -n "$ISO" ] && [ -f "$ISO" ] || { echo "STOP: ISO live-build introuvable" >&2; exit 2; }
-OUT="$OUTPUT_DIR/PMKB-Qualification-USB-$SHORT.iso"
+OUT="$OUTPUT_DIR/PMKB-Qualification-USB-$SHORT-$LIVE_SHORT.iso"
 cp "$ISO" "$OUT"
 sha256sum "$OUT" > "$OUT.sha256"
 
-printf '\nOK — ISO créé localement, aucune microSD touchée:\n%s\n' "$OUT"
+printf '\nOK — ISO créé localement, aucune microSD touchée (candidat $SHORT / Live $LIVE_SHORT):\n%s\n' "$OUT"
 cat "$OUT.sha256"
