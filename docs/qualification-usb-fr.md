@@ -62,7 +62,9 @@ Le builder :
 5. inscrit dans `BUILD-IDENTITY.json` les SHA-256 du manifest, du candidat et du plan ;
 6. produit `private/qualification-usb/PMKB-Qualification-USB-0b00d858.iso` et son fichier `.sha256`.
 
-Le Live démarre l'interface texte PMKB automatiquement sur tty1. L'option « Quitter » arrête réellement l'interface ; systemd ne la relance pas automatiquement.
+Le Live démarre l'interface texte PMKB automatiquement sur tty1. Avant toute saisie d'un périphérique `/dev/...`, l'opérateur choisit la langue de l'interface (français par défaut ou anglais) puis le clavier console. Le français/AZERTY est proposé par défaut ; tous les keymaps présents dans l'image peuvent être affichés et sélectionnés. Le menu permet ensuite de changer langue/clavier, de redémarrer ou d'éteindre proprement le PC. Il n'existe plus d'option « Quitter » laissant tty1 sur un curseur sans interface.
+
+Le menu GRUB de la clé utilise le visuel PMKB à la place du splash Debian d'origine lorsque le logo versionné est disponible.
 
 ## Création de la clé USB sous Windows avec Rufus
 
