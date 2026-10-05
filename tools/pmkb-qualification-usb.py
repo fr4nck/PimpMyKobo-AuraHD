@@ -135,6 +135,14 @@ def _is_sha256(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
 
 
+def _is_git_oid(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) in (40, 64)
+        and all(c in "0123456789abcdef" for c in value.lower())
+    )
+
+
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -169,7 +177,7 @@ def load_identity(path: Path) -> dict[str, Any]:
     if int(data.get("schema", 1)) >= 2:
         if data.get("candidate_head") != data["head"]:
             raise QualificationError("identité Live: candidate_head et head divergent")
-        if not _is_sha256(data.get("candidate_head")) or not _is_sha256(data.get("live_head")):
+        if not _is_git_oid(data.get("candidate_head")) or not _is_git_oid(data.get("live_head")):
             raise QualificationError("identité Live: HEAD candidat/Live invalide")
     return data
 
