@@ -132,7 +132,7 @@ class ReplacementMicroSdTests(unittest.TestCase):
             command[command.index("--offset") + 1],
         )
         self.assertEqual(str(layout["p3_kib"]), command[-1])
-        self.assertEqual("/dev/sdz", command[-2])
+        self.assertEqual(str(Path("/dev/sdz")), command[-2])
         self.assertIn(mod.FAT_LABEL, command)
 
     def test_verify_fat32_accepts_expected_bpb(self):
