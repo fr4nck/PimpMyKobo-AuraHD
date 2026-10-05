@@ -20,6 +20,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Callable
@@ -178,6 +179,76 @@ def patch_pre_p1(pre_p1: bytes, manifest: dict[str, Any],
     return bytes(patched)
 
 
+def _progress_text(label: str, done: int, total: int, started: float) -> str:
+    percent = 100 if total <= 0 else min(100, int(done * 100 / total))
+    mib = 1024 * 1024
+    elapsed = max(time.monotonic() - started, 0.001)
+    rate = (done / mib) / elapsed
+    return (
+        f"\r{label}: {percent:3d}% "
+        f"({done / mib:.1f}/{total / mib:.1f} MiB, {rate:.1f} MiB/s)"
+    )
+
+
+def _show_progress(label: str, done: int, total: int, started: float,
+                   *, stream=None) -> None:
+    stream = sys.stdout if stream is None else stream
+    stream.write(_progress_text(label, done, total, started))
+    if done >= total:
+        stream.write("\n")
+    stream.flush()
+
+
+def copy_range_with_progress(source: BinaryIO, destination: BinaryIO,
+                             offset: int, size: int, label: str,
+                             *, stream=None) -> str:
+    source.seek(offset)
+    remaining = size
+    done = 0
+    sha = hashlib.sha256()
+    started = time.monotonic()
+    last_percent = -1
+    while remaining:
+        data = source.read(min(restore.CHUNK, remaining))
+        if not data:
+            raise ReplacementError("lecture source interrompue")
+        restore.write_all(destination, data)
+        sha.update(data)
+        done += len(data)
+        remaining -= len(data)
+        percent = 100 if size <= 0 else min(100, int(done * 100 / size))
+        if percent != last_percent:
+            _show_progress(label, done, size, started, stream=stream)
+            last_percent = percent
+    if size == 0:
+        _show_progress(label, 0, 0, started, stream=stream)
+    return sha.hexdigest()
+
+
+def hash_region_with_progress(handle: BinaryIO, offset: int, size: int, label: str,
+                              *, stream=None) -> str:
+    handle.seek(offset)
+    remaining = size
+    done = 0
+    sha = hashlib.sha256()
+    started = time.monotonic()
+    last_percent = -1
+    while remaining:
+        data = handle.read(min(restore.CHUNK, remaining))
+        if not data:
+            raise ReplacementError("relecture cible interrompue")
+        sha.update(data)
+        done += len(data)
+        remaining -= len(data)
+        percent = 100 if size <= 0 else min(100, int(done * 100 / size))
+        if percent != last_percent:
+            _show_progress(label, done, size, started, stream=stream)
+            last_percent = percent
+    if size == 0:
+        _show_progress(label, 0, 0, started, stream=stream)
+    return sha.hexdigest()
+
+
 def _hash_region(handle: BinaryIO, offset: int, size: int) -> str:
     return restore.simulation.hash_region(handle, offset, size)
 
@@ -205,8 +276,12 @@ def donor_identity(handle: BinaryIO, size: int, manifest: dict[str, Any]) -> dic
     if parts[0]["type"] != 0x83 or parts[1]["type"] != 0x83 or parts[2]["type"] not in (0x0B, 0x0C):
         raise ReplacementError("carte donneuse: types de partitions inattendus")
 
-    pre_sha = _hash_region(handle, 0, manifest["pre_p1"]["size"])
-    p2_sha = _hash_region(handle, p2["offset"], p2["size"])
+    pre_sha = hash_region_with_progress(
+        handle, 0, manifest["pre_p1"]["size"], "Lecture originale PRE-P1"
+    )
+    p2_sha = hash_region_with_progress(
+        handle, p2["offset"], p2["size"], "Lecture originale P2 recovery"
+    )
     if pre_sha != manifest["pre_p1"]["sha256"]:
         raise ReplacementError("carte donneuse: PRE-P1/HWCONFIG ne correspond pas à la référence")
     if p2_sha != p2["sha256"]:
@@ -232,9 +307,10 @@ def _prepare_stage_dir(stage_dir: Path) -> None:
         stage_dir.mkdir(mode=0o700, parents=False)
 
 
-def _write_stage_file(source: BinaryIO, destination: Path, offset: int, size: int) -> str:
+def _write_stage_file(source: BinaryIO, destination: Path, offset: int, size: int,
+                      label: str) -> str:
     with destination.open("xb") as out:
-        digest = restore.copy_range(source, out, offset, size)
+        digest = copy_range_with_progress(source, out, offset, size, label)
         out.flush()
         os.fsync(out.fileno())
     return digest
@@ -257,10 +333,14 @@ def capture_donor(manifest_path: Path, device: Path, stage_dir: Path,
         pre_path = stage_dir / "donor-pre-p1.img"
         p2_path = stage_dir / "donor-p2-recovery.img"
         pre_sha = _write_stage_file(
-            disk.handle, pre_path, 0, manifest["pre_p1"]["size"]
+            disk.handle, pre_path, 0, manifest["pre_p1"]["size"],
+            "Capture PRE-P1",
         )
         p2 = manifest["partitions"][1]
-        p2_sha = _write_stage_file(disk.handle, p2_path, p2["offset"], p2["size"])
+        p2_sha = _write_stage_file(
+            disk.handle, p2_path, p2["offset"], p2["size"],
+            "Capture P2 recovery",
+        )
         if pre_sha != manifest["pre_p1"]["sha256"] or p2_sha != p2["sha256"]:
             raise ReplacementError("capture donneuse incohérente après relecture")
         if _sha256_file(pre_path) != pre_sha or _sha256_file(p2_path) != p2_sha:
@@ -591,11 +671,15 @@ def execute_replacement(plan_path: Path, expected_plan_sha256: str,
         restore.write_all(disk.handle, patched_pre)
         with candidate.open("rb") as source:
             disk.handle.seek(p1["offset"])
-            if restore.copy_range(source, disk.handle, 0, p1["size"]) != candidate_sha:
+            if copy_range_with_progress(
+                source, disk.handle, 0, p1["size"], "Écriture P1 PMKB"
+            ) != candidate_sha:
                 raise ReplacementError("P1 candidate modifiée pendant l'écriture")
         with Path(stage["_p2_path"]).open("rb") as source:
             disk.handle.seek(p2["offset"])
-            if restore.copy_range(source, disk.handle, 0, p2["size"]) != manifest["partitions"][1]["sha256"]:
+            if copy_range_with_progress(
+                source, disk.handle, 0, p2["size"], "Écriture P2 recovery"
+            ) != manifest["partitions"][1]["sha256"]:
                 raise ReplacementError("P2 staged modifiée pendant l'écriture")
         disk.flush_and_invalidate()
         disk.recheck()
@@ -620,11 +704,17 @@ def execute_replacement(plan_path: Path, expected_plan_sha256: str,
         if disk.size() != size:
             raise ReplacementError("capacité cible modifiée après formatage")
 
-        if _hash_region(disk.handle, 0, manifest["pre_p1"]["size"]) != expected_pre_sha:
+        if hash_region_with_progress(
+            disk.handle, 0, manifest["pre_p1"]["size"], "Vérification PRE-P1"
+        ) != expected_pre_sha:
             raise ReplacementError("PRE-P1/MBR différent après écriture")
-        if _hash_region(disk.handle, p1["offset"], p1["size"]) != candidate_sha:
+        if hash_region_with_progress(
+            disk.handle, p1["offset"], p1["size"], "Vérification P1 PMKB"
+        ) != candidate_sha:
             raise ReplacementError("P1 différente après relecture")
-        if _hash_region(disk.handle, p2["offset"], p2["size"]) != manifest["partitions"][1]["sha256"]:
+        if hash_region_with_progress(
+            disk.handle, p2["offset"], p2["size"], "Vérification P2 recovery"
+        ) != manifest["partitions"][1]["sha256"]:
             raise ReplacementError("P2 recovery différente après relecture")
 
         inspector = restore.legacy.load_inspector()
