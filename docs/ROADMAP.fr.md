@@ -2,7 +2,7 @@
 
 **Français** | [English](ROADMAP.md)
 
-État au **6 octobre 2026**, référence d'intégration `integration/pmkb-first-boot-1@c2a8ae54fd4a5c80f84415c165e90e566a8549de`.
+État au **6 octobre 2026**, référence d'intégration `integration/pmkb-first-boot-1@27e33654626fb996398284d8ca683fd81737262c`.
 
 Une fonctionnalité codée et testée sur fichiers ne constitue pas une validation sur la vraie Kobo. **Aucune écriture physique sur une microSD Kobo n'a encore été réalisée dans ce chantier.** Cette roadmap n'autorise aucune écriture implicite.
 
@@ -32,7 +32,7 @@ La ligne d'arrivée immédiate est simple :
 | Staging Live | PRE-P1 + P2 seulement, environ 278 Mio ; un seul lecteur de cartes suffit | À exercer sur le Live réel |
 | Nouvelle P3 | Création FAT32 `KOBOeReader`, taille adaptée à la cible | Montage réel par la Kobo non qualifié |
 | Live UX | Français/anglais, AZERTY, parcours remplacement prioritaire, progression texte | Rapport opérateur à rendre plus lisible sur un écran unique |
-| Identité du Live | Séparation `candidate_head` / `live_head` préparée dans PR #17 ; CI #130 verte au moment de ce snapshot | PR #17 non fusionnée dans la référence ci-dessus |
+| Identité du Live | **Fusionnée via PR #17** — séparation `candidate_head` / `live_head`, CI #130 verte | Le nouveau Live réel doit maintenant être reconstruit depuis cette référence |
 | Boot du PC sur un ancien Live PMKB | **Observé** jusqu'au menu PMKB | Le nouveau Live intégrant le parcours de remplacement doit être reconstruit et requalifié |
 | FIRST BOOT Aura HD | **UNQUALIFIED** | Boot, écran, tactile, frontlight, P3, USB/Calibre |
 
@@ -42,8 +42,8 @@ Voir [remplacement-microsd-fr.md](remplacement-microsd-fr.md), [qualification-us
 
 Avant toute microSD réelle :
 
-1. terminer la qualification du code Live courant, notamment l'identité distincte du candidat P1 et du code Live ;
-2. reconstruire l'ISO depuis un checkout Git propre et un commit exact ;
+1. partir de la référence Live qualifiée issue de la PR #17, avec identités distinctes du candidat P1 et du code Live ;
+2. reconstruire l'ISO depuis un checkout Git propre de cette référence exacte ;
 3. conserver le SHA-256 de l'ISO produite ;
 4. vérifier dans l'ISO le candidat, les backends, le manifest, le plan et l'identité de build ;
 5. garder l'interface principale sur **un écran unique** : progression, résultats essentiels et erreurs lisibles au même endroit ;
