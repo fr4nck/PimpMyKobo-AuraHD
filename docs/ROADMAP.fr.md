@@ -121,7 +121,7 @@ Géométrie système conservée :
 - P2 : offset 278 397 440, taille 268 435 968 ;
 - P3 commence à 546 833 408.
 
-Le contrat actuel réserve au minimum 1 Gio à P3, soit un minimum théorique total d'environ 1,51 Gio. Les cartes 16 Go et 32 Go sont donc très au-dessus du minimum logiciel ; la compatibilité matérielle de capacités très élevées reste à qualifier sur l'Aura HD.
+Le contrat actuel réserve au minimum 1 Gio à P3, soit un minimum théorique total d'environ 1,51 Gio. **La capacité de la cible n'a pas à être identique à celle de la donneuse et aucune capacité commerciale particulière ne doit être codée en dur.** Toute cible dont la capacité réelle satisfait les contraintes du profil peut être préparée ; la compatibilité matérielle aux différentes capacités reste à qualifier sur l'Aura HD.
 
 ## 7. Construire la nouvelle carte
 
