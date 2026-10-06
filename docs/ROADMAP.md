@@ -121,7 +121,7 @@ Fixed system geometry:
 - P2: offset 278,397,440, size 268,435,968;
 - P3 starts at 546,833,408.
 
-The current contract reserves at least 1 GiB for P3, making the theoretical minimum total capacity about 1.51 GiB. 16 GB and 32 GB cards are therefore far above the software minimum; real compatibility of very large capacities remains a hardware qualification matter.
+The current contract reserves at least 1 GiB for P3, making the theoretical minimum total capacity about 1.51 GiB. **Target capacity does not need to match donor capacity, and no particular commercial card size must be hard-coded.** Any target whose real capacity satisfies the active device profile may be prepared; hardware compatibility across capacities remains to be qualified on the Aura HD.
 
 ## 7. Build the new card
 
