@@ -2,7 +2,7 @@
 
 [Français](ROADMAP.fr.md) | **English**
 
-Snapshot: **6 October 2026**, integration reference `integration/pmkb-first-boot-1@c2a8ae54fd4a5c80f84415c165e90e566a8549de`.
+Snapshot: **6 October 2026**, integration reference `integration/pmkb-first-boot-1@27e33654626fb996398284d8ca683fd81737262c`.
 
 Code implemented and tested on files is not equivalent to qualification on the real Kobo. **No physical write to a Kobo microSD has yet been performed in this workstream.** This roadmap grants no implicit write authorization.
 
@@ -32,7 +32,7 @@ The immediate finish line is simple:
 | Live staging | PRE-P1 + P2 only, about 278 MiB; one card reader is enough | Must be exercised on the real Live |
 | New P3 | FAT32 `KOBOeReader`, sized from target capacity | Real Kobo mount not qualified |
 | Live UX | French/English, AZERTY, replacement-first flow, textual progress | Operator report should become clearer in a single screen |
-| Live identity | Separate `candidate_head` / `live_head` prepared in PR #17; CI #130 green at this snapshot | PR #17 not merged into the reference above |
+| Live identity | **Merged via PR #17** — separate `candidate_head` / `live_head`, CI #130 green | The new real Live must now be rebuilt from this reference |
 | PC boot of an older PMKB Live | **Observed** up to the PMKB menu | New Live containing replacement flow must be rebuilt and requalified |
 | Aura HD FIRST BOOT | **UNQUALIFIED** | Boot, display, touch, frontlight, P3, USB/Calibre |
 
@@ -42,8 +42,8 @@ See [replacement microSD](remplacement-microsd-fr.md), [qualification USB](quali
 
 Before touching any real microSD:
 
-1. finish qualification of the current Live code, including separate candidate-P1 and Live-code identities;
-2. rebuild the ISO from a clean Git checkout and exact commit;
+1. start from the qualified Live reference delivered by PR #17, with separate candidate-P1 and Live-code identities;
+2. rebuild the ISO from a clean Git checkout of that exact reference;
 3. retain the produced ISO SHA-256;
 4. verify the candidate, backends, manifest, plan and build identity inside the ISO;
 5. keep the main operator interface on **one screen**: progress, essential results and readable errors in one place;
