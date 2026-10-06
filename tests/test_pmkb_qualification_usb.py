@@ -110,6 +110,43 @@ assert plan["physical_restore_eligible"] is False
             )
             self.assertEqual(0, checked.returncode, checked.stdout + checked.stderr)
 
+    def test_schema2_identity_separates_candidate_and_live_heads(self):
+        candidate_head = "a" * 40
+        live_head = "b" * 40
+        identity = {
+            "schema": 2,
+            "head": candidate_head,
+            "candidate_head": candidate_head,
+            "live_head": live_head,
+            "image_name": "fixture.img",
+            "image_sha256": "1" * 64,
+            "plan_sha256": "2" * 64,
+            "manifest_sha256": "3" * 64,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "identity.json"
+            path.write_text(json.dumps(identity), encoding="utf-8")
+            loaded = mod.load_identity(path)
+        self.assertEqual(candidate_head, loaded["candidate_head"])
+        self.assertEqual(live_head, loaded["live_head"])
+
+    def test_schema2_identity_rejects_divergent_candidate_alias(self):
+        identity = {
+            "schema": 2,
+            "head": "a" * 40,
+            "candidate_head": "b" * 40,
+            "live_head": "c" * 40,
+            "image_name": "fixture.img",
+            "image_sha256": "1" * 64,
+            "plan_sha256": "2" * 64,
+            "manifest_sha256": "3" * 64,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "identity.json"
+            path.write_text(json.dumps(identity), encoding="utf-8")
+            with self.assertRaises(mod.QualificationError):
+                mod.load_identity(path)
+
     def test_manifest_is_still_pinned_to_frozen_candidate(self):
         self.assertEqual(268435968, MANIFEST["image_size"])
         self.assertEqual(
