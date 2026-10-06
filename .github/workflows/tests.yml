@@ -74,7 +74,9 @@ jobs:
             "$RUNNER_TEMP/pmkb-live-fixture/candidate.json"
       - name: Verify ISO and embedded PMKB payload
         run: |
-          ISO="$RUNNER_TEMP/pmkb-live-out/PMKB-Qualification-USB-cafebabe.iso"
+          LIVE_HEAD=$(git rev-parse HEAD)
+          LIVE_SHORT=$(printf '%s' "$LIVE_HEAD" | cut -c1-8)
+          ISO="$RUNNER_TEMP/pmkb-live-out/PMKB-Qualification-USB-cafebabe-$LIVE_SHORT.iso"
           test -s "$ISO"
           sha256sum -c "$ISO.sha256"
           xorriso -osirrox on -indev "$ISO" \
@@ -93,10 +95,11 @@ jobs:
           # Import the backend from the actual ISO payload, without repository fallbacks.
           unsquashfs -no-progress -d "$RUNNER_TEMP/pmkb-live-extracted" \
             "$RUNNER_TEMP/filesystem.squashfs" usr/local/sbin/pmkb-qualification opt/pmkb
-          python -I -B - "$RUNNER_TEMP/pmkb-live-extracted" <<'PY'
+          python -I -B - "$RUNNER_TEMP/pmkb-live-extracted" "$LIVE_HEAD" <<'PY'
           import importlib.machinery, importlib.util, json, sys
           from pathlib import Path
           root = Path(sys.argv[1])
+          expected_live_head = sys.argv[2]
           ui = root / "usr/local/sbin/pmkb-qualification"
           loader = importlib.machinery.SourceFileLoader("iso_qualification_ui", str(ui))
           spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -109,6 +112,10 @@ jobs:
               root / "opt/pmkb/tools/replace-microsd-linux.py")
           assert replacement.MIN_P3_BYTES >= 1024 * 1024 * 1024
           identity = json.loads((root / "opt/pmkb/BUILD-IDENTITY.json").read_text())
+          assert identity["schema"] == 2
+          assert identity["head"] == identity["candidate_head"]
+          assert identity["candidate_head"] == "cafebabecafebabecafebabecafebabecafebabe"
+          assert identity["live_head"] == expected_live_head
           plan, sha = backend.validate_sealed_plan(
               root / "opt/pmkb/restore-plan.json",
               root / "opt/pmkb" / identity["image_name"], identity["plan_sha256"])

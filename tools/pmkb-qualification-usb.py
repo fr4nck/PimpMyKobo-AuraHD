@@ -135,6 +135,14 @@ def _is_sha256(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
 
 
+def _is_git_oid(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) in (40, 64)
+        and all(c in "0123456789abcdef" for c in value.lower())
+    )
+
+
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -166,6 +174,11 @@ def load_identity(path: Path) -> dict[str, Any]:
             raise QualificationError(f"identité Live incomplète: {key}")
     if not _is_sha256(data["image_sha256"]) or not _is_sha256(data["plan_sha256"]) or not _is_sha256(data["manifest_sha256"]):
         raise QualificationError("identité Live: empreinte SHA-256 invalide")
+    if int(data.get("schema", 1)) >= 2:
+        if data.get("candidate_head") != data["head"]:
+            raise QualificationError("identité Live: candidate_head et head divergent")
+        if not _is_git_oid(data.get("candidate_head")) or not _is_git_oid(data.get("live_head")):
+            raise QualificationError("identité Live: HEAD candidat/Live invalide")
     return data
 
 
@@ -516,7 +529,11 @@ def print_header(manifest: dict[str, Any], identity: dict[str, Any], *, language
     print("=" * 72)
     print(" PimpMyKobo — Aura HD E606C0 — FIRST BOOT #1 qualification")
     print("=" * 72)
-    print(f" HEAD       {identity['head']}")
+    candidate_head = identity.get("candidate_head", identity["head"])
+    live_head = identity.get("live_head")
+    print(f" CAND.HEAD  {candidate_head}")
+    if live_head:
+        print(f" LIVE.HEAD  {live_head}")
     print(f" CANDIDAT   {manifest['image_sha256']}")
     print(f" PLAN       {identity['plan_sha256']}")
     print(" Backends   restore-p1-linux.py + replace-microsd-linux.py")
