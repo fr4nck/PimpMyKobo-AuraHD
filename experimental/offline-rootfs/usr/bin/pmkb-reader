@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+[ -f /run/pmkb-ready ]
+/usr/bin/pmkb-check-offline
+export PRODUCT=dragon PLATFORM=ntx508
+export HOME=/tmp/pmkb KO_MULTIUSER=1
+export XDG_CONFIG_HOME=/tmp/pmkb/config XDG_DATA_HOME=/tmp/pmkb/data XDG_CACHE_HOME=/tmp/pmkb/cache
+export LANG=C LD_LIBRARY_PATH=/opt/koreader/libs:/lib
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
+cd /opt/koreader
+# /run/pmkb-ready only proves P3 mounted during rcS; it says nothing about
+# now. /proc/mounts is a live kernel view, not a cached marker, so this
+# re-check immediately before exec closes that gap: nothing below this
+# line can unmount P3.
+/usr/bin/pmkb-check-onboard
+# Bypass the stock launcher and all of its exit/reboot/Nickel paths.
+exec ./luajit reader.lua /mnt/onboard

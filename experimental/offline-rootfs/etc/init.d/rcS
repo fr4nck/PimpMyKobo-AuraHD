@@ -1,0 +1,37 @@
+#!/bin/sh
+# Experimental E606C0 init, never run on the development host.
+set -eu
+PATH=/bin:/sbin:/usr/bin
+export PATH
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs -o mode=0755 tmpfs /run
+mount -t tmpfs -o mode=1777 tmpfs /tmp
+mount -t tmpfs -o mode=0755 tmpfs /dev
+mkdir -p /dev/input /dev/pts
+mount -t devpts devpts /dev/pts
+echo '' > /proc/sys/kernel/hotplug
+# Cold-plug nodes only: no udev rules, firmware loader or module autoload.
+for entry in /sys/class/*/*/dev; do
+    [ -f "$entry" ] || continue
+    IFS=: read -r major minor < "$entry"
+    [ -n "$major" ] && [ -n "$minor" ]
+    case "$major:$minor" in *[!0-9:]*|:*) exit 1 ;; esac
+    parent=${entry%/dev}; name=${parent##*/}
+    kind=c; destination=/dev/$name
+    case "$entry" in /sys/class/block/*) kind=b ;; /sys/class/input/event*) destination=/dev/input/$name ;; esac
+    [ -e "$destination" ] || /bin/busybox mknod "$destination" "$kind" "$major" "$minor"
+done
+for node in 'null:3' 'zero:5' 'random:8' 'urandom:9'; do
+    name=${node%:*}; minor=${node#*:}
+    [ -e /dev/$name ] || /bin/busybox mknod /dev/$name c 1 "$minor"
+done
+/usr/bin/pmkb-check-offline
+[ -c /dev/fb0 ] && [ -c /dev/input/event0 ] && [ -c /dev/input/event1 ]
+[ -b /dev/mmcblk0p3 ]
+# The rootfs build guarantees this directory, but rcS must not depend on that
+# alone: create it here too so a differently assembled rootfs still mounts.
+mkdir -p /mnt/onboard
+# No fsck, archive installation, formatting or partition changes.
+mount -t vfat -o ro,noatime,nodiratime,utf8 /dev/mmcblk0p3 /mnt/onboard
+/bin/busybox touch /run/pmkb-ready

@@ -10,7 +10,7 @@ lecture seule.
 ## Entrées et exemple
 
 Il faut un manifeste `legacy/imported`, les fichiers pré-P1/P2 qu'il
-référence, une P1 reconstruite et son rapport `rebuild-rootfs`, une image
+référence, une P1 et son rapport `rebuild-rootfs` ou `build-koreader-rootfs`, une image
 disque locale complète et une destination nouvelle :
 
 ```bash
@@ -31,9 +31,12 @@ E606C0, SHA-256 pré-P1 et P2 identiques aux preuves. Il vérifie la taille et
 le SHA de la nouvelle P1, la référence au manifeste d'import, la cohérence
 du rapport de reconstruction et ses contrôles déclarés complets.
 
-Le rapport de reconstruction n'est pas signé. Le simulateur vérifie sa
-cohérence et les octets de P1, mais ne relance pas les contrôles filesystem
-et ne prouve pas que l'image démarrera sur la liseuse.
+Le rapport n'est pas signé. Pour `rebuild-rootfs`, le simulateur vérifie ses
+contrôles filesystem déclarés. Pour `build-koreader-rootfs`, il exige le
+contrat typé E606C0 (taille et SHA de P1, `complete=true`, aucune erreur,
+`physical_restore_eligible=false`, `hardware_qualified=false`) et relance
+`e2fsck -f -n` sur le fichier image local après comparaison des paramètres ext4 réels avec le rapport et la référence P2. Le rapport conserve le résultat de cette revalidation et `write_authorized=false`. Aucun des deux chemins ne prouve
+que l'image démarrera sur la liseuse.
 
 Après copie et remplacement, il relit P1 et compare son SHA à la nouvelle
 image. Il compare les SHA avant/après de la zone pré-P1, de P2, de P3 et de
@@ -50,6 +53,11 @@ La publication sans écrasement exige des liens physiques dans le dossier
 de destination. Si la publication du rapport échoue après celle de l'image,
 le résultat est `failed` ; l'image publiée a néanmoins passé les contrôles,
 et le rapport doit être conservé depuis la sortie JSON avant toute utilisation.
+
+Le plan inclut `candidate_source` avec l'outil producteur et le SHA-256 de son
+rapport; le backend Live accepte ces deux contrats explicitement et exige que
+le candidat embarqué corresponde exactement au plan. Le plan conserve
+`write_authorized=false` et `physical_restore_eligible=false`.
 
 Le succès produit `disk-simulation.img` et
 `disk-simulation.img.simulation.json`. Il ne constitue jamais une

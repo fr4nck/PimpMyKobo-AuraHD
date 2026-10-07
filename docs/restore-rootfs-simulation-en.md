@@ -12,7 +12,8 @@ python3 tools/restore-rootfs.py legacy-import.json rootfs.img.rebuild.json rootf
 ```
 
 Inputs are the explicit legacy manifest and its referenced prefix/P2 files,
-the rebuilt P1 and report, a complete local disk image and a new output path.
+the P1 and its `rebuild-rootfs` or `build-koreader-rootfs` report, a complete
+local disk image and a new output path.
 Native backup manifests are not supported by this first contract. Devices,
 Windows PhysicalDrive/UNC paths, resolved device aliases and non-regular
 inputs are rejected. There is no physical mode or bypass option.
@@ -20,13 +21,20 @@ inputs are rejected. There is no physical mode or bypass option.
 The simulator rereads legacy evidence and checks target MBR geometry, bounds
 within the disk-image size, E606C0 HWCONFIG, and pre-P1/P2 hashes. It verifies
 P1 length/hash, the report's reference to the legacy manifest, provenance
-and complete reported rebuild checks. Reports are unsigned: consistency is
-checked, but filesystem checks are not rerun and bootability is not proven.
+and complete reported checks. For `build-koreader-rootfs`, it requires the
+typed E606C0 contract (P1 size/hash, `complete=true`, no errors,
+`physical_restore_eligible=false`, `hardware_qualified=false`) and reruns
+`e2fsck -f -n` read-only on the local image. Reports are unsigned: consistency
+is checked, but report authenticity and bootability are not proven.
 
 After copying and replacing P1, it rereads its bytes and compares hashes of
 pre-P1, P2, P3 and **the entire suffix after P1**, including gaps and trailing
 bytes. Output length and the original disk-image hash must remain correct.
-Provenance and `physical_restore_eligible=false` are retained. Preserving P3
+The resulting plan records the producer tool and report hash in
+`candidate_source`; the Live backend accepts only the two explicit producer
+contracts and checks the candidate against the plan. The plan retains
+`write_authorized=false` and `physical_restore_eligible=false`. Provenance and
+`physical_restore_eligible=false` are retained. Preserving P3
 bytes does not otherwise qualify their contents.
 
 The full logical disk-image size must fit on the destination, even for a
@@ -45,3 +53,5 @@ exercises an actual synthetic import → ext4 rebuild → disk-image simulation.
 Separate prefix/P1/P2 backups are not a complete historical disk image:
 P3 contents and actual card capacity are unverified. A synthetic demo must
 be labeled accordingly, never treated as a real backup with invented P3.
+
+For PMKB candidates, actual ext4 parameters are compared with the typed producer report and preserved recovery reference before read-only e2fsck. The prepared plan binds `simulation_sha256` to the whole simulated image, records the filesystem validation and retains `write_authorized=false`. Sealing checks the exact plan SHA-256; it does not grant physical write approval.

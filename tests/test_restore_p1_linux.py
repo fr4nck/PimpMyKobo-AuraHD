@@ -263,6 +263,75 @@ class LinuxRestoreTests(unittest.TestCase):
         self.assertEqual([], self.writes)
 
 
+class SealedPlanTests(unittest.TestCase):
+    setUp = plan_fixtures.PrepareP1Tests.setUp
+    setup_plan = plan_fixtures.PrepareP1Tests.setup_plan
+
+    def fixture(self):
+        self.setup_plan()
+        result = plan_fixtures.prepare.prepare(*self.args)
+        self.assertEqual("prepared", result["status"], result)
+        return result
+
+    def test_sealed_plan_requires_exact_reviewed_hash_and_candidate(self):
+        plan_data = self.fixture()
+        plan_sha = legacy.digest(self.plan)
+        loaded, actual = mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+        self.assertEqual(plan_data, loaded)
+        self.assertEqual(plan_sha, actual)
+        with self.assertRaisesRegex(ValueError, "sealed plan SHA"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, "0" * 64)
+        original = self.rootfs.read_bytes()
+        self.rootfs.write_bytes(b"X" + original[1:])
+        with self.assertRaisesRegex(ValueError, "candidate image"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+
+    def test_sealed_live_path_delegates_to_common_physical_backend(self):
+        self.fixture()
+        plan_sha = legacy.digest(self.plan)
+        expected = {"status": "device_ready_read_only", "complete": True}
+        with mock.patch.object(mod, "_execute_physical_plan", return_value=expected) as common:
+            result = mod.execute_sealed_plan(
+                self.plan,
+                self.rootfs,
+                self.root / "unused-journal.jsonl",
+                expected_plan_sha256=plan_sha,
+                device=Path("/dev/sdz"),
+                check_device=True,
+                ack_linux_live=True,
+            )
+        self.assertEqual(expected, result)
+        self.assertEqual(1, common.call_count)
+        self.assertTrue(common.call_args.kwargs["check_device"])
+        self.assertFalse(common.call_args.kwargs["write_p1"])
+        self.assertEqual(Path("/dev/sdz"), common.call_args.kwargs["device"])
+
+    def test_sealed_plan_requires_whole_simulation_hash_and_producer(self):
+        original = self.fixture()
+        for key, value in (("simulation_sha256", "invalid"), ("candidate_source", None)):
+            changed = dict(original); changed[key] = value
+            self.plan.write_text(json.dumps(changed))
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+        for key in ("simulation_sha256", "candidate_source"):
+            changed = dict(original); changed.pop(key)
+            self.plan.write_text(json.dumps(changed))
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+
+    def test_sealed_plan_accepts_explicit_pmkb_candidate_source_contract(self):
+        plan_data = self.fixture()
+        plan_data["candidate_source"]["tool"] = "build-koreader-rootfs"
+        self.plan.write_text(json.dumps(plan_data))
+        plan_sha = legacy.digest(self.plan)
+        loaded, _ = mod.validate_sealed_plan(self.plan, self.rootfs, plan_sha)
+        self.assertEqual("build-koreader-rootfs", loaded["candidate_source"]["tool"])
+        plan_data["evidence_sha256"]["rootfs_report"] = "0" * 64
+        self.plan.write_text(json.dumps(plan_data))
+        with self.assertRaisesRegex(ValueError, "evidence hashes"):
+            mod.validate_sealed_plan(self.plan, self.rootfs, legacy.digest(self.plan))
+
+
 class FilesystemCheckTests(unittest.TestCase):
     def test_only_read_only_flags_are_passed_to_fsck(self):
         with tempfile.TemporaryDirectory() as temp:
