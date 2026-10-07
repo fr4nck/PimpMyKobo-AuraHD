@@ -117,6 +117,25 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 
 `build-koreader-rootfs.py` assemble un rootfs P1 expérimental à partir de la surcouche `experimental/offline-rootfs`, d'une version locale de KOReader et de composants runtime locaux (jamais committés). L'assemblage est multiplateforme et ne nécessite aucun outil Linux ; `--build` construit l'image ext4 et réutilise les fonctions de `rebuild-rootfs.py`, sous Linux uniquement. `scan_tree_for_nickel(root)` est le point d'entrée public destiné aux outils tiers (par exemple un futur `preflight-koreader` fusionné) qui analysent un répertoire déjà assemblé par cet outil. Voir [le contrat V1](../docs/build-koreader-rootfs-spec-fr.md).
 
+## `recover-live-bundle.py`
+
+Récupère le **bundle privé scellé** déjà embarqué dans un ancien Live PMKB, sans dépendre du poste qui l'a construit. La source est lue uniquement et peut être :
+
+- une racine Live déjà extraite/montée contenant `/opt/pmkb` ;
+- le fichier `live/filesystem.squashfs` de la clé/ISO Live.
+
+L'outil récupère uniquement le candidat P1, `candidate.json`, `restore-plan.json` et `BUILD-IDENTITY.json`, puis recalcule les SHA-256 et refuse toute incohérence. Les chemins `/dev/*` et périphériques bloc/caractère sont explicitement refusés.
+
+Exemple depuis Linux/WSL lorsque `filesystem.squashfs` est accessible comme fichier :
+
+```bash
+python3 tools/recover-live-bundle.py \
+  /chemin/vers/live/filesystem.squashfs \
+  ~/pmkb-recovered
+```
+
+Pour une source SquashFS, `unsquashfs` (paquet `squashfs-tools`) est requis. L'outil n'écrit que dans le répertoire de destination fourni et refuse de l'écraser s'il n'est pas vide.
+
 ## Tests
 
 La première restauration physique dispose d'un exécuteur Linux Live distinct : `restore-p1-linux.py`. Son mode par défaut vérifie uniquement les fichiers locaux. Voir [Français](../docs/restore-p1-linux-fr.md) / [English](../docs/restore-p1-linux-en.md) pour les refus, l'autorisation séparée et les limites.

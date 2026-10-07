@@ -65,7 +65,7 @@ Le builder :
 
 1. vérifie la taille et le SHA-256 du candidat ;
 2. valide le contrat du plan scellé et sa correspondance avec le candidat/manifest ;
-3. embarque l'interface PMKB, le backend physique unique et ses dépendances Python ;
+3. embarque l'interface PMKB, les deux backends physiques séparés et leurs dépendances Python ;
 4. embarque localement le candidat et le plan ;
 5. inscrit dans `BUILD-IDENTITY.json` les SHA-256 du manifest, du candidat et du plan, ainsi que deux identités Git distinctes : `candidate_head` pour l'image P1 figée et `live_head` pour le code du Live réellement embarqué ;
 6. refuse un checkout Git suivi modifié ;
@@ -74,6 +74,28 @@ Le builder :
 Le Live démarre l'interface texte PMKB automatiquement sur tty1. Avant toute saisie d'un périphérique `/dev/...`, l'opérateur choisit la langue de l'interface (français par défaut ou anglais) puis le clavier console. Le français/AZERTY est proposé par défaut ; tous les keymaps présents dans l'image peuvent être affichés et sélectionnés. Le menu permet ensuite de changer langue/clavier, de redémarrer ou d'éteindre proprement le PC. Il n'existe plus d'option « Quitter » laissant tty1 sur un curseur sans interface.
 
 Le menu GRUB de la clé utilise le visuel PMKB à la place du splash Debian d'origine lorsque le logo versionné est disponible.
+
+## Récupérer le candidat depuis un ancien Live
+
+Le candidat privé et le plan scellé sont déjà présents dans toute ancienne ISO/clé PMKB construite avec eux, sous `/opt/pmkb` dans le SquashFS du Live. Il n'est donc pas nécessaire de rallumer le poste de construction uniquement pour récupérer ces deux artefacts.
+
+L'outil `tools/recover-live-bundle.py` permet de les extraire depuis une racine Live ou directement depuis `live/filesystem.squashfs`. Il recalcule et croise :
+
+- la taille et le SHA-256 du candidat ;
+- le SHA-256 de `candidate.json` ;
+- le SHA-256 du plan scellé ;
+- les empreintes enregistrées dans `BUILD-IDENTITY.json` ;
+- les drapeaux du plan `write_authorized=false` et `physical_restore_eligible=false`.
+
+Il refuse les chemins `/dev/*` et n'effectue aucune lecture brute ni écriture sur une microSD.
+
+```bash
+python3 tools/recover-live-bundle.py \
+  /media/PMKB/live/filesystem.squashfs \
+  ~/pmkb-recovered
+```
+
+La reconstruction du nouveau Live doit ensuite réutiliser **exactement** le candidat et le plan ainsi récupérés ; le builder les revalidera de nouveau avant construction.
 
 ## Création de la clé USB sous Windows avec Rufus
 
