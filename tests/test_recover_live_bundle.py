@@ -74,6 +74,7 @@ class RecoverLiveBundleTests(unittest.TestCase):
             self.assertEqual(candidate, (destination / report["image_name"]).read_bytes())
             receipt = json.loads((destination / "RECOVERED-BUNDLE.json").read_text())
             self.assertEqual("recovered", receipt["status"])
+            self.assertEqual("valid", receipt["validation_status"])
             self.assertEqual("read_only", receipt["source_access"])
             self.assertEqual(1, receipt["identity_schema"])
 
