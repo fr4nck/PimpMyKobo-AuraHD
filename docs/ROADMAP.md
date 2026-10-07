@@ -2,223 +2,263 @@
 
 [Français](ROADMAP.fr.md) | **English**
 
-Snapshot: 3 October 2026, `feat/rebuild-rootfs-spec`. Implemented code is distinguished from real-hardware qualification; none of the statuses below authorizes physical writes.
+Snapshot: **6 October 2026**, integration reference `integration/pmkb-first-boot-1@27e33654626fb996398284d8ca683fd81737262c`.
 
-This roadmap keeps the project focused on one principle: **preserve first, modify only after the original device can be recovered**.
+Code implemented and tested on files is not equivalent to qualification on the real Kobo. **No physical write to a Kobo microSD has yet been performed in this workstream.** This roadmap grants no implicit write authorization.
 
-Status legend: **DONE** · **IMPLEMENTED** (hardware qualification pending where specified) · **IN PROGRESS** · **NEXT** · **PLANNED** · **EXPERIMENTAL**
+## Immediate objective
 
-## Current snapshot and next gates
+The priority milestone is no longer to restore P1 on the original microSD.
 
-| Milestone | Current evidence | Remaining gate |
+The normal target workflow is now:
+
+**original microSD read-only → capture PRE-P1 + P2 → remove original → build a new PMKB microSD → reread and verify → hardware FIRST BOOT on the Aura HD.**
+
+The original microSD must remain untouched and be kept as the hardware backup.
+
+The immediate finish line is simple:
+
+**build a new microSD, install it in the Aura HD, and finally qualify the real first boot.**
+
+## Current state
+
+| Stage | Actual state | Remaining gate |
 |---|---|---|
-| Legacy import | Implemented; actual pre-P1/P2 files qualified | Association remains declared; no native manifest fabricated |
-| Full development-card backup | New read-only acquisition; full copy and second source read agree | Task-local acquisition is not the native backup tool |
-| Offline P1 reconstruction | Actual image checked for filesystem, metadata, contents, links and hashes | Bootability untested |
-| Full-image simulation | Actual backup copied; rebuilt P1 inserted; all regions outside P1 preserved | Local files only |
-| Native Linux Live P1 executor | Implemented; synthetic failures and bounded writes tested | Hardware locking/ioctl, restore and boot qualification pending |
-| Installable CLI | `pmkb` 0.2.0, local `.deb`, extracted launcher verified; 150 Linux tests (5 Qt skipped without optional dependency) and Linux/Windows CI | APT installation on the reference Live environment pending |
-| Qt/PySide6 interface | First local workshop implemented and tested | Optional Qt; no physical restoration; see [GUI](gui-en.md) |
+| PMKB FIRST BOOT #1 P1 candidate | **FROZEN / software-qualified** — 268,435,968 bytes, SHA-256 `7980fec15cb62ca3c2cabcb64cbbb683446fbf64070d75b45acf9a5e99e0f67c` | Hardware boot not attempted |
+| Reference PRE-P1 / HWCONFIG | **Qualified** | Must be reread from the real donor during creation |
+| Reference P2 / recoveryfs | **Qualified** — SHA-256 `fe7885d391a5627cf2b04bd75518cf8fb5b0f379b29032727adb29cba35b968a` | Must be reread from the real donor during creation |
+| Replacement backend `replace-microsd-linux.py` | **Implemented and merged** via PR #16 | Real write to replacement media not qualified |
+| Original donor | **Read-only** contract implemented | Real hardware read in the new workflow pending |
+| Live staging | PRE-P1 + P2 only, about 278 MiB; one card reader is enough | Must be exercised on the real Live |
+| New P3 | FAT32 `KOBOeReader`, sized from target capacity | Real Kobo mount not qualified |
+| Live UX | French/English, AZERTY, replacement-first flow, textual progress | Operator report should become clearer in a single screen |
+| Live identity | **Merged via PR #17** — separate `candidate_head` / `live_head`, CI #130 green | The new real Live must now be rebuilt from this reference |
+| PC boot of an older PMKB Live | **Observed** up to the PMKB menu | New Live containing replacement flow must be rebuilt and requalified |
+| Aura HD FIRST BOOT | **UNQUALIFIED** | Boot, display, touch, frontlight, P3, USB/Calibre |
 
-Next gates, in order:
+See [replacement microSD](remplacement-microsd-fr.md), [qualification USB](qualification-usb-fr.md), and [FIRST BOOT](pmkb-first-boot-1-en.md).
 
-1. Prepare a native Linux Live reference environment, validate CLI installation and access to evidence on persistent storage. Creating a Live USB also requires authorization before writing any physical support.
-2. Identify the card explicitly and run the exclusive **read-only** full-target comparison. Refine/document the return-to-original-P1 procedure before the first write; automatic rollback is not implemented.
-3. Review the exact target, P1 bounds and plan; obtain separate explicit human authorization. Only then perform the first bounded P1 restore, verify all preserved regions, and test boot on the Kobo. Failed or interrupted operations require review, not automatic retries.
-4. Qualify the first Qt/PySide6 local workshop on operator environments. Reuse the CLI/backend checks; keep physical writing out of the first GUI. This local-only work can proceed while hardware qualification awaits the operator.
-5. Integrate the native backup lane and qualify the end-to-end workflow on other Aura HD units; choose the project's own-code license before planning a public packaged release.
-6. Start the liberation layer once the actual rescue and return-to-original workflow is proven.
+## 1. Align and freeze the preparation Live
 
-See [CLI installation](cli-install-en.md), [local simulation](restore-rootfs-simulation-en.md) and [native Linux Live restore](restore-p1-linux-en.md).
+Before touching any real microSD:
 
-## 1. Rescue and read-only inspection — DONE
+1. start from the qualified Live reference delivered by PR #17, with separate candidate-P1 and Live-code identities;
+2. rebuild the ISO from a clean Git checkout of that exact reference;
+3. retain the produced ISO SHA-256;
+4. verify the candidate, backends, manifest, plan and build identity inside the ISO;
+5. keep the main operator interface on **one screen**: progress, essential results and readable errors in one place;
+6. present analyses as `OK / ERROR / TO TEST`, with technical details available without requiring another console;
+7. version useful graphical source material and its provenance in Git; displaying illustrations in the Live is a refinement, not a safety prerequisite.
 
-Goal: understand an Aura HD E606C0 without modifying it.
+No complex graphical effects or animations are required for FIRST BOOT #1.
 
-- identify HWCONFIG v1.7 / PCB 28 / E606C0;
-- parse and validate the MBR and P1/P2/P3 geometry;
-- identify `rootfs`, `recoveryfs` and `KOBOeReader`;
-- inspect physical media with read-only source access;
-- validate factory recovery archives and E606C0 artifacts;
-- expose read/access failures instead of silently treating them as a non-Kobo;
-- support Windows sector-aligned reads;
-- document host-OS write risks and preservation precautions;
-- maintain synthetic tests and Linux/Windows CI.
+## 2. Make the exact P1 candidate available
 
-The read-only foundation is qualified independently from future restore code.
+The replacement flow can recapture PRE-P1 and P2 from the original microSD, but **not the PMKB P1 candidate**.
 
-## 2. Verified backup — IN PROGRESS
+The real Live therefore requires exactly:
 
-Goal: create a verifiable local copy before any physical write is authorized.
+- `PMKB-FIRST-BOOT-1-0b00d858.img`
+- size: `268435968`
+- SHA-256: `7980fec15cb62ca3c2cabcb64cbbb683446fbf64070d75b45acf9a5e99e0f67c`
 
-`backup-aura-hd` is developed separately from the rebuild work.
+This artifact may come from the existing private build or from a previous private Live containing it, provided its SHA-256 is verified.
 
-This branch already qualifies historical local files through an explicit `legacy/imported` contract. A complete backup of the development card was also acquired and reread using a task-local read-only acquisition script. Neither is a native `backup-aura-hd` manifest; native backup integration remains a separate gate.
+## 3. Build and boot the new real Live
 
-V1 target:
+1. build the PMKB ISO with the exact candidate and sealed plan;
+2. verify its SHA-256;
+3. write the ISO to the qualification USB stick, never to a Kobo microSD;
+4. boot the laptop into native Linux Live;
+5. verify PMKB startup, French/AZERTY if selected, and displayed candidate/Live identities.
 
-- positively identify E606C0 before copying;
-- save the pre-P1 boot/HWCONFIG area;
-- save P1 `rootfs`;
-- save P2 `recoveryfs`;
-- make P3/user data opt-in because of its size;
-- SHA-256 source ranges and destination files;
-- produce `backup-manifest.json`;
-- produce a stable target fingerprint independent of names such as `/dev/sdX` or `PhysicalDriveN`;
-- never open the source for writing.
+The earlier successful PC boot only proves that this Live family can boot on that laptop; it does not qualify the new ISO.
 
-A backup is not considered usable merely because files were created: required components must be verified.
+## 4. Read the original microSD — strictly read-only
 
-## 3. Offline rootfs rebuild — DONE for local construction
+Normal workflow:
 
-Goal: produce a new P1 image without touching physical media.
+1. choose **Create / repair a new PMKB microSD**;
+2. insert the original microSD;
+3. explicitly enter the whole disk, for example `/dev/sdb`;
+4. verify removable USB media, 512-byte logical sectors, geometry and Aura HD E606C0 identity;
+5. reread and verify PRE-P1 / HWCONFIG;
+6. reread and verify P2 / recoveryfs;
+7. stage only:
+   - PRE-P1: about 9.5 MiB;
+   - P2: 256 MiB;
+   - capture manifest.
 
-The local-files-only construction boundary is implemented and has been exercised on the actual recovery files. This proves local image construction, not successful boot.
+The original card is opened read-only. **No write to it is required in this workflow.**
 
-Implemented checks and operations:
+The staging fits in RAM; one card reader is sufficient.
 
-- validate the native backup contract or explicitly accept the separate qualified legacy contract;
-- verify the local P2 copy against its recorded size and SHA-256;
-- validate the recovery content;
-- create a new P1 image with exactly the geometry recorded in the backup;
-- safely extract the factory root filesystem without archive traversal;
-- validate the resulting filesystem and file manifest;
-- hash the final image;
-- produce a `.rebuild.json` report with provenance and verification results.
+## 5. Remove and preserve the original
 
-`rebuild-rootfs` must reject physical/block-device paths. It has no authority to restore anything.
+After successful capture:
 
-## 4. Rebuilt-image validation — DONE for offline checks
+1. physically remove the original microSD;
+2. store it as the hardware backup;
+3. do not depend on it during target writing.
 
-Goal: make a reconstructed image independently auditable before it can be written anywhere.
+The donor must not need to remain present while the replacement target is written.
 
-Implemented offline gates include:
+## 6. Prepare the replacement microSD
 
-- exact P1 size;
-- filesystem structural check;
-- expected content/manifests;
-- critical permissions and links where applicable;
-- SHA-256 of the final image;
-- provenance back to the verified inputs; native fingerprint where applicable, explicit declared association for legacy inputs;
-- explicit incomplete/failed states.
+1. insert another microSD;
+2. explicitly enter its whole-disk path;
+3. verify it is removable, USB, unused and large enough;
+4. reject a target that looks like the donor;
+5. calculate P3 from actual target capacity;
+6. display target capacity, future P3 size and exact plan;
+7. bind the plan to this target's identity and fingerprint;
+8. require the exact destructive confirmation.
 
-A historical SHA-256 from one successful manual rebuild is evidence, not a universal expected hash: filesystem metadata can legitimately make independently rebuilt images differ bit-for-bit.
+Fixed system geometry:
 
-The actual full-image simulation also preserves the boot prefix, P2, P3, gaps and trailing bytes. Legacy provenance and `physical_restore_eligible=false` remain unchanged. Bootability and P3 filesystem health are not qualified by these checks.
+- PRE-P1: offset 0, size 9,961,472;
+- P1: offset 9,961,472, size 268,435,968;
+- P2: offset 278,397,440, size 268,435,968;
+- P3 starts at 546,833,408.
 
-## 5. Guarded P1 restore — IMPLEMENTED; hardware qualification NEXT
+The current contract reserves at least 1 GiB for P3, making the theoretical minimum total capacity about 1.51 GiB. **Target capacity does not need to match donor capacity, and no particular commercial card size must be hard-coded.** Any target whose real capacity satisfies the active device profile may be prepared; hardware compatibility across capacities remains to be qualified on the Aura HD.
 
-Goal: restore only after backup, rebuild and validation are proven.
+## 7. Build the new card
 
-`restore-p1-linux.py` is isolated from earlier tools. Its default checks local files; its exclusive read-only device mode and physical write mode are separate. WSL/Windows physical access is refused. No physical restore has yet been performed in this development workflow.
+Only after confirmation:
 
-Implemented constraints:
+1. write donor PRE-P1, changing only the MBR P3 length for target capacity;
+2. write P1 with the frozen PMKB candidate;
+3. write P2 bit-for-bit from staging;
+4. create FAT32 P3 labeled `KOBOeReader`.
 
-- no automatic disk selection;
-- positively identify an Aura HD E606C0;
-- recompute the entire target's SHA-256 before writing and require equality with the verified full backup;
-- keep the legacy contract unchanged; record contemporary physical comparison and operator intent separately;
-- verify expected MBR geometry and P1 bounds;
-- default to P1 only;
-- preserve pre-P1, P2 and P3 unless a future separately designed operation explicitly says otherwise;
-- require explicit human confirmation containing target identity, operation and affected range;
-- re-check the target after confirmation and immediately before the first write;
-- abort on ambiguity or device change;
-- write only the bounded P1 byte range;
-- flush, reread and verify the written data;
-- produce a restore report.
+Long operations show textual progress, for example:
 
-Additional Linux gates include whole removable USB media, unmounted partitions, no active swap/holders, native 64-bit Linux, kernel-exclusive access, persistent journal storage, a staged P1 checked read-only with e2fsck, durable original-P1 capture, durable write intent, cache invalidation and rereading the entire complement of P1. The confirmation token is bound to the reviewed plan SHA-256, with an explicit device and write operation.
+`Original P2 recovery read: 72% (184.3/256.0 MiB, 18.4 MiB/s)`
 
-Hardware behavior of exclusive locking/ioctl remains unqualified until an authorized Live operation. Original P1 and the full backup are retained for recovery, but automatic rollback is not implemented. A separate reviewed return procedure is required; no convenience bypass is planned.
+No automatic retry and no implicit automatic rollback.
 
-No implementation should weaken these gates merely to make restoration easier.
+## 8. Reread and qualify the new card before the Kobo
 
-## 6. Liberation layer — LOCAL PROTOTYPE; hardware pending
+Creation succeeds only if post-write checks pass:
 
-Goal: move from “recoverable Kobo” to a useful Aura HD whose software can be maintained without depending blindly on Kobo's historical recovery path.
+- PRE-P1 reread and matches;
+- P1 reread with expected SHA-256;
+- P2 reread with expected SHA-256;
+- MBR and geometry valid;
+- P3 FAT32 valid;
+- `KOBOeReader` label valid.
 
-Possible work includes:
+Operator reporting must clearly distinguish:
 
-- define what “liberated” means technically for E606C0;
-- separate Kobo-proprietary material from redistributable PMKB tooling;
-- make modifications reproducible from files legally obtained from the user's own device;
-- preserve a documented route back to the verified original backup;
-- evaluate alternative reader/user environments and boot-time customisation without sacrificing recovery.
+- **OK**: demonstrated by read/check;
+- **ERROR**: invalid or interrupted operation;
+- **TO TEST**: depends on Kobo hardware and cannot be inferred from the card alone.
 
-Local-only research and an experimental direct-KOReader rootfs are authorized; see [offline liberation](offline-liberation-en.md). Physical restoration authorization is withdrawn. Hardware trials remain gated; the earlier restore evidence does not qualify this new image.
+A partially written target remains disposable/rebuildable. After a failure, diagnose and rebuild the target; the original stays untouched.
 
-`build-koreader-rootfs` assembles that prototype overlay with a local KOReader release and local runtime components (never committed) into one verifiable manifest, flags path/file collisions and a bounded set of unintended Nickel references, and — Linux-only — builds and offline-validates an actual ext4 P1 image from it, reusing `rebuild-rootfs`'s ext4 construction and verification; see [the V1 contract](build-koreader-rootfs-spec-en.md). It still needs to be exercised against a real KOReader release and real local runtime components, not only synthetic fixtures, before any hardware trial is proposed.
+## 9. Hardware FIRST BOOT on the Aura HD
 
-Cross-checked against `feat/audit-arm-runtime`'s offline bootstrap/storage audit (parallel branch, not merged here): three defects it found in the prototype itself (scripts tracked without the execute bit, `rcS` not creating `/mnt/onboard` before mounting it, `pmkb-reader` not re-checking the mount before launch) are fixed on this branch; a local-only scratch merge (never pushed) confirmed the builder's output already works as `audit-arm-runtime`'s input, and fixed a permanent false positive in its Nickel-reference reuse of this builder's scanner (`scan_tree_for_nickel`, not yet adopted on the other branch). See the V1 contract's "Relationship to other in-flight work" section for detail.
+Install the new card and explicitly qualify:
 
-## 7. Reproducible rescue for other Aura HD units — PLANNED
+1. real boot;
+2. framebuffer / E-Ink display;
+3. KOReader launch;
+4. touch;
+5. frontlight;
+6. P3 mount at `/mnt/onboard`;
+7. book/file access;
+8. USB / Calibre;
+9. stability after reboot.
 
-Goal: make the project useful beyond the development device.
+Until exercised on the real device, these remain **UNQUALIFIED**.
 
-- FR/EN end-to-end documentation;
-- device → inspect → backup → verify → rebuild → validate → guarded restore workflow;
-- clear diagnostics for hardware variants and unsupported layouts;
-- no publication of proprietary firmware, recovery images or dumps;
-- tests remain synthetic and redistributable;
-- recovery procedures remain useful even when the liberation layer is not wanted.
+Hardware results must be tied to the P1 candidate SHA, Live commit, constructed-card identity and session report.
 
-## 8. Installable CLI, Qt interface and retro extras
+## 10. The 31.9 GB full-card backup is no longer a prerequisite
 
-The `pmkb` CLI and local Debian/Ubuntu/WSL package are implemented. Installing the package does not access devices or run restoration. The first optional Qt/PySide6 local workshop is implemented; see [GUI instructions](gui-en.md).
+The existing full backup remains useful as a cold archive, especially as an exact snapshot of the old P3 and user data.
 
-For the first GUI:
+The replacement workflow does not depend on it:
 
-- select local evidence and display qualification status and provenance;
-- invoke the existing local reconstruction and simulation operations;
-- expose reports, errors and progress without rewriting safety logic;
-- use the same command arguments and JSON contracts;
-- exclude physical writes from the first version; their future UI needs separate design and hardware qualification.
+- PRE-P1 can be recaptured from the original;
+- P2 can be recaptured from the original;
+- P3 is recreated;
+- PMKB P1 comes from the frozen candidate.
 
-Later refinements, once the core workflow is dependable:
+Target policy:
 
-- friendlier CLI progress and diagnostics;
-- improve the GUI without duplicating device logic;
-- PMKB visual identity and retro-themed presentation;
-- optional Easter eggs such as Ikari Mode, kept completely outside safety-critical paths.
+- keep the original microSD intact;
+- keep hashes, manifests, scripts, documentation and small source assets in Git;
+- keep large dumps as optional cold archives, not as a 24/7 service dependency;
+- do not synchronize 31.9 GB merely to make the normal workflow possible.
 
-An Easter egg must never alter device detection, backup validation, fingerprints, restore confirmation or write boundaries.
+## 11. P1 restoration on the original remains a separate advanced contract
+
+`restore-p1-linux.py` remains available.
+
+Its historical contract stays strict:
+
+- target = known original card;
+- whole card equals the qualified backup;
+- only P1 may be written;
+- everything outside P1 must remain unchanged.
+
+This is an advanced recovery path, **not the normal repair workflow**.
+
+It must never be weakened to accept arbitrary replacement cards; full replacement belongs to `replace-microsd-linux.py`.
+
+## 12. Only after FIRST BOOT — PMKB product phase
+
+Product work must not delay the first hardware boot.
+
+After FIRST BOOT is qualified:
+
+- stabilize KOReader as V1;
+- design the PMKB e-ink launcher;
+- organize Books / Apps / Games / Store / Web / Notes / Recipes / Settings;
+- continue lightweight applications, network/diagnostic tools, PDA functions, offline cards and other planned capabilities;
+- keep optional services non-resident when unused;
+- then study two-panel split mode and interface refinements;
+- keep retro themes, Ikari Mode and other Easter eggs outside all safety paths.
+
+## 13. Then make rescue reproducible on other Aura HD units
+
+After success on the development device:
+
+- qualify the same workflow on other E606C0 units;
+- document unsupported hardware variants and geometries;
+- retain synthetic tests and FR/EN documentation;
+- publish no private dumps, recovery images or firmware;
+- separately decide what can become a lightweight public distribution.
 
 ## Architecture invariant
 
-The intended pipeline is deliberately segmented:
+The primary workflow must remain segmented:
 
 ```text
-physical Aura HD
+original microSD
       |
       | read only
       v
-inspect -> verified backup
-                 |
-                 | local files only
-                 v
-          offline rebuild
-                 |
-                 v
-          image validation
-                 |
-                 | explicit guarded operation only
-                 v
-             P1 restore
+PRE-P1 + P2 + E606C0 identification
+      |
+      | Live staging (~278 MiB)
+      v
+remove original
+      |
+      v
+explicitly selected replacement microSD
+      |
+      | plan + destructive confirmation
+      v
+PRE-P1 + PMKB P1 + P2 + FAT32 P3
+      |
+      | reread / verification
+      v
+FIRST BOOT on Aura HD
 ```
 
-**Backup → offline rebuild → validation → guarded write.**
+**Read the original → remove it → build another card → reread → test hardware.**
 
-There must never be a convenience path that silently collapses those stages into an unverified “fix my Kobo” write operation.
-
-## Current development lanes
-
-- Read-only inspection/recovery verification: qualified foundation.
-- `backup-aura-hd`: separate native backup lane, not qualified on this branch.
-- `rebuild-rootfs`: implemented local-only construction and offline validation.
-- `restore-rootfs`: implemented local full-image simulator, no physical mode.
-- `restore-p1-linux`: implemented separate native Live executor; hardware qualification and physical launch pending.
-- `pmkb`: implemented installable CLI; optional Qt/PySide6 local workshop implemented.
-- `build-koreader-rootfs`: implemented local assembly/offline validation of the direct-KOReader rootfs; `--build` ext4 construction is Linux-only and still untested against real KOReader/runtime inputs.
-
-Parallel development is welcome when branches do not weaken or bypass the interfaces and safety boundaries between these lanes.
+No button, shortcut or interface improvement may turn this chain into an implicit write to the original card.
