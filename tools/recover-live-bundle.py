@@ -181,9 +181,10 @@ def copy_bundle(bundle_dir: Path, destination: Path, report: dict[str, Any]) -> 
     receipt.write_text(
         json.dumps(
             {
+                **copied,
+                "validation_status": copied["status"],
                 "status": "recovered",
                 "source_access": "read_only",
-                **copied,
             },
             indent=2,
             ensure_ascii=False,
