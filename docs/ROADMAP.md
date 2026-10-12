@@ -134,7 +134,7 @@ Hardware behavior of exclusive locking/ioctl remains unqualified until an author
 
 No implementation should weaken these gates merely to make restoration easier.
 
-## 6. Liberation layer — PLANNED
+## 6. Liberation layer — LOCAL PROTOTYPE; hardware pending
 
 Goal: move from “recoverable Kobo” to a useful Aura HD whose software can be maintained without depending blindly on Kobo's historical recovery path.
 
@@ -146,7 +146,7 @@ Possible work includes:
 - preserve a documented route back to the verified original backup;
 - evaluate alternative reader/user environments and boot-time customisation without sacrificing recovery.
 
-This phase starts only after the restore safety model is proven on real hardware.
+Local-only research and an experimental direct-KOReader rootfs are authorized; see [offline liberation](offline-liberation-en.md). Physical restoration authorization is withdrawn. Hardware trials remain gated; the earlier restore evidence does not qualify this new image.
 
 ## 7. Reproducible rescue for other Aura HD units — PLANNED
 

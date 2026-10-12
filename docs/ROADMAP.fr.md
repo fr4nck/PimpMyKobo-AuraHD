@@ -56,8 +56,10 @@ La première interface n'effectue pas de restauration physique. Voir [l’atelie
 - Choisir la licence du code propre au projet avant de planifier une distribution publique du paquet.
 - Garder les tests synthétiques et la documentation FR/EN ; ne publier aucun dump ou firmware privé.
 
-## 5. Libérer la Kobo — après sauvetage et retour arrière éprouvés
+## 5. Libérer la Kobo — prototype local en cours, matériel en attente
 
+- Direction validée : démarrage direct de KOReader, sans interface/services Kobo ; réseau refusé au lancement hors loopback. Voir [le prototype autonome](offline-liberation-fr.md).
+- L’autorisation de restauration physique est retirée ; les anciens plans ne qualifient pas la nouvelle image.
 - Documenter et extraire la waveform E-Ink de manière reproductible.
 - Compiler les références U-Boot/kernel et qualifier les contraintes E606C0.
 - Construire un userspace minimal maintenable puis intégrer KOReader.

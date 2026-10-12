@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "scope": "synthetic_metadata_only",
+  "cases": [
+    {
+      "file": "minimal.json",
+      "expected_status": "coherent",
+      "expected_error": null,
+      "expected_touch": "class/input/event5"
+    },
+    {
+      "file": "touch-event1.json",
+      "expected_status": "coherent",
+      "expected_error": null,
+      "expected_touch": "class/input/event1"
+    },
+    {
+      "file": "touch-event17.json",
+      "expected_status": "coherent",
+      "expected_error": null,
+      "expected_touch": "class/input/event17"
+    },
+    {
+      "file": "framebuffer-present-unverified.json",
+      "expected_status": "coherent",
+      "expected_error": null,
+      "expected_touch": "class/input/event5"
+    },
+    {
+      "file": "touch-missing.json",
+      "expected_status": "refused",
+      "expected_error": "touch_identity_ambiguous_or_missing",
+      "expected_touch": null
+    },
+    {
+      "file": "touch-ambiguous.json",
+      "expected_status": "refused",
+      "expected_error": "touch_identity_ambiguous_or_missing",
+      "expected_touch": null
+    },
+    {
+      "file": "ntx-missing.json",
+      "expected_status": "refused",
+      "expected_error": "missing_file",
+      "expected_touch": null
+    },
+    {
+      "file": "invalid-dev.json",
+      "expected_status": "refused",
+      "expected_error": "invalid_dev",
+      "expected_touch": null
+    },
+    {
+      "file": "dev-collision.json",
+      "expected_status": "refused",
+      "expected_error": "duplicate_dev",
+      "expected_touch": null
+    },
+    {
+      "file": "fabricated-ready.json",
+      "expected_status": "refused",
+      "expected_error": "unsupported_path",
+      "expected_touch": null
+    },
+    {
+      "file": "duplicate-root-key.json",
+      "expected_status": "refused",
+      "expected_error": "duplicate_json_key",
+      "expected_touch": null
+    },
+    {
+      "file": "duplicate-record-key.json",
+      "expected_status": "refused",
+      "expected_error": "duplicate_json_key",
+      "expected_touch": null
+    }
+  ]
+}

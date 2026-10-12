@@ -439,7 +439,10 @@ class LinuxDestinationDetectionTests(unittest.TestCase):
             (slaves / slave.rsplit("/", 1)[1]).symlink_to(self.sys / "devices" / slave)
         self.dest = self.root / "dest"
         self.dest.mkdir()
-        self.patches = [mock.patch.object(backup, "SYSFS", str(self.sys))]
+        mountinfo = self.root / "empty-mountinfo"
+        mountinfo.write_text("", encoding="utf-8")
+        self.patches = [mock.patch.object(backup, "SYSFS", str(self.sys)),
+                        mock.patch.object(backup, "MOUNTINFO", str(mountinfo))]
         for patch in self.patches:
             patch.start()
 
