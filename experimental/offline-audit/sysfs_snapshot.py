@@ -1,4 +1,5 @@
 """Validate synthetic sysfs metadata only; no filesystem or device access."""
+import json
 import re
 
 EVENT = r"event(?:0|[1-9][0-9]{0,3})"
@@ -128,3 +129,40 @@ def validate_snapshot(snapshot):
     except SnapshotError as error:
         report["errors"].append(error.detail)
     return report
+
+
+MAX_JSON_CHARACTERS = 128 * 1024
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        _require(key not in result, "duplicate_json_key")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value):
+    raise SnapshotError("invalid_json")
+
+
+def validate_snapshot_json(text):
+    """Decode an already supplied JSON string, without opening any file.
+
+    Unlike json.loads defaults, reject duplicate object keys and non-JSON
+    constants before information can disappear into a Python dictionary.
+    """
+    try:
+        _require(type(text) is str and len(text) <= MAX_JSON_CHARACTERS,
+                 "invalid_json_text")
+        snapshot = json.loads(text, object_pairs_hook=_unique_object,
+                              parse_constant=_reject_constant)
+    except SnapshotError as error:
+        report = validate_snapshot(None)
+        report["errors"] = [error.detail]
+        return report
+    except (ValueError, RecursionError):
+        report = validate_snapshot(None)
+        report["errors"] = [{"code": "invalid_json"}]
+        return report
+    return validate_snapshot(snapshot)

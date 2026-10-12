@@ -11,8 +11,9 @@ CLI, création de nœuds ou intégration au boot n'est fourni.
 Un snapshot est un document JSON ordinaire contenant les textes de fichiers
 sysfs **synthétiques**. Les chemins sont des identifiants relatifs, jamais des
 chemins à ouvrir. Les liens sysfs sont représentés par les textes des attributs
-ciblés : aucun lien symbolique n'est suivi. Le consommateur lui fournit le
-document déjà chargé en mémoire.
+ciblés : aucun lien symbolique n'est suivi. La fonction validate_snapshot reçoit le document déjà chargé en mémoire.
+Pour partir du texte JSON, utiliser validate_snapshot_json(text) : elle décode
+une chaîne déjà fournie sans ouvrir de fichier.
 
 ```json
 {
@@ -111,3 +112,41 @@ Ces commandes ne sont pas une procédure d'essai matériel. Le premier essai
 autorisé devra encore confirmer la géométrie et les rafraîchissements E-Ink,
 les coordonnées et réponses tactiles, puis la gradation/extinction du frontlight.
 Watchdog, veille, USB et absence de trafic ne sont pas certifiés ici.
+
+## Lecture JSON stricte et fixtures versionnées
+
+L'audit du lot initial n'a pas trouvé de divergence avec les contrôles documentés
+sur le dictionnaire en mémoire. Il a démontré une perte d'information en amont :
+json.loads ordinaire retient la dernière valeur d'une clé répétée. Un texte avec
+schema_version=0 puis schema_version=1, ou un dev invalide puis valide dans le
+même record, peut ainsi devenir un dictionnaire accepté par validate_snapshot.
+
+La nouvelle entrée pure validate_snapshot_json(text) refuse les clés JSON
+dupliquées à tous les niveaux (duplicate_json_key), NaN/Infinity, la syntaxe
+invalide et les textes de plus de 131072 caractères. Elle ne lit aucun chemin.
+La limite porte sur des caractères de la chaîne Python, pas sur des octets ou
+sur une taille de fichier. Une profondeur faisant échouer le décodeur est
+rapportée comme invalid_json ; ce n'est pas une politique de collecte live.
+
+validate_snapshot reste disponible pour les dictionnaires déjà chargés. Elle ne
+peut pas reconstituer les clés effacées par un décodeur précédent : ne pas lui
+attribuer cette garantie. Utiliser l'entrée JSON stricte pour les fixtures texte.
+
+Les douze fixtures sont dans tests/fixtures/sysfs-v1 ; cases.json donne leurs
+résultats attendus, indépendamment du contrôle. Les tests lisent uniquement ces
+fichiers ordinaires versionnés et utilisent le décodeur strict. Les cas de
+doublons JSON sont intentionnels et ne doivent pas être « nettoyés » par un
+formateur qui garderait seulement la dernière valeur.
+
+framebuffer-present-unverified.json reprend volontairement les mêmes attributs
+que minimal.json : aucun champ du snapshot ne prouve hw_ready. Son résultat
+coherent doit conserver hardware_verified=false, boot_qualified=false et la
+disponibilité de l'écran dans unverified.
+
+Les fixtures sont des exemples construits, jamais des relevés de l'Aura HD.
+Les nombres et les noms plausibles ne prouvent ni un binding driver ni la
+complétude du snapshot. La correspondance numéro input/driver reste hors v1 ;
+l'ajouter exigerait une preuve source et une évolution documentée du contrat.
+
+La [spécification du futur démarrage](offline-startup-spec-fr.md) distingue ces
+contrôles de données des préconditions matérielles encore non qualifiées.

@@ -162,3 +162,96 @@ class SyntheticSysfsTests(unittest.TestCase):
              patch.object(subprocess, "run", side_effect=AssertionError("run")):
             self.assertTrue(MOD.validate_snapshot(fixture())["snapshot_coherent"])
             self.assert_refused(None, "invalid_schema")
+
+
+    def test_versioned_json_fixtures_have_expected_reports(self):
+        directory = ROOT / "tests/fixtures/sysfs-v1"
+        manifest = json.loads((directory / "cases.json").read_text(encoding="utf-8"))
+        expected_files = {
+            "minimal.json", "touch-event1.json", "touch-event17.json",
+            "framebuffer-present-unverified.json", "touch-missing.json",
+            "touch-ambiguous.json", "ntx-missing.json", "invalid-dev.json",
+            "dev-collision.json", "fabricated-ready.json",
+            "duplicate-root-key.json", "duplicate-record-key.json",
+        }
+        self.assertEqual(1, manifest["schema_version"])
+        self.assertEqual("synthetic_metadata_only", manifest["scope"])
+        names = [case["file"] for case in manifest["cases"]]
+        self.assertEqual(len(expected_files), len(names))
+        self.assertEqual(expected_files, set(names))
+        self.assertEqual(expected_files | {"cases.json"},
+                         {p.name for p in directory.glob("*.json")})
+        for case in manifest["cases"]:
+            with self.subTest(file=case["file"]):
+                text = (directory / case["file"]).read_text(encoding="utf-8")
+                result = MOD.validate_snapshot_json(text)
+                self.assertEqual(case["expected_status"], result["status"])
+                self.assertFalse(result["hardware_verified"])
+                self.assertFalse(result["boot_qualified"])
+                self.assertFalse(result["physical_restore_eligible"])
+                self.assertEqual("synthetic_metadata_only", result["scope"])
+                self.assertIn("framebuffer_driver_binding_and_panel_readiness",
+                              result["unverified"])
+                if case["expected_status"] == "coherent":
+                    self.assertTrue(result["snapshot_coherent"])
+                    self.assertEqual([], result["errors"])
+                    self.assertEqual(case["expected_touch"],
+                                     result["identified"]["touch"]["sysfs_path"])
+                else:
+                    self.assertFalse(result["snapshot_coherent"])
+                    self.assertEqual({}, result["identified"])
+                    self.assertEqual(case["expected_error"],
+                                     result["errors"][0]["code"])
+
+    def test_duplicate_json_keys_are_not_silently_overwritten(self):
+        directory = ROOT / "tests/fixtures/sysfs-v1"
+        for name in ("duplicate-root-key.json", "duplicate-record-key.json"):
+            with self.subTest(file=name):
+                text = (directory / name).read_text(encoding="utf-8")
+                # Demonstrate the information loss in an ordinary JSON reader.
+                self.assertTrue(MOD.validate_snapshot(json.loads(text))["snapshot_coherent"])
+                result = MOD.validate_snapshot_json(text)
+                self.assertEqual("refused", result["status"])
+                self.assertEqual("duplicate_json_key", result["errors"][0]["code"])
+                self.assertEqual({}, result["identified"])
+
+    def test_strict_json_syntax_and_input_limits(self):
+        for text, code in (
+            (None, "invalid_json_text"),
+            (b"{}", "invalid_json_text"),
+            (" " * (MOD.MAX_JSON_CHARACTERS + 1), "invalid_json_text"),
+            ('{"schema_version": NaN}', "invalid_json"),
+            ('{"schema_version": Infinity}', "invalid_json"),
+            ('{"schema_version": -Infinity}', "invalid_json"),
+            ('{"files":', "invalid_json"),
+            ("{} {}", "invalid_json"),
+            ("null", "invalid_schema"),
+        ):
+            with self.subTest(code=code, text_type=type(text).__name__):
+                result = MOD.validate_snapshot_json(text)
+                self.assertEqual("refused", result["status"])
+                self.assertEqual(code, result["errors"][0]["code"])
+                self.assertFalse(result["snapshot_coherent"])
+                self.assertFalse(result["hardware_verified"])
+                self.assertFalse(result["boot_qualified"])
+                self.assertFalse(result["physical_restore_eligible"])
+        for text in ("[" * 2048 + "0" + "]" * 2048,
+                     '{"schema_version":' + "9" * 8192 + "}"):
+            result = MOD.validate_snapshot_json(text)
+            self.assertEqual("refused", result["status"])
+            self.assertIn(result["errors"][0]["code"], {"invalid_json", "invalid_schema"})
+
+    def test_json_validation_has_no_io_and_preserves_report_isolation(self):
+        text = json.dumps(fixture())
+        with patch("builtins.open", side_effect=AssertionError("open")), \
+             patch.object(io, "open", side_effect=AssertionError("io.open")), \
+             patch.object(os, "open", side_effect=AssertionError("os.open")), \
+             patch.object(subprocess, "run", side_effect=AssertionError("run")):
+            first = MOD.validate_snapshot_json(text)
+            self.assertTrue(first["snapshot_coherent"])
+            first["hardware_verified"] = True
+            first["identified"].clear()
+            second = MOD.validate_snapshot_json(text)
+            self.assertFalse(second["hardware_verified"])
+            self.assertEqual(3, len(second["identified"]))
+            self.assertEqual("refused", MOD.validate_snapshot_json("{")["status"])
