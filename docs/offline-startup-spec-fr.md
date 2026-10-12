@@ -117,3 +117,11 @@ puis vérifier l'ordre et l'absence de lancement après refus. Les opérations
 matérielles restent des descriptions inertes, sans exécuteur. Les décisions
 ouvertes demeurent « non résolues » et doivent provoquer un refus de plan
 exécutable, jamais être remplacées par des valeurs par défaut.
+
+## Modèle inerte disponible
+
+Le [contrat du planificateur](startup-plan-fr.md) modélise maintenant les
+étapes 4–10 sur le snapshot synthétique. Les traces et opérations sont des
+descriptions sans exécuteur. Les hypothèses de scénario ne lèvent aucune
+décision réelle et ne qualifient pas le matériel ; tous les rapports restent
+non exécutables. Ce modèle ne modifie aucun fichier du prototype de boot.
