@@ -111,7 +111,7 @@ Ce test valide ces deux call-flows ; il ne prétend pas certifier tout KOReader 
 5. Monter P3 en lecture seule ; préparer le profil temporaire et ses deux surcharges Nickel ; lancer le backend dragon. L'ouverture evdev active le tactile ; l'ioctl 241 pilote le frontlight à travers le noyau. Ne pas programmer le contrôleur Neonode ni réimplémenter son I²C/GPIO.
 6. Lors d'un essai autorisé ultérieurement, valider les trois résultats observables avant veille/USB/persistance.
 
-Le noyau réel active aussi `MXC_WATCHDOG` et `WATCHDOG_NOWAYOUT`. Le pilote `mxc_wdt.c:247–283` appelle disable pendant le probe et l'active dans open à 149–159 ; cela n'établit pas l'état physique effectif de tous les watchdogs, notamment du MCU. Ne pas ouvrir `/dev/watchdog` comme simple test de présence. Ce point et les états d'alimentation ne sont pas qualifiés par les trois interfaces ci-dessus.
+Le noyau réel compile aussi `MXC_WATCHDOG` et `WATCHDOG_NOWAYOUT`. Complément du 12 octobre : le pilote `mxc_wdt.c:247–283` appelle disable pendant le probe, mais **disable est une fonction vide** ; de plus l'enregistrement du périphérique watchdog est commenté dans la plateforme MX50 RDP. Driver compilé, probe exécuté et compteur actif sont des états distincts. L'ouverture à 149–159 active le compteur si le pilote est effectivement lié. Ne pas ouvrir `/dev/watchdog` comme simple test de présence. L'[audit des conditions de boot](offline-boot-gates-fr.md) précise ces preuves, la branche watchdog du MCU et les limites de la disponibilité sysfs. Les états d'alimentation restent non qualifiés.
 
 ## Conclusion de qualification
 
