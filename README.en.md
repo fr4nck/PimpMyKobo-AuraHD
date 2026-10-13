@@ -222,6 +222,16 @@ A read-only tool does not make the host operating system unable to write to the 
 - [ ] Integrate KOReader
 - [ ] Test a fully liberated microSD image
 
+## E-ink launcher — V0.2 concept art
+
+An isolated host-side Lua prototype implements menu navigation and SVG preview. The approved **V0.2 manga/pixel-art design** and its graphic assets are now committed. **16 grayscale levels (4-bit indexed PNG, 250,757 bytes)** are the preferred starting point for future tests; the original RGB artwork is preserved unchanged.
+
+- [Launcher prototype and README](experimental/launcher-v0/README.md).
+- [Approved V0.2 assets (original, 16-gray, 4-gray, 1-bit, comparison and manifest)](experimental/launcher-v0/assets/v02/).
+- [Compression measurements and qualification limits (French)](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
+
+**No graphical launcher has been qualified on real Kobo hardware.** The Wi-Fi and battery values in the mockup are illustrative. Importing these assets did not alter FIRST BOOT.
+
 ## Documentation
 
 - [Disassemble the Aura HD and access the internal microSD](docs/disassembly-en.md) — with original photos, iFixit/MobileRead sources and a Lynx-friendly text edition.

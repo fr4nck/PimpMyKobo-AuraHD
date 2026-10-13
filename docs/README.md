@@ -39,6 +39,12 @@ Ces outils n'écrivent jamais sur la microSD. La reconstruction et la simulation
 
 Avant toute inspection sous Windows : [protéger la microSD](windows-preservation-fr.md).
 
+## Launcher e-ink expérimental
+
+- [Prototype Lua et README du launcher](../experimental/launcher-v0/README.md) : navigation simulée sur PC ; encore aucun backend framebuffer/tactile qualifié.
+- [Graphismes V0.2 validés dans Git](../experimental/launcher-v0/assets/v02/) : original RGB, 16 gris, 4 gris, 1 bit, comparatif et manifeste.
+- [Qualification des graphismes V0.2](launcher-v02-asset-qualification-2026-10-13-fr.md) : poids, SHA-256, limites matérielles.
+
 ## Données non publiées
 
 Le dépôt ne contient volontairement pas les dumps de microSD, `fs.tgz`, `db.tgz`, images P1/P2, U-Boot précompilés, kernels précompilés ni futures extractions de waveform provenant d'une liseuse.

@@ -39,6 +39,12 @@ These tools never write to the microSD source. See the [tool catalogue](../tools
 
 Before any inspection on Windows: [protect the microSD](windows-preservation-en.md).
 
+## Experimental e-ink launcher
+
+- [Launcher Lua prototype and README](../experimental/launcher-v0/README.md): host-only simulated navigation; hardware framebuffer/touch remains unqualified.
+- [Approved V0.2 graphics in Git](../experimental/launcher-v0/assets/v02/): original RGB, 16-gray, 4-gray, 1-bit, comparison and manifest.
+- [V0.2 image qualification (French)](launcher-v02-asset-qualification-2026-10-13-fr.md): file sizes, SHA-256 and hardware limits.
+
 ## Data intentionally not published
 
 The repository intentionally excludes complete microSD dumps, `fs.tgz`, `db.tgz`, P1/P2 images, prebuilt U-Boot images, prebuilt kernels and future waveform extractions originating from a reader.

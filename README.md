@@ -222,6 +222,16 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [ ] Intégrer KOReader
 - [ ] Tester une microSD totalement libérée
 
+## Launcher e-ink — maquette V0.2
+
+Un prototype Lua isolé sur PC fournit la navigation et un aperçu SVG ; la composition manga/pixel-art **V0.2** et ses images sont désormais versionnées. Le format **16 niveaux de gris (PNG 4 bits, 250 757 octets)** est privilégié pour les essais futurs ; l'original RGB reste intact.
+
+- [Prototype Lua et README du launcher](experimental/launcher-v0/README.md).
+- [Graphismes V0.2 validés (original, 16 gris, 4 gris, 1 bit, comparatif et manifeste)](experimental/launcher-v0/assets/v02/).
+- [Mesures d'optimisation et limites de qualification](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
+
+**Aucun launcher graphique embarqué n'est encore qualifié sur la Kobo** ; les statuts Wi-Fi/batterie de la maquette sont fictifs. Aucun changement du FIRST BOOT n'a été effectué lors de l'import des images.
+
 ## Documentation
 
 - [Démonter l'Aura HD et accéder à la microSD interne](docs/disassembly-fr.md) — avec photos originales, sources iFixit/MobileRead et version texte pour Lynx.

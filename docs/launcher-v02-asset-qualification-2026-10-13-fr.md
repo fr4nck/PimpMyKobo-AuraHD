@@ -7,7 +7,7 @@
 - Nom du PNG source : `PMKB-launcher-V0.2-ordre-valide.png`.
 - Format : **1086 × 1448, RGB, 1 933 866 octets**.
 - SHA-256 : `4596389be32ba4cded6dde0940ec7528d3f0fc91e25638b0006802907a886d6d`.
-- Présent dans les artefacts de la conversation ChatGPT ; **non présent en haute résolution dans Git** au moment de cette note. Il faut transférer ses octets sans modification pour l'archiver définitivement.
+- **Archivé dans Git depuis le commit [`cd154a92`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/cd154a92faaf912fc39b2f4984d0c48fcea07854)** : [`experimental/launcher-v0/assets/v02/source/PMKB-launcher-V0.2-ordre-valide.png`](../experimental/launcher-v0/assets/v02/source/PMKB-launcher-V0.2-ordre-valide.png). Source conservée sans modification.
 - Un aperçu 1-bit de 128 px est déjà versionné sous `experimental/launcher-v0/assets/pmkb-v02-layout-thumbnail-128.png` (ce n'est **pas** le PNG original).
 - Décision utilisateur : **ne plus changer la composition ni les dessins**. Grille portrait : Livres | Applications ; Jeux | Web ; Recettes | Notes ; Boutique | Réglages. Fond blanc, atmosphère manga/pixel-art, mascotte Kobo, bandeau de raccourcis en bas.
 
@@ -26,9 +26,9 @@ Soit environ **87 % de réduction pour les 16 gris** et **95 % pour les 4 gris**
 
 La variante 16 gris affiche un rendu visuellement très proche de la source, avec une perte mesurée PSNR **36,16 dB** sur le PNG source ramené à 1080 × 1440 en luminance ; la variante 4 gris est plus agressive (**25,23 dB**) et le noir/blanc 1 bit simplifie nettement les ombres (**16,57 dB**). Il s'agit de mesures numériques, pas d'une qualification sur écran physique.
 
-Les variantes optimisées ont été produites et contrôlées **dans le conteneur de cette conversation**, mais **ne sont pas encore des assets binaires commités au dépôt GitHub**. Ne pas les présenter comme intégrés au launcher avant un transfert vérifié.
+Les variantes optimisées sont désormais **commitées dans GitHub** : [répertoire `experimental/launcher-v0/assets/v02/`](../experimental/launcher-v0/assets/v02/) avec `source/`, `optimise/` et [`MANIFEST-validated.json`](../experimental/launcher-v0/assets/v02/MANIFEST-validated.json). Le commit `cd154a92` a été poussé sur `main` et sa CI est **verte**. **Cela ne signifie pas que les graphismes sont intégrés dans le rendu Lua ou qualifiés sur la Kobo**.
 
-Un ZIP de transmission existe dans les artefacts de la conversation : `PMKB-launcher-V0.2-assets-optimises.zip`, **2 670 637 octets**, SHA-256 `312583af3ebc8b4d5c230a58be9e49752303c980a20f851e41c6e057276ebc52`. Il contient la source canonique, les variantes 16/4/1-bit, un zoom comparatif et un manifeste à empreintes.
+Le ZIP de transmission reste dans les artefacts de la conversation (les fichiers extraits sont maintenant dans Git) : `PMKB-launcher-V0.2-assets-optimises.zip`, **2 670 637 octets**, SHA-256 `312583af3ebc8b4d5c230a58be9e49752303c980a20f851e41c6e057276ebc52`. Il contient la source canonique, les variantes 16/4/1-bit, un zoom comparatif et un manifeste à empreintes.
 
 ## Limites d'architecture
 
@@ -38,4 +38,4 @@ Un ZIP de transmission existe dans les artefacts de la conversation : `PMKB-laun
 - Le décodage PNG, la rotation/coordonnées, le rafraîchissement e-ink, le tactile et la consommation RAM réelle restent à tester sur Kobo.
 - Les images P1/P2/P3, `rcS`, `pmkb-reader` et FIRST BOOT restent intacts. Pas de flash ou montage physique autorisé par cette note.
 
-**Étape suivante :** importer exactement les assets approuvés dans Git (contrôler leurs SHA), puis seulement étudier l'atlas des huit tuiles et une barre de statut dynamique. Préférer **16 gris / PNG 4 bits** comme point de départ et conserver l'original RGB comme référence immuable.
+**Étape suivante :** étudier la découpe sans altération des huit tuiles et la séparation de la barre de statut dynamique ; qualifier l'affichage sur matériel avant toute intégration boot. L'import Git des images est **terminé**. Préférer **16 gris / PNG 4 bits** comme point de départ et conserver l'original RGB comme référence immuable.

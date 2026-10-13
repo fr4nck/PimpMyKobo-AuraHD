@@ -42,8 +42,8 @@ Tests locaux du lot réalisés avec `texlua` (Lua 5.3) : **PASS** sur le modèle
 ## Trajectoire possible
 
 1. V0 : logique de menu et maquette hôte (premier commit).
-2. V0.1 : **pictogrammes vectoriels, retour visuel de sélection et scénario de navigation simulé** (sur cette PR). Le modèle sait également décoder les taps, mais n'a pas de backend tactile physique.
-3. V0.2 : éventuel banc de prévisualisation tactile interactif sur PC et stratégie d'actualisation e-ink *simulée* sans matériel.
+2. V0.1 : **pictogrammes vectoriels, retour visuel de sélection et scénario de navigation simulé** (PR #21 fusionnée dans `main`). Le modèle sait également décoder les taps, mais n'a pas de backend tactile physique.
+3. V0.2 : **direction graphique validée et assets archivés** ; le banc de prévisualisation tactile interactif et la stratégie d'actualisation e-ink restent à réaliser hors matériel.
 4. V1 : backend e-ink léger et cycle de vie du lecteur, intégrés uniquement après qualification hardware/boot, avec refus sûrs et sans retour Nickel automatique.
 
 ## Validation du lot V0.1
@@ -65,6 +65,18 @@ Boutique est immédiatement à gauche de Réglages ; Web occupe l'ancienne posit
 
 Direction artistique approuvée : fond blanc, scènes manga/pixel-art monochromes à gris limités, **même mascotte Kobo anthropomorphe déclinée dans les huit univers**, aucune grande bannière PMKB, aucun paysage de décoration hors cartes. L'ancienne famille d'icônes vectorielles génériques de `launcher.lua` reste une **maquette technique**, non représentative de ce design visuel final.
 
-Le visuel de référence de la conversation a été assemblé **localement** (permutation des trois panneaux de l'illustration approuvée, sans refaire les dessins), au chemin `/mnt/data/PMKB-launcher-V0.2-ordre-valide.png`. Taille 1 933 866 octets ; SHA-256 `4596389be32ba4cded6dde0940ec7528d3f0fc91e25638b0006802907a886d6d`. **Ce chemin est celui du conteneur de la conversation, pas celui du poste WSL de l'utilisateur.** Un **aperçu miniature 1 bit de 128 px de large** a été sauvegardé dans Git sous `experimental/launcher-v0/assets/pmkb-v02-layout-thumbnail-128.png` (2 512 octets), vérifié par lecture du blob GitHub. **Le PNG haute résolution 1086 × 1448 n'est pas encore téléversé dans Git** : il reste disponible dans la conversation et est traçable par son empreinte ci-dessus. L'image reste un concept : Wi-Fi connecté et batterie 87 % sont des valeurs illustratives, pas un relevé matériel.
+Le visuel de référence a été assemblé sans redessiner les scènes et est **désormais archivé en haute résolution dans Git**, à l'emplacement [`assets/v02/source/PMKB-launcher-V0.2-ordre-valide.png`](assets/v02/source/PMKB-launcher-V0.2-ordre-valide.png). Dimensions **1086 × 1448** ; taille **1 933 866 octets** ; SHA-256 `4596389be32ba4cded6dde0940ec7528d3f0fc91e25638b0006802907a886d6d`. Import vérifié dans `main`, commit [`cd154a92`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/cd154a92faaf912fc39b2f4984d0c48fcea07854) ; CI verte.
+
+### Assets V0.2 sauvegardés (sans modification des dessins)
+
+- [Source RGB approuvée](assets/v02/source/PMKB-launcher-V0.2-ordre-valide.png) — 1 933 866 octets, référence immuable.
+- [Version **16 gris**, recommandée pour l'étude](assets/v02/optimise/PMKB-V0.2-16gris.png) — 1080 × 1440, **250 757 octets**, PNG indexé 4 bits.
+- [Version 4 gris](assets/v02/optimise/PMKB-V0.2-4gris.png) — 98 919 octets.
+- [Version noir/blanc 1 bit](assets/v02/optimise/PMKB-V0.2-1bit.png) — 46 780 octets.
+- [Comparatif agrandi](assets/v02/optimise/PMKB-comparatif-zoom.png).
+- [Manifeste et SHA-256](assets/v02/MANIFEST-validated.json).
+- [Note de qualification et mesures](../../docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
+
+Le [miniature 1 bit 128 px](assets/pmkb-v02-layout-thumbnail-128.png) reste disponible pour la documentation, mais **ne remplace pas les images pleine résolution**. La maquette reste conceptuelle : les indications Wi-Fi connecté et batterie 87 % sont fictives. **Le rendu Lua actuel utilise encore les anciens pictogrammes vectoriels** ; les graphismes approuvés ne sont pas encore découpés en tuiles ni reliés au moteur d'affichage e-ink.
 
 La grille logique de navigation a été réordonnée dans `launcher.lua` ; `tests/test_launcher_v0.lua` contient désormais une assertion d'ordre exacte. Le rendu visuel final riche n'est **pas** encore implémenté en Lua ni vérifié sur l'Aura HD. Aucune modification du FIRST BOOT, de `rcS`, de `pmkb-reader` ou de stockage Kobo autorisée par ce lot.
