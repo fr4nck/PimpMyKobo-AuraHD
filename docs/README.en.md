@@ -41,7 +41,8 @@ Before any inspection on Windows: [protect the microSD](windows-preservation-en.
 
 ## Experimental e-ink launcher
 
-- [Launcher Lua prototype and README](../experimental/launcher-v0/README.md): host-only simulated navigation; hardware framebuffer/touch remains unqualified.
+- [Launcher Lua prototype and README (V0.4/V0.5)](../experimental/launcher-v0/README.md): host-only preview; framebuffer/touch remain unqualified.
+- [**Open illustrated local simulator**](../experimental/launcher-v0/simulator.html): eight clickable tiles, composited light/dark states and a separate configurable app dock (V0.5 host prototype); no device actions.
 - [Approved V0.2 graphics in Git](../experimental/launcher-v0/assets/v02/): original RGB, 16-gray, 4-gray, 1-bit, comparison and manifest.
 - [V0.2 image qualification (French)](launcher-v02-asset-qualification-2026-10-13-fr.md): file sizes, SHA-256 and hardware limits.
 

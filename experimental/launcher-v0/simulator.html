@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PMKB — Launcher V0.4, simulation PC</title>
+  <title>PMKB — Launcher V0.5, simulation PC</title>
   <style>
     * { box-sizing: border-box; }
     body { margin:0; background:#e8e8e8; color:#111; font:15px/1.5 system-ui,sans-serif; }
@@ -14,10 +14,20 @@
     main { max-width:1100px; margin:0 auto; padding:8px 20px 40px; display:grid; grid-template-columns:minmax(290px,580px) minmax(240px,1fr); gap:28px; align-items:start; }
     .screen { position:relative; width:100%; aspect-ratio:3 / 4; background:white; container-type:inline-size; box-shadow:0 6px 22px #0002; outline:none; }
     .artwork { display:block; width:100%; height:100%; object-fit:fill; user-select:none; pointer-events:none; }
-    .tile-target { position:absolute; z-index:1; background:transparent; border:0; margin:0; padding:0; cursor:pointer; }
+    .tile-target { position:absolute; z-index:1; overflow:hidden; background:transparent; border:0; margin:0; padding:0; cursor:pointer; }
+    .tile-skin { position:absolute; inset:0; display:block; background-repeat:no-repeat; pointer-events:none; }
+    .tile-target.tone-inverse .tile-skin { filter:invert(1); }
     .tile-target.selected { outline:3px dashed #777; outline-offset:-7px; }
     .tile-target:focus-visible { outline:4px dashed #222; outline-offset:-8px; }
-    .status-bar { position:absolute; z-index:2; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); background:#fff; border:2px solid #111; border-radius:5px; overflow:hidden; }
+    .status-bar { position:absolute; z-index:2; display:grid; grid-template-rows:1fr 1fr; background:#fff; border:2px solid #111; border-radius:5px; overflow:hidden; }
+    .dock-row { display:flex; min-height:0; width:100%; align-items:stretch; background:#fff; }
+    .dock-row::before { content:"DOCK"; display:grid; place-items:center; width:12%; flex:0 0 12%; font:700 clamp(8px,1.5cqw,16px)/1 monospace; border-right:1px solid #111; }
+    .dock-control { appearance:none; color:#111; flex:1 1 0; min-width:0; padding:0; margin:0; background:#fff; border:0; border-right:1px solid #aaa; cursor:pointer; }
+    .dock-control svg { display:block; width:100%; height:96%; fill:none; stroke:currentColor; stroke-width:6; stroke-linejoin:round; stroke-linecap:round; }
+    .dock-control.selected { background:#111; color:#fff; }
+    .dock-control:hover, .dock-control:focus-visible { outline:2px dashed currentColor; outline-offset:-2px; }
+    .status-row { display:grid; min-height:0; grid-template-columns:repeat(7,minmax(0,1fr)); border-top:2px solid #111; }
+
     .status-control { appearance:none; margin:0; border:0; border-right:1px solid #111; background:#fff; color:#111; font-family:monospace; font-size:clamp(8px,1.64cqw,18px); font-weight:800; letter-spacing:-.05em; cursor:pointer; padding:0; white-space:nowrap; }
     .status-control:last-child { border-right:0; }
     .status-control:hover, .status-control:focus-visible { background:#dedede; outline:2px solid #111; outline-offset:-2px; }
@@ -31,6 +41,10 @@
     .actions button:hover, .actions button:focus-visible { background:#dedede; }
     .message { min-height:65px; padding:10px; border-left:4px solid #111; background:#f2f2f2; }
     .notes { font-size:13px; color:#333; }
+    .dock-picks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 10px; border:1px solid #888; padding:10px; }
+    .dock-picker { font-size:13px; font-weight:400; margin:0; }
+    .dock-picker input { accent-color:#111; }
+
     footer { max-width:1100px; margin:0 auto; padding:0 20px 25px; font-size:12px; color:#333; }
     @media(max-width:750px) { main { display:flex; flex-direction:column; align-items:stretch; } .screen { max-width:540px; margin:0 auto; } aside { width:100%; } }
   </style>
@@ -38,17 +52,20 @@
 </head>
 <body>
 <header>
-  <h1>PMKB · Launcher V0.4</h1>
+  <h1>PMKB · Launcher V0.5</h1>
   <span class="tag">SIMULATION PC · HORS LIGNE · PAS DE KOBO</span>
-  <p>Illustrations manga validées, 16 niveaux de gris. Cliquez sur une scène ou un raccourci ; les actions restent fictives.</p>
+  <p>Illustrations manga validées, 16 gris. Sélection clair/sombre, dock des applications et contrôles système : simulation uniquement.</p>
 </header>
 <main>
   <div id="screen" class="screen" role="group" aria-label="Accueil Kobo PMKB, simulation tactile" tabindex="0">
     <img class="artwork" width="1080" height="1440" draggable="false"
       src="assets/v02/optimise/PMKB-V0.2-16gris.png"
       alt="Huit scènes manga PMKB : Livres, Applications, Jeux, Web, Recettes, Notes, Boutique et Réglages">
-    <!-- Couvre exclusivement les anciennes valeurs fictives en bas ; l'image n'est jamais modifiée. -->
-    <div class="status-bar" id="dynamic-status" role="group" aria-label="Bandeau de contrôle simulé"></div>
+    <!-- Deux bandes distinctes recouvrent la barre fictive d'origine à l'affichage seulement. -->
+    <div class="status-bar" id="dynamic-status" role="group" aria-label="Dock et contrôles système simulés">
+      <div class="dock-row" id="dock-shortcuts" role="group" aria-label="Lancement rapide des applications"></div>
+      <div class="status-row" id="system-controls" role="group" aria-label="Indicateurs et commandes système"></div>
+    </div>
   </div>
   <aside>
     <h2>Tableau de bord · démonstration</h2>
@@ -65,13 +82,15 @@
     <label for="frontlight-level">Éclairage fictif (0 à 100 %)</label>
     <input id="frontlight-level" type="range" min="0" max="100" step="1" value="0">
     <p class="notes">Les curseurs alimentent uniquement l'écran de simulation, jamais le matériel.</p>
+    <label for="dock-picks">Favoris du dock (1 à 5 raccourcis, modifiables sans sauvegarde)</label>
+    <div id="dock-picks" class="dock-picks" role="group" aria-label="Applications favorites du dock"></div>
     <p><strong>Sélection :</strong> <span id="selected-label">Livres</span></p>
     <div class="actions">
       <button id="activate" type="button">Sélectionner</button>
       <button id="reset" type="button">Réinitialiser</button>
     </div>
     <div id="event-log" class="message" role="status" aria-live="polite">Aucune action.</div>
-    <p class="notes">Clavier : cliquez sur l'aperçu, puis utilisez les flèches et Entrée. Livres renvoie une intention inerte KOReader ; toutes les autres applications sont « à venir ».</p>
+    <p class="notes">Clavier : cliquez sur l'aperçu, puis utilisez les flèches et Entrée. Les icônes du dock lancent les mêmes intentions fictives que les huit scènes. Les fonds sombre/clair sont composés à l'écran depuis le PNG inchangé : ce n'est pas encore une qualification e-ink.</p>
   </aside>
 </main>
 <footer>Prototype graphique hôte. Pas de réseau, pas d'accès système, pas de démarrage KOReader, pas d'accès à la microSD Kobo. Les 16 gris et les huit scènes d'origine ne sont pas altérés.</footer>

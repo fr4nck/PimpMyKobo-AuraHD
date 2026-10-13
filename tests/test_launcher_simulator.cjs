@@ -72,3 +72,32 @@ test("keyboard navigation stays in approved 2x4 portrait grid",()=>{
   assert.equal(m.selectionIndex(5,"ArrowLeft"),4);
   assert.equal(m.selectionIndex(0,"End"),0);
 });
+
+test("dock favorites are configurable but cannot execute unknown apps", () => {
+  assert.deepEqual(m.DEFAULT_DOCK,["books","notes","recipes","web"]);
+  assert.equal(m.MAX_DOCK,5);
+  const custom=m.dockChoice(["books","games","settings"]);
+  assert.deepEqual(custom,["books","games","settings"]);
+  custom.push("store");
+  assert.equal(m.DEFAULT_DOCK.length,4,"original dock untouched");
+  for (const ids of [[],["books","books"],["books","shell"],["books","notes","games","web","apps","store"]]) {
+    assert.throws(()=>m.dockChoice(ids));
+  }
+  assert.throws(()=>m.dockChoice("books"));
+  assert.deepEqual(m.tileAction(m.DEFAULT_DOCK[0]),{kind:"intent",name:"open_reader",id:"books"});
+  for(const id of m.DEFAULT_DOCK.slice(1)) {
+    assert.equal(m.tileAction(id).kind,"unavailable");
+  }
+});
+
+test("every tile has explicit light idle and dark selected state without editing art",()=>{
+  const darkInApprovedImage=["books","web"];
+  for(const tile of m.TILES) {
+    assert.equal(m.tileTone(tile.id,false),"light");
+    assert.equal(m.tileTone(tile.id,true),"dark");
+    assert.equal(m.needsInversion(tile.id,false),darkInApprovedImage.includes(tile.id));
+    assert.equal(m.needsInversion(tile.id,true),!darkInApprovedImage.includes(tile.id));
+  }
+  assert.equal(m.tileTone("invalid",true),null);
+  assert.equal(m.needsInversion("invalid",true),false);
+});
