@@ -238,7 +238,7 @@ An isolated host-side Lua prototype implements menu navigation and SVG preview. 
 
 [**Open the standalone note editor and sketch palette**](experimental/notes-v01/index.html) · [Notes English guide](experimental/notes-v01/README.en.md) · [Guide français](experimental/notes-v01/README.md).
 
-The offline host-only editor retains UTF-8 text, search, local autosave, JSON/TXT exports, and optional drawing with PNG export. V0.2 has a full-width editor with a collapsible My Notes drawer, plus per-note typography and local TTF/OTF/WOFF import. Imported font files are not saved in JSON; reimport them on another session. E-ink, virtual keyboard and hardware remain unqualified.
+The offline host-only editor retains UTF-8 text, search, local autosave, JSON/TXT exports, and optional drawing with PNG export. V0.2 has a full-width editor with a collapsible My Notes drawer, plus a small on-demand « Aa » font/size panel for the whole note and local TTF/OTF/WOFF import. Imported font files are not saved in JSON; reimport them on another session. E-ink, virtual keyboard and hardware remain unqualified.
 
 **No working launcher integration, Wi-Fi sync or Kobo partition access.** Launcher V0.6 has its [own PR awaiting visual validation](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25). Approved illustrations and FIRST BOOT remain untouched.
 

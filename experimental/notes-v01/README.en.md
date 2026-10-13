@@ -9,7 +9,7 @@ V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of
 
 - **Editing-first layout**: My Notes drawer is initially closed, opened through « ☰ Mes notes » and closed when selecting a note. Search, list and JSON backups remain in the drawer, dismissed by ×, outside click or Escape.
 - **Compact toolbar**: new note, my notes, save and overflow delete; optional Sketch tab has a collapsible palette.
-- **Per-note typography**: built-in system font stacks (mono, sans, serif, generic handwriting), sizes 12–36 px and line spacing 1.2–2.0. Stored in existing backwards-compatible pmkb-notes-v1 JSON; old V0.1 notes load with default values.
+- **Compact on-demand typography**: the « Aa » button opens a small floating panel (outside click/Escape closes it), with a short note-wide font selector and 12–36 px size input. No large permanent fields. Line spacing is no longer a visible control; pre-existing values in the versioned JSON are retained. Per-line and selected-range rich formatting are **not implemented**. V0.1 notebook data stays compatible.
 - **Local font import**: TTF, OTF, WOFF, WOFF2, max 2 MB, extension and signature check, loaded through browser FontFace. Browser fallback stacks can use Linux/Windows installed fonts but do not enumerate them.
 - **Deliberate limitation**: uploaded font binaries are **session-only**. JSON keeps the font identifier, not the file; after refresh, notes fall back gracefully until the same font is reimported. TXT is plain text. No automatic DaFont download or licensing claims.
 - No per-character rich text or PDF output in this revision. No network, cloud or persistent service.

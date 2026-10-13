@@ -20,7 +20,7 @@ Détails et commandes : [README du launcher](../experimental/launcher-v0/README.
 | Fonction | État | Limite |
 | --- | --- | --- |
 | Mes notes escamotable | Implémenté sur branche V0.2 | Ergonomie navigateur à vérifier |
-| Typographie par note | Implémentée : système, taille, interligne et JSON V0.1 compatible | Polices système selon environnement |
+| Typographie compacte par note | Implémentée : bouton « Aa » ouvrant une palette police/taille courte, sauvegarde JSON V0.1 compatible ; interligne ancien conservé, mais non éditable ici | Pas de style par ligne/passage ; polices système selon environnement |
 | Import TTF/OTF/WOFF/WOFF2 | Prototype hôte validant signatures et tailles | Contrôle visuel ; polices non embarquées, réimport après rafraîchissement |
 | Palette graphique escamotable | Implémentée | Toucher et rafraîchissement e-ink non qualifiés |
 

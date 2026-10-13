@@ -28,8 +28,14 @@
     handwriting:'"URW Chancery L","Comic Sans MS",cursive'
   };
   const fontFamily=$("font-family"), fontSize=$("font-size"),
-    fontLineheight=$("font-lineheight"),fontFile=$("font-file"),
-    fontMessage=$("font-message");
+    fontFile=$("font-file"),fontMessage=$("font-message");
+  const fontPanel=$("font-options"),fontToggle=$("open-fonts"),fontContainer=$("type-menu");
+  function toggleTypography(open) {
+    fontPanel.hidden=!open;
+    fontToggle.setAttribute("aria-expanded",open?"true":"false");
+    if(open) fontFamily.focus();
+    else if(fontPanel.contains(document.activeElement))fontToggle.focus();
+  }
   const drawer=$("notes-drawer"),backdrop=$("drawer-backdrop"),openNotes=$("open-notes");
 
   function toggleDrawer(open) {
@@ -75,7 +81,6 @@
     renderFontOptions(style.font);
     fontFamily.value=style.font;
     fontSize.value=String(style.size);
-    fontLineheight.value=String(style.lineHeight);
     const imported=loadedFonts.get(style.font);
     refs.text.style.fontFamily=imported
       ? '"'+imported.family+'",monospace'
@@ -93,7 +98,7 @@
     const next={
       font:fontFamily.value,
       size:Number(fontSize.value),
-      lineHeight:Number(fontLineheight.value)
+      lineHeight:C.typography(item.typography).lineHeight
     };
     try{
       update({typography:C.typography(next)});
@@ -202,6 +207,7 @@
     refs.title.value=item.title;
     refs.text.value=item.text;
     setTab("text");
+    toggleTypography(false);
     applyTypography();
     toggleDrawer(false);
     renderList();
@@ -247,7 +253,10 @@
     $("tab-sketch").classList.toggle("active",isSketch);
     $("tab-text").setAttribute("aria-selected",isSketch?"false":"true");
     $("tab-sketch").setAttribute("aria-selected",isSketch?"true":"false");
-    if(isSketch)renderDrawing();
+    if(isSketch) {
+      toggleTypography(false);
+      renderDrawing();
+    }
   }
   function drawStroke(stroke){
     const pts=stroke.points;
@@ -396,11 +405,23 @@
   $("close-drawer").addEventListener("click",()=>toggleDrawer(false));
   backdrop.addEventListener("click",()=>toggleDrawer(false));
   document.addEventListener("keydown",event=>{
-    if(event.key==="Escape"&&!drawer.hidden)toggleDrawer(false);
+    if(event.key!=="Escape")return;
+    if(!fontPanel.hidden) {
+      event.preventDefault();
+      toggleTypography(false);
+    } else if(!drawer.hidden) {
+      event.preventDefault();
+      toggleDrawer(false);
+    }
   });
+  document.addEventListener("pointerdown",event=>{
+    if(!fontPanel.hidden && !fontContainer.contains(event.target)) {
+      toggleTypography(false);
+    }
+  });
+  fontToggle.addEventListener("click",()=>toggleTypography(fontPanel.hidden));
   fontFamily.addEventListener("change",changeTypography);
   fontSize.addEventListener("change",changeTypography);
-  fontLineheight.addEventListener("change",changeTypography);
   $("import-font").addEventListener("click",()=>fontFile.click());
   fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);

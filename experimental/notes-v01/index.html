@@ -27,24 +27,31 @@
     .main-toolbar {display:flex;gap:9px;align-items:center;flex-wrap:wrap}
     .main-toolbar > button {min-height:44px}
     .more-actions {position:relative;margin-left:auto}
-    .more-actions summary,.font-options summary,.palette-details summary {cursor:pointer;font-weight:700;
+    .more-actions summary,.palette-details summary {cursor:pointer;font-weight:700;
       list-style:none;padding:8px 12px;border:2px solid #111;background:white;user-select:none}
-    .more-actions summary::-webkit-details-marker,.font-options summary::-webkit-details-marker,
-      .palette-details summary::-webkit-details-marker {display:none}
+    .more-actions summary::-webkit-details-marker,.palette-details summary::-webkit-details-marker {display:none}
     .more-content {position:absolute;right:0;top:100%;min-width:230px;max-width:330px;padding:12px;
       border:2px solid #111;background:white;box-shadow:0 3px 14px #0003;z-index:10}
     .more-content button {width:100%}
-    .font-options {margin:2px 0 16px}
-    .type-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 0}
-    .type-grid label {font-size:13px;margin:0}
-    .type-grid select,.type-grid input[type="number"] {width:100%;display:block;background:white;border:2px solid #777;padding:7px;font:inherit;min-height:44px}
-    .font-import {grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .type-menu {position:relative}
+    .type-menu > button {min-height:44px;min-width:44px;font-weight:700}
+    .type-panel {position:absolute;top:calc(100% + 5px);left:0;width:min(420px, calc(100vw - 35px));
+      max-height:75vh;overflow:auto;padding:12px;background:#fff;border:2px solid #111;
+      box-shadow:0 4px 18px #0004;z-index:15}
+    .type-controls {display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .type-controls label {display:flex;flex-direction:column;gap:4px;font-size:12px;margin:0}
+    .type-controls select,.type-controls input {min-height:38px;padding:4px 7px;border:1px solid #666;
+      background:white;color:#111;font-size:14px}
+    #font-family {width:175px;max-width:100%}
+    #font-size {width:70px}
+    .type-panel .hint {margin:7px 0 0}
+    .import-type-button {padding:5px 9px;font-size:13px;min-height:36px}
     .palette-details {margin-bottom:12px}
     .palette {margin:12px 0 4px}
     @media(max-width:610px) {
-      .type-grid {grid-template-columns:1fr}
       .main-toolbar > button {flex:1}
       .more-actions {margin:0}
+      .type-panel {position:fixed;top:96px;left:10px;right:10px;width:auto;max-height:calc(100dvh - 110px)}
     }
     nav .section-head {display:flex;align-items:center;justify-content:space-between}
     nav h2 {font-size:1rem;margin:0}
@@ -122,6 +129,28 @@
         <button id="toolbar-new" type="button">+ Nouvelle</button>
         <button id="open-notes" type="button" aria-controls="notes-drawer" aria-expanded="false">☰ Mes notes</button>
         <button id="save-now" type="button">Enregistrer</button>
+        <div id="type-menu" class="type-menu">
+          <button id="open-fonts" type="button" aria-label="Typographie (police et taille pour toute la note)" aria-controls="font-options" aria-expanded="false" title="Typographie de la note">Aa</button>
+          <div id="font-options" class="type-panel" role="group" aria-label="Typographie de la note entière" hidden>
+            <div class="type-controls">
+              <label for="font-family">Police
+                <select id="font-family">
+                  <option value="mono">Monospace</option>
+                  <option value="sans">Sans serif</option>
+                  <option value="serif">Serif</option>
+                  <option value="handwriting">Manuscrite</option>
+                </select>
+              </label>
+              <label for="font-size">Taille (px)
+                <input id="font-size" type="number" min="12" max="36" step="1" value="17" inputmode="numeric">
+              </label>
+            </div>
+            <button id="import-font" type="button" class="import-type-button">Importer une police…</button>
+            <input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" hidden>
+            <p id="font-message" class="hint" role="status">Polices locales TTF, OTF, WOFF ou WOFF2.</p>
+            <p class="hint">Ces réglages concernent la note entière. La mise en forme d'un passage et l'interligne par paragraphe ne sont pas encore disponibles.</p>
+          </div>
+        </div>
         <details class="more-actions" id="more-menu">
           <summary>⋯ Plus</summary>
           <div class="more-content">
@@ -146,34 +175,6 @@
           <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
         </div>
         <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
-          <details id="font-options" class="font-options">
-            <summary>Typographie · police, taille et interligne</summary>
-            <div class="type-grid">
-              <label for="font-family">Police
-                <select id="font-family">
-                  <option value="mono">Monospace · système</option>
-                  <option value="sans">Sans serif · système</option>
-                  <option value="serif">Serif · système</option>
-                  <option value="handwriting">Manuscrite · système</option>
-                </select>
-              </label>
-              <label for="font-size">Taille
-                <input id="font-size" type="number" min="12" max="36" step="1" value="17" aria-label="Taille de police en pixels">
-              </label>
-              <label for="font-lineheight">Interligne
-                <select id="font-lineheight">
-                  <option value="1.2">1,2</option><option value="1.4">1,4</option>
-                  <option value="1.6">1,6</option><option value="1.8">1,8</option>
-                  <option value="2">2</option>
-                </select>
-              </label>
-              <div class="font-import">
-                <button id="import-font" type="button">Importer une police (.ttf / .otf / .woff / .woff2)</button>
-                <input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" hidden>
-                <span id="font-message" class="hint" role="status">Les polices importées restent en mémoire seulement pendant cette session.</span>
-              </div>
-            </div>
-          </details>
           <label for="note-text">Contenu de la note</label>
           <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
           <div class="actions" style="margin-top:12px">

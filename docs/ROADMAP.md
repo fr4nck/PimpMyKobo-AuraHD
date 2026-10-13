@@ -22,7 +22,7 @@ See the [launcher README](../experimental/launcher-v0/README.md) for reproductio
 | Feature | Status | Qualification missing |
 | --- | --- | --- |
 | Collapsible My Notes drawer | Implemented in V0.2 branch | Manual browser layout/keyboard test |
-| Per-note typography | Implemented: system fonts, size, spacing in V0.1-compatible JSON | System font availability varies |
+| Compact typography | Implemented: on-demand « Aa » popover with short font/size controls; V0.1 JSON compatible; existing line spacing preserved but not exposed | No per-line/selection rich formatting; system fonts vary |
 | TTF/OTF/WOFF/WOFF2 import | Host-only file checks and FontFace loading | Manual rendering; font binary not stored; re-import after refresh |
 | Collapsible drawing palette | Implemented | Real touch/e-ink refresh pending |
 

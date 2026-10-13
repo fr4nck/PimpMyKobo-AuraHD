@@ -33,7 +33,7 @@ class TestNotesHostAssets(unittest.TestCase):
             'id="open-notes"', 'aria-expanded="false"',
             'id="close-drawer"', 'id="toolbar-new"',
             'id="font-options"', 'id="font-family"',
-            'id="font-size"', 'id="font-lineheight"',
+            'id="font-size"', 'id="open-fonts"',
             'id="font-file"', 'id="import-font"',
             'id="sketch-tools"', 'class="more-actions"',
         ):
@@ -49,6 +49,17 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertIn('file.size>2000000', self.browser)
         self.assertIn('loadedFonts=new Map()', self.browser)
         self.assertIn('refs.text.style.fontFamily=', self.browser)
+        self.assertIn('id="font-options" class="type-panel"', self.html)
+        self.assertIn('aria-controls="font-options" aria-expanded="false"', self.html)
+        self.assertIn('id="font-size" type="number" min="12" max="36"', self.html)
+        self.assertIn('class="type-controls"', self.html)
+        self.assertIn('function toggleTypography(open)', self.browser)
+        self.assertIn('fontPanel.hidden=!open', self.browser)
+        self.assertIn('lineHeight:C.typography(item.typography).lineHeight', self.browser)
+        self.assertIn("mise en forme d'un passage", self.html)
+        self.assertNotIn('id="font-lineheight"', self.html)
+        self.assertNotIn('class="type-grid"', self.html)
+        self.assertNotIn('fontLineheight.addEventListener', self.browser)
         self.assertIn('function typography(value)', self.core)
         self.assertNotIn('localStorage.setItem("font-', self.browser)
         self.assertNotIn('indexedDB', self.browser)
