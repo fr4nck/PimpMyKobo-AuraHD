@@ -1,69 +1,93 @@
-// Host-only V0.4 model checks. Zero browser dependencies, no devices.
+// V0.6 host-only launcher behavior. Node built-in test runner; zero hardware.
 "use strict";
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const m = require("../experimental/launcher-v0/simulator.js");
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const m=require("../experimental/launcher-v0/simulator.js");
 
-test("approved portrait ordering and safe hit zones", () => {
-  assert.deepEqual(m.TILES.map(x=>x.id),[
+test("eight ordered tiles are entire touch targets, artwork AND label",()=>{
+  assert.deepEqual(m.TILES.map(t=>t.id),[
     "books","apps","games","web","recipes","notes","store","settings"
   ]);
-  for (let i=0;i<m.TILES.length;i++) {
-    const a=m.TILES[i];
-    assert.ok(a.x>=0 && a.y>=0 && a.x+a.w<=m.WIDTH && a.y+a.h<=m.HEIGHT);
-    assert.ok(a.y+a.h<m.BAR.y,"tile never covers status bar");
-    for (let j=0;j<i;j++) {
-      const b=m.TILES[j];
-      const intersects=a.x < b.x+b.w && b.x < a.x+a.w
-        && a.y < b.y+b.h && b.y < a.y+a.h;
-      assert.equal(intersects,false,"tiles must never overlap");
+  for(let i=0;i<m.TILES.length;i++){
+    const t=m.TILES[i], b=m.labelBand(t.id);
+    assert.ok(t.x>=0&&t.y>=0&&t.x+t.w<=m.WIDTH&&t.y+t.h<=m.HEIGHT);
+    assert.ok(t.y+t.h<m.BAR.y,"tile separate from system controls");
+    assert.ok(b.x>=t.x&&b.x+b.w<=t.x+t.w,"ribbon within full button");
+    assert.ok(b.y>t.y && b.y+b.h<=t.y+t.h,"ribbon under art, within button");
+    assert.equal(m.tileAt(t.x+12,t.y+12),t.id,"photo region clickable");
+    assert.equal(m.tileAt(b.x+12,b.y+12),t.id,"text band clickable");
+    for(let j=0;j<i;j++){
+      const u=m.TILES[j];
+      assert.ok(t.x>=u.x+u.w || u.x>=t.x+t.w || t.y>=u.y+u.h || u.y>=t.y+t.h);
     }
   }
-  assert.ok(m.BAR.x>=0 && m.BAR.y>=0
-    && m.BAR.x+m.BAR.w<=m.WIDTH && m.BAR.y+m.BAR.h<=m.HEIGHT);
+  assert.equal(m.tileAt(0,0),null);
+  assert.equal(m.tileAt(NaN,400),null);
+  assert.equal(m.tileAt(Infinity,400),null);
+  assert.equal(m.labelBand("invalid"),null);
 });
 
-test("no invented telemetry; state updates are immutable and validated", () => {
-  const empty=m.defaults();
-  assert.equal(empty.battery,null);
-  assert.equal(empty.wifi,"unknown");
-  assert.equal(m.labelFor("battery",empty),"BAT --");
-  assert.equal(m.labelFor("wifi",empty),"WIFI ?");
-  const next=m.withSample(empty,{battery:87,charging:true,wifi:"off",frontlight:25,contrast:"normal"});
+test("unselected labels white, selected labels dark, with no illustration filter",()=>{
+  assert.equal(m.bandNeedsInversion("books",false),true,"original black Books ribbon whitened");
+  assert.equal(m.bandNeedsInversion("books",true),false,"original black Books ribbon when selected");
+  for(const tile of m.TILES.slice(1)){
+    assert.equal(m.bandNeedsInversion(tile.id,false),false,"original light ribbon stays");
+    assert.equal(m.bandNeedsInversion(tile.id,true),true,"only ribbon is inverted");
+  }
+});
+
+test("first tap selects, second tap confirms, changing tiles deselects previous",()=>{
+  let selected=null;
+  const first=m.tapSelection(selected,"books");
+  assert.deepEqual(first,{selected:"books",action:{kind:"selected",id:"books"}});
+  selected=first.selected;
+  assert.deepEqual(m.tapSelection(selected,"books"),{
+    selected:"books",action:{kind:"intent",name:"open_reader",id:"books"}
+  });
+  const second=m.tapSelection(selected,"web");
+  assert.equal(second.selected,"web");
+  assert.deepEqual(second.action,{kind:"selected",id:"web"});
+  assert.equal(m.bandNeedsInversion("books",false),true,"Books returns white");
+  assert.deepEqual(m.tapSelection(second.selected,"web"),{
+    selected:"web",action:{kind:"unavailable",id:"web"}
+  });
+  assert.deepEqual(m.tapSelection(null,"shell"),{selected:null,action:{kind:"ignored"}});
+});
+
+test("only the six ORIGINAL system pictograms are interactive",()=>{
+  assert.deepEqual(m.CONTROLS,["wifi","battery","frontlight","contrast","refresh","sleep"]);
+  assert.deepEqual(m.ZONES.map(x=>x.id),m.CONTROLS);
+  let end=0;
+  for(const z of m.ZONES){
+    assert.equal(z.x,end,"no gaps/overlaps");
+    assert.ok(z.w>0);
+    assert.deepEqual(m.quickAction(z.id),{kind:"quick_request",id:z.id});
+    end=z.x+z.w;
+  }
+  assert.equal(end,m.BAR.w);
+  for(const id of ["books","notes","settings","dock"]){
+    assert.deepEqual(m.quickAction(id),{kind:"ignored"});
+  }
+});
+
+test("telemetry stays simulated, validated and immutable",()=>{
+  const old=m.defaults();
+  assert.deepEqual(old,{battery:null,charging:null,wifi:"unknown",frontlight:null,contrast:"unknown"});
+  assert.equal(m.labelFor("battery",old),"BAT --");
+  const next=m.withSample(old,{battery:87,charging:true,wifi:"off",frontlight:25,contrast:"normal"});
   assert.equal(m.labelFor("battery",next),"BAT 87%+");
-  assert.equal(m.labelFor("frontlight",next),"LED 25%");
   assert.equal(m.labelFor("wifi",next),"WIFI OFF");
-  assert.equal(empty.battery,null);
-  assert.equal(empty.wifi,"unknown");
-  assert.notEqual(empty,next);
-  for (const invalid of [-1,101,1.5,NaN,Infinity,"87"]) {
-    assert.throws(()=>m.withSample(empty,{battery:invalid}));
+  assert.equal(m.labelFor("frontlight",next),"LED 25%");
+  assert.equal(old.battery,null,"original never mutated");
+  for(const val of [-1,101,1.5,Infinity,NaN,"45"]){
+    assert.throws(()=>m.withSample(old,{battery:val}));
   }
-  assert.throws(()=>m.withSample(empty,{wifi:"enabled"}));
-  assert.throws(()=>m.withSample(empty,{charging:"yes"}));
-  assert.throws(()=>m.withSample(empty,{voltage:4000}));
-  assert.equal(m.withSample(next,{battery:null}).battery,null);
-});
-
-test("only Books has an inert intent, all other apps unavailable",()=>{
-  assert.deepEqual(m.tileAction("books"),{kind:"intent",name:"open_reader",id:"books"});
-  for (const x of m.TILES.slice(1)) {
-    assert.deepEqual(m.tileAction(x.id),{kind:"unavailable",id:x.id});
-  }
-  assert.deepEqual(m.tileAction("shell"),{kind:"ignored"});
-});
-
-test("seven quick actions cannot operate any hardware",()=>{
-  assert.deepEqual(m.CONTROLS,[
-    "battery","wifi","frontlight","contrast","refresh","sleep","settings"
-  ]);
-  for(const id of m.CONTROLS) {
-    assert.deepEqual(m.quickAction(id),{kind:"quick_request",id:id});
-  }
-  assert.deepEqual(m.quickAction("reboot"),{kind:"ignored"});
+  assert.throws(()=>m.withSample(old,{wifi:"online"}));
+  assert.throws(()=>m.withSample(old,{voltage:4000}));
 });
 
 test("keyboard navigation stays in approved 2x4 portrait grid",()=>{
+  assert.equal(m.selectionIndex(-1,"ArrowDown"),0);
   assert.equal(m.selectionIndex(0,"ArrowRight"),1);
   assert.equal(m.selectionIndex(1,"ArrowRight"),1);
   assert.equal(m.selectionIndex(1,"ArrowDown"),3);
@@ -71,33 +95,4 @@ test("keyboard navigation stays in approved 2x4 portrait grid",()=>{
   assert.equal(m.selectionIndex(6,"ArrowDown"),6);
   assert.equal(m.selectionIndex(5,"ArrowLeft"),4);
   assert.equal(m.selectionIndex(0,"End"),0);
-});
-
-test("dock favorites are configurable but cannot execute unknown apps", () => {
-  assert.deepEqual(m.DEFAULT_DOCK,["books","notes","recipes","web"]);
-  assert.equal(m.MAX_DOCK,5);
-  const custom=m.dockChoice(["books","games","settings"]);
-  assert.deepEqual(custom,["books","games","settings"]);
-  custom.push("store");
-  assert.equal(m.DEFAULT_DOCK.length,4,"original dock untouched");
-  for (const ids of [[],["books","books"],["books","shell"],["books","notes","games","web","apps","store"]]) {
-    assert.throws(()=>m.dockChoice(ids));
-  }
-  assert.throws(()=>m.dockChoice("books"));
-  assert.deepEqual(m.tileAction(m.DEFAULT_DOCK[0]),{kind:"intent",name:"open_reader",id:"books"});
-  for(const id of m.DEFAULT_DOCK.slice(1)) {
-    assert.equal(m.tileAction(id).kind,"unavailable");
-  }
-});
-
-test("every tile has explicit light idle and dark selected state without editing art",()=>{
-  const darkInApprovedImage=["books","web"];
-  for(const tile of m.TILES) {
-    assert.equal(m.tileTone(tile.id,false),"light");
-    assert.equal(m.tileTone(tile.id,true),"dark");
-    assert.equal(m.needsInversion(tile.id,false),darkInApprovedImage.includes(tile.id));
-    assert.equal(m.needsInversion(tile.id,true),!darkInApprovedImage.includes(tile.id));
-  }
-  assert.equal(m.tileTone("invalid",true),null);
-  assert.equal(m.needsInversion("invalid",true),false);
 });

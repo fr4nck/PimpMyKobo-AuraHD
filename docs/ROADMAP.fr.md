@@ -11,7 +11,9 @@
 | V0.2 — composition manga et versions optimisées | **Validé et conservé dans Git** : PNG RGB, 16 gris (1080 × 1440, 250 757 octets), 4 gris, 1 bit et manifeste SHA-256 | Pas une interface embarquée |
 | V0.3 — barre système simulée Lua | **Implémenté et testé** : batterie, Wi-Fi, éclairage, contraste, rafraîchissement, veille et réglages | Demandes inertes ; aucune mesure réelle |
 | V0.4 — [accueil illustré cliquable sur PC](../experimental/launcher-v0/simulator.html) | **Fusionné dans main** : huit scènes approuvées, navigation clavier/souris et états fictifs | KOReader non lancé ; navigateur/tactile matériel non qualifiés |
-| V0.5 — dock et sélection | **Prototype hôte** : dock applicatif distinct, favoris configurables en session, états clair/sombre via composition CSS, sans modifier les images | Compromis d'espace et de contraste e-ink à valider sur matériel |
+| V0.5 — dock et sélection | **Historique, abandonné** : favoris doublonnant les huit tuiles et inversion d'illustrations, rejetés au contrôle visuel | Ne pas réintroduire |
+| V0.6 — sélection des seuls bandeaux | **Prototype hôte corrigé** : huit boutons complets photo + bandeau, aucune présélection, premier appui = sélectionner, second appui = intention inerte ; seul le bandeau est inversé, livre blanc par défaut | Exactitude des découpes visuelles et vrai tactile encore à confirmer sur PC puis Kobo |
+| Bandeau inférieur V0.6 | **Six pictogrammes originaux conservés**, aucun dock d'applications, relevés simulés | Aucun contrôle matériel réel |
 
 Détails et commandes : [README du launcher](../experimental/launcher-v0/README.md). L'ordre approuvé reste **Livres / Applications, Jeux / Web, Recettes / Notes, Boutique / Réglages**. Le PNG original **ne doit pas être redessiné**. Le chemin FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 restent protégés. **Toute qualification matérielle (écran, tactile, frontlight, énergie, Wi-Fi, veille, boot, lancement KOReader) est en attente** ; aucune opération d'écriture n'est autorisée par ces versions.
 
