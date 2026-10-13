@@ -122,8 +122,11 @@ end
 
 local function tag(name, attributes, text)
   local fields = {"<", name}
-  for key, value in pairs(attributes) do
-    fields[#fields + 1] = " " .. key .. '= "' .. xml_escape(value) .. '"'
+  local keys = {}
+  for key in pairs(attributes) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    fields[#fields + 1] = " " .. key .. '="' .. xml_escape(attributes[key]) .. '"'
   end
   if text == nil then
     fields[#fields + 1] = "/>"
