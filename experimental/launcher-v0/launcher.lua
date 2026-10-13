@@ -1,6 +1,7 @@
 -- PMKB Launcher V0: pure Lua menu model + SVG host-side preview.
 -- No framebuffer, input device, filesystem, process or network access.
 local M = {}
+local statusbar = dofile("experimental/launcher-v0/statusbar.lua")
 
 local ITEMS = {
   {id = "books", label = "LIVRES", detail = "KOReader", enabled = true},
@@ -20,7 +21,7 @@ end
 function M.new(width, height)
   width, height = width or 1080, height or 1440
   assert(valid_size(width) and valid_size(height), "invalid logical screen size")
-  return {width = width, height = height, selected = 1}
+  return {width = width, height = height, selected = 1, status = statusbar.defaults()}
 end
 
 function M.items()
@@ -61,8 +62,18 @@ function M.tiles(state)
   return result
 end
 
+function M.with_status(state, sample)
+  local copy = {width = state.width, height = state.height, selected = state.selected}
+  copy.status = statusbar.patch(state.status or statusbar.defaults(), sample)
+  return copy
+end
+
+function M.quick_controls(state)
+  return statusbar.controls(state)
+end
+
 local function updated(state, selected)
-  return {width = state.width, height = state.height, selected = selected}
+  return {width = state.width, height = state.height, selected = selected, status = state.status}
 end
 
 -- Inert intent only. The caller must decide whether/how to run KOReader.
@@ -94,6 +105,11 @@ function M.handle(state, event)
         and y >= tile.y and y < tile.y + tile.height then
         return activate(state, i)
       end
+    end
+    local control = statusbar.hit(state, x, y)
+    if control then
+      -- Host-only request: never probes hardware or changes the status itself.
+      return state, {kind = "quick_request", id = control}
     end
     return state, {kind = "ignored"}
   end
@@ -185,6 +201,7 @@ function M.render_svg(state)
       fill=primary,["text-anchor"]="middle",["font-family"]="sans-serif",
       ["font-size"]=math.floor(math.min(tile.height * 0.08,tile.width * 0.056))},tile.detail)
   end
+  out[#out + 1] = statusbar.render_svg(state)
   local active = ITEMS[state.selected]
   out[#out + 1] = tag("text", {x=math.floor(state.width * 0.045),
     y=math.floor(state.height * 0.935),fill="#000000",["font-family"]="sans-serif",
