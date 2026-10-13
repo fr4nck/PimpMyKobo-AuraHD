@@ -46,6 +46,24 @@ for _, dims in ipairs({{1080,1440}, {1440,1080}, {600,800}}) do
   expect(svg:find("<image", 1, true) == nil, "no external raster assets")
   expect(svg:find("01 / 08", 1, true) ~= nil, "focus status displayed")
 end
+local unknown = launcher.new(1080,1440)
+expect(unknown.status.battery == nil and unknown.status.wifi == "unknown", "not pretending device is connected")
+local instrumented = launcher.with_status(unknown, {
+  battery=87, charging=false, wifi="off", frontlight=30, contrast="normal",
+})
+expect(unknown.status.battery == nil, "sample not mutating menu state")
+expect(instrumented.status.battery == 87, "external telemetry accepted")
+local controls = launcher.quick_controls(instrumented)
+expect(#controls == 7, "seven quick zones")
+local next_status, request = launcher.handle(instrumented, {
+  type="tap", x=controls[2].x+2, y=controls[2].y+2,
+})
+expect(next_status == instrumented and request.kind == "quick_request"
+  and request.id == "wifi", "inert wifi request")
+expect(instrumented.status.wifi == "off", "tap cannot turn wifi on")
+local status_svg = launcher.render_svg(instrumented)
+expect(status_svg:find('data-pmkb-status="host-simulation"',1,true) ~= nil, "status marked as simulated")
+expect(status_svg:find("WIFI OFF",1,true) ~= nil, "sample displayed")
 local s = launcher.new(1080,1440)
 local s2, a = launcher.handle(s,{type="key",key="right"})
 expect(s.selected == 1 and s2.selected == 2 and a.kind == "moved", "pure state change")

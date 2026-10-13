@@ -80,3 +80,22 @@ Le visuel de référence a été assemblé sans redessiner les scènes et est **
 Le [miniature 1 bit 128 px](assets/pmkb-v02-layout-thumbnail-128.png) reste disponible pour la documentation, mais **ne remplace pas les images pleine résolution**. La maquette reste conceptuelle : les indications Wi-Fi connecté et batterie 87 % sont fictives. **Le rendu Lua actuel utilise encore les anciens pictogrammes vectoriels** ; les graphismes approuvés ne sont pas encore découpés en tuiles ni reliés au moteur d'affichage e-ink.
 
 La grille logique de navigation a été réordonnée dans `launcher.lua` ; `tests/test_launcher_v0.lua` contient désormais une assertion d'ordre exacte. Le rendu visuel final riche n'est **pas** encore implémenté en Lua ni vérifié sur l'Aura HD. Aucune modification du FIRST BOOT, de `rcS`, de `pmkb-reader` ou de stockage Kobo autorisée par ce lot.
+
+## V0.3 — bandeau d'état (simulation PC seulement)
+
+- Le modèle Lua inclut maintenant **sept zones** sous la grille : batterie/charge, Wi-Fi, frontlight, contraste logiciel, rafraîchissement e-ink, veille et réglages.
+- **Valeurs inconnues par défaut** : jamais de faux Wi-Fi connecté ni de pourcentage de batterie inventé.
+- `launcher.with_status(state, telemetry)` reçoit des **mesures fournies de l'extérieur**, les valide (pourcentages entiers 0–100 ; états Wi-Fi énumérés), et crée un nouvel état sans modifier le précédent. Aucune interrogation de la Kobo.
+- Les taps sur le bandeau produisent uniquement `{kind="quick_request",id="wifi"|...}` : demandes **inertes**, aucun Wi-Fi activé, aucune écriture sysfs, aucun changement de luminosité ou de veille.
+- Le nouveau bandeau est visible dans **l'ancien aperçu SVG technique à pictogrammes**, pas encore superposé au PNG manga validé. L'original RGB et ses variantes optimisées sont strictement inchangés.
+- La capture de données batterie/USB, réseau, rétroéclairage, framebuffer/EPDC et mise en veille nécessitera un backend séparé, qualifié sur le matériel, **hors du candidat FIRST BOOT scellé**.
+
+Depuis la racine du dépôt, avec Lua 5.1/5.3/LuaJIT :
+
+```sh
+lua tests/test_launcher_v0.lua
+lua tests/test_launcher_statusbar.lua
+lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
+```
+
+Le scénario `status-preview.lua` injecte des valeurs **fictives et clairement simulées** (batterie 87 %, Wi-Fi coupé, frontlight 25 %) afin de vérifier visuellement la maquette technique. Aucune interaction matérielle.

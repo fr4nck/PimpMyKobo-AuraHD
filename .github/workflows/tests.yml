@@ -26,6 +26,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y fakeroot e2fsprogs
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Run Lua launcher tests (one Linux matrix job)
+        if: runner.os == 'Linux' && matrix.python-version == '3.10'
+        run: |
+          sudo apt-get install -y lua5.1
+          lua tests/test_launcher_v0.lua
+          lua tests/test_launcher_statusbar.lua
+          lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
   qt:
     strategy:
       fail-fast: false
