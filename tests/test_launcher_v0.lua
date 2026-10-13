@@ -20,6 +20,9 @@ for _, dims in ipairs({{1080,1440}, {1440,1080}, {600,800}}) do
         t.y >= u.y + u.height or u.y >= t.y + t.height, "no tile overlap")
     end
   end
+  -- Leave a dedicated footer band below the final row on both orientations.
+  local last_bottom = tiles[#tiles].y + tiles[#tiles].height
+  expect(last_bottom < math.floor(s.height * 0.90), "footer must not overlap tiles")
   local first = tiles[1]
   local t, action = launcher.handle(s,{type="tap",x=first.x + 5,y=first.y+5})
   expect(t.selected == 1 and action.kind == "intent" and action.name == "open_reader", "books inert intent")
