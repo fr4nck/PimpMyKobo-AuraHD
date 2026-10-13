@@ -39,7 +39,7 @@ local function geometry(state)
   local side = math.floor(w * 0.045)
   local gap = math.floor(w * (landscape and 0.012 or 0.020))
   local top = math.floor(h * (landscape and 0.145 or 0.125))
-  local bottom = math.floor(h * 0.090)
+  local bottom = math.floor(h * 0.125)
   local tile_w = math.floor((w - 2 * side - (columns - 1) * gap) / columns)
   local tile_h = math.floor((h - top - bottom - (rows - 1) * gap) / rows)
   return columns, side, gap, top, tile_w, tile_h
