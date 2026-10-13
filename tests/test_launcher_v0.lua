@@ -32,6 +32,12 @@ for _, dims in ipairs({{1080,1440}, {1440,1080}, {600,800}}) do
   expect(action.kind == "ignored", "nan tap safe")
   local svg = launcher.render_svg(s)
   expect(svg:find("<svg",1,true) ~= nil and svg:find("LIVRES",1,true) ~= nil, "preview")
+  -- Pictograms are distinct vector paths, independent of webfonts/images.
+  for _, item in ipairs(launcher.items()) do
+    expect(svg:find('data-app="' .. item.id .. '"', 1, true) ~= nil, "icon " .. item.id)
+  end
+  expect(svg:find("<image", 1, true) == nil, "no external raster assets")
+  expect(svg:find("01 / 08", 1, true) ~= nil, "focus status displayed")
 end
 local s = launcher.new(1080,1440)
 local s2, a = launcher.handle(s,{type="key",key="right"})
@@ -44,4 +50,6 @@ local s5, d = launcher.handle(s2,{type="key",key="down"})
 expect(s5.selected == 4 and d.kind == "moved", "grid navigation")
 local s6, e = launcher.handle(s,{type="key",key="bogus"})
 expect(s6 == s and e.kind == "ignored", "unrecognized key no side effects")
-print("launcher-v0: PASS (menu, touch, keyboard, geometry, disabled entries, preview)")
+expect(launcher.render_svg(s2):find("02 / 08", 1, true) ~= nil, "focus is rendered")
+expect(launcher.render_svg(s2):find("BIENTOT", 1, true) ~= nil, "unavailable is visible")
+print("launcher-v0: PASS (menu, touch, keyboard, geometry, 8 vector icons, focus, disabled entries, preview)")
