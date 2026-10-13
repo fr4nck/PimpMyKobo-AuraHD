@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, fix/claude-audit, feat/rebuild-rootfs-spec]
+    branches: [main, fix/claude-audit, feat/rebuild-rootfs-spec, feat/pmkb-notes-v02-typography-drawer]
   pull_request:
 
 permissions:
@@ -39,6 +39,22 @@ jobs:
           node --check experimental/notes-v01/notes-core.js
           node --check experimental/notes-v01/notes-app.js
           node --test tests/test_launcher_simulator.cjs tests/test_notes_core.cjs
+  notes:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Notes syntax and regression tests
+        run: |
+          node --check experimental/notes-v01/notes-core.js
+          node --check experimental/notes-v01/notes-app.js
+          node --test tests/test_notes_core.cjs tests/test_notes_app.cjs
   qt:
     strategy:
       fail-fast: false

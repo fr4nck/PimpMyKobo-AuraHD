@@ -18,6 +18,8 @@ La V0.2 est développée **sur une branche empilée sur la PR Notes V0.1 (#26)**
 
 ## Fonctions disponibles
 
+**Règle UX durable et obligatoire** : [politique Notes issue de l'ADR-005](../../docs/notes-ux-policy.md). L'état court est placé près d'Enregistrer, sans grande case. Les erreurs apparaissent seulement si nécessaires et proposent une correction ; le rappel d'export JSON est dans Mes notes. Les contrôles courts utilisent des largeurs sémantiques communes. La fusion des PR #25/#26/#27 exige la validation visuelle explicite de l'utilisateur.
+
 - Liste de notes : création, sélection, renommage, recherche plein texte et suppression avec confirmation.
 - Éditeur de texte UTF-8, fonctionnement hors ligne, limites explicites (100 notes, 120 000 caractères par note).
 - Onglet **Croquis** par note : crayon, gomme, traits fins/moyens/épais, annuler/rétablir, effacer avec confirmation, tracés au doigt ou à la souris via Pointer Events.
@@ -50,6 +52,7 @@ Le serveur Python sert seulement les fichiers locaux à votre navigateur. Le car
 - \`notes-app.js\` : interface navigateur, écoute tactile/souris, rendu canvas, export de fichiers et stockage browser-local.
 - \`index.html\` : interface monochrome responsive, onglet Texte / Croquis.
 - \`tests/test_notes_core.cjs\` : tests Node natifs du modèle, export/import, limites, intégrité et cas invalides.
+- `tests/test_notes_app.cjs` : tests de l'adaptateur réel avec stockage/DOM simulés, erreurs conditionnelles, quota, import refusé, retry et export ; CI Node 22 Windows/Linux.
 - \`tests/test_notes_host_assets.py\` : contrôles de structure, hors réseau/matériel, inclus dans la CI Python.
 
 Depuis la racine du dépôt :

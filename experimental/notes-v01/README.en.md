@@ -18,6 +18,8 @@ V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of
 
 ## Implemented features
 
+**Mandatory enduring UX rule**: [Notes policy derived from ADR-005](../../docs/notes-ux-policy.md). Short storage status sits beside Save without a large box. Actionable errors appear only when needed; the JSON backup reminder belongs in My Notes. Short controls use shared semantic widths. PRs #25/#26/#27 require explicit user visual acceptance before merging.
+
 - Create, select, rename, search and delete notes, with confirmation before deletion.
 - Offline UTF-8 text editor; explicit limits (100 notes and 120,000 characters per note).
 - Optional **Sketch** tab for every note: pen, eraser, three line widths, undo/redo, confirmed clear action, touch/mouse Pointer Events.
@@ -50,6 +52,7 @@ The Python command serves local files only. Browser-local storage is scoped to t
 - \`notes-app.js\`: browser UI, touch/mouse drawing, downloads and browser-local storage.
 - \`index.html\`: monochrome adaptive text/sketch interface.
 - \`tests/test_notes_core.cjs\`: built-in Node.js tests for text, drawing, export/import and malformed data.
+- `tests/test_notes_app.cjs`: real adapter with simulated DOM/storage, conditional errors, quota, rejected imports, retry and export; Node 22 CI on Windows/Linux.
 - \`tests/test_notes_host_assets.py\`: Python standard-library contract tests, part of CI.
 
 \`\`\`bash

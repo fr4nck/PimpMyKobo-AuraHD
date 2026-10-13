@@ -89,4 +89,12 @@ Keep tests free of redistributed Kobo firmware/blobs. Use synthetic fixtures whe
 
 ## Scope discipline
 
+For **PMKB Notes only**, PMSL-Arch ADR-005 is normative. Read and follow
+[`docs/notes-ux-policy.md`](docs/notes-ux-policy.md) before changing Notes UI:
+semantic field widths, compact save feedback beside Save, conditional actionable
+errors, JSON backup reminder in My Notes, shared layout primitives, accessibility,
+regression tests and targeted visual acceptance. PRs #25/#26/#27 require explicit
+user visual validation before merging. This rule does not authorize changes to
+FIRST BOOT, partitions or approved images.
+
 PMKB is intended to become an independent e-ink environment, not a general-purpose tablet OS. Prefer designs that exploit e-ink characteristics: static pages, partial refreshes, touch-first interaction and low background activity. Avoid introducing heavy frameworks or permanent services without a demonstrated need on this 512 MiB device.

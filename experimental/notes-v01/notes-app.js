@@ -11,6 +11,7 @@
   const refs={
     list:$("note-list"),search:$("search"),title:$("note-title"),text:$("note-text"),
     empty:$("empty-state"),editor:$("editor"),badge:$("save-status"),
+    error:$("notes-error"),backupResult:$("backup-result"),
     count:$("note-count"),canvas:$("sketch"),screen:$("sketch-pane"),
     textPane:$("text-pane"),sketchPane:$("sketch-pane"),file:$("import-file"),
     tool:$("tool-label")
@@ -20,6 +21,7 @@
   let book=C.empty(),selected=null,pending=null,saving=null;
   let tab="text",tool="pen",width=5,drawing=null,redo=[];
   let storageEnabled=false;
+  const errors=new Map();
   const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
   const fontNames={
     mono:'ui-monospace,Consolas,"DejaVu Sans Mono",monospace',
@@ -103,7 +105,7 @@
     try{
       update({typography:C.typography(next)});
       applyTypography();
-    }catch(err){applyTypography();status(err.message,true);}
+    }catch(err){applyTypography();fontMessage.textContent="Taille refusée : choisir un nombre entre 12 et 36 px.";}
   }
   async function importFont(event) {
     const file=event.target.files[0];fontFile.value="";
@@ -140,9 +142,17 @@
   }
 
   function now(){return new Date().toISOString();}
-  function status(msg,warning){
+  function status(msg,warning,scope="action"){
+    if(warning)errors.set(scope,msg);
+    else errors.delete(scope);
+    refs.error.textContent=[...errors.values()].join(" · ");
+    refs.error.hidden=errors.size===0;
+    if(scope==="storage")return;
+    refs.backupResult.textContent=warning?"":msg;
+    refs.backupResult.hidden=warning||!msg;
+  }
+  function saveStatus(msg){
     refs.badge.textContent=msg;
-    refs.badge.classList.toggle("warning",Boolean(warning));
   }
   function stored(){
     try {
@@ -153,7 +163,8 @@
     }catch(error){
       book=C.empty();
       storageEnabled=false;
-      status("Stockage du navigateur indisponible : exporter les notes en JSON",true);
+      saveStatus("Non enregistré");
+      status("Stockage local inaccessible ou carnet illisible : conserver les données du navigateur et exporter les notes en JSON depuis Mes notes.",true,"storage");
     }
   }
   function persist(){
@@ -162,15 +173,17 @@
       const value=C.encode(book);
       if(!storageEnabled)throw Error("Stockage local désactivé");
       window.localStorage.setItem(STORAGE,value);
-      status("Enregistré dans ce navigateur · exporter pour sauvegarder",false);
+      saveStatus("Enregistré localement");
+      status("",false,"storage");
       return true;
     }catch(error){
-      status("Sauvegarde auto indisponible : exporter en JSON !",true);
+      saveStatus("Non enregistré");
+      status("Enregistrement local impossible : libérer du stockage ou exporter en JSON depuis Mes notes.",true,"storage");
       return false;
     }
   }
   function queueSave(){
-    status("Modification en attente…",false);
+    saveStatus("En attente…");
     clearTimeout(saving);
     saving=setTimeout(persist,350);
   }
@@ -378,7 +391,7 @@
       refs.editor.hidden=true;refs.empty.hidden=false;
       toggleDrawer(false);
       renderList();
-      status("Import effectué. Sauvegarde dans ce navigateur uniquement.",false);
+      status("Import effectué.",false);
     }catch(err){status("Import refusé : "+err.message,true);}
   }
   function deleteCurrent(){
@@ -462,6 +475,5 @@
   const mostRecent=C.sorted(book)[0];
   if(mostRecent)showEditor(mostRecent.id);
   else applyTypography();
-  if(!book.notes.length)status("Carnet vide. Crée une note et exporte une sauvegarde JSON.",!storageEnabled);
-  else if(storageEnabled)status("Notes locales chargées · export JSON conseillé",false);
+  if(storageEnabled)saveStatus(book.notes.length?"Notes locales chargées":"Carnet vide");
 })();

@@ -1,9 +1,29 @@
 """PMKB Notes: host-only UI contract and safety guardrails (no browser dependency)."""
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "experimental" / "notes-v01"
+
+class NotesStructure(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.stack = []
+        self.nodes = {}
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        node = {"tag": tag, "attrs": attrs, "ancestors": list(self.stack)}
+        if "id" in attrs:
+            self.nodes[attrs["id"]] = node
+        if tag not in {"input", "meta", "link", "br", "img"}:
+            self.stack.append(node)
+
+    def handle_endtag(self, tag):
+        if self.stack and self.stack[-1]["tag"] == tag:
+            self.stack.pop()
 
 class TestNotesHostAssets(unittest.TestCase):
     @classmethod
@@ -11,6 +31,35 @@ class TestNotesHostAssets(unittest.TestCase):
         cls.html = (APP / "index.html").read_text(encoding="utf-8")
         cls.browser = (APP / "notes-app.js").read_text(encoding="utf-8")
         cls.core = (APP / "notes-core.js").read_text(encoding="utf-8")
+
+    def test_normative_notes_density_and_feedback_placement(self):
+        nodes = NotesStructure(self.html).nodes
+        save = nodes["save-now"]
+        status = nodes["save-status"]
+        self.assertIs(save["ancestors"][-1], status["ancestors"][-1])
+        self.assertEqual(save["ancestors"][-1]["attrs"]["class"], "save-control")
+        self.assertEqual(status["tag"], "span")
+        self.assertEqual(status["attrs"]["role"], "status")
+        self.assertEqual(save["attrs"]["aria-describedby"], "save-status")
+        error = nodes["notes-error"]["attrs"]
+        self.assertIn("hidden", error)
+        self.assertEqual(error["role"], "alert")
+        for name in ("backup-reminder", "backup-result", "export-json", "import-button"):
+            with self.subTest(name=name):
+                self.assertTrue(any(n["attrs"].get("id") == "notes-drawer"
+                                    for n in nodes[name]["ancestors"]))
+        self.assertNotIn("Enregistré dans ce navigateur · exporter pour sauvegarder", self.browser)
+        self.assertIn("--field-number:7ch", self.html)
+        self.assertIn("--field-font:22ch", self.html)
+        self.assertIn("select:focus-visible", self.html)
+
+    def test_ux_rule_and_ci_are_durable(self):
+        policy = (ROOT / "docs" / "notes-ux-policy.md").read_text(encoding="utf-8")
+        self.assertIn("ADR-005-formulaires-densite-informationnelle.md", policy)
+        self.assertIn("docs/notes-ux-policy.md", (ROOT / "AGENTS.md").read_text(encoding="utf-8"))
+        ci = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+        self.assertIn("tests/test_notes_app.cjs", ci)
+        self.assertIn("feat/pmkb-notes-v02-typography-drawer", ci)
 
     def test_standalone_ui_has_editing_and_optional_sketch(self):
         for marker in (
