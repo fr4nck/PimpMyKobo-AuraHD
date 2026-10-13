@@ -222,15 +222,17 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [ ] Intégrer KOReader
 - [ ] Tester une microSD totalement libérée
 
-## Launcher e-ink — maquette V0.2
+## Launcher e-ink — visuels V0.2, simulation V0.4 et dock V0.5
 
 Un prototype Lua isolé sur PC fournit la navigation et un aperçu SVG ; la composition manga/pixel-art **V0.2** et ses images sont désormais versionnées. Le format **16 niveaux de gris (PNG 4 bits, 250 757 octets)** est privilégié pour les essais futurs ; l'original RGB reste intact.
 
-- [Prototype Lua et README du launcher](experimental/launcher-v0/README.md).
+- [Prototype Lua, V0.4/V0.5 et README du launcher](experimental/launcher-v0/README.md).
+- [**Ouvrir le simulateur V0.4/V0.5 sur PC**](experimental/launcher-v0/simulator.html) : véritable PNG 16 gris, huit tuiles cliquables, navigation et états de batterie/Wi-Fi **simulés**.
+- **V0.5** : dock de raccourcis applicatifs personnalisables en session, séparé des sept contrôles système ; états visuels clair/sombre générés à l'affichage sans modifier les PNG.
 - [Graphismes V0.2 validés (original, 16 gris, 4 gris, 1 bit, comparatif et manifeste)](experimental/launcher-v0/assets/v02/).
 - [Mesures d'optimisation et limites de qualification](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
 
-**Aucun launcher graphique embarqué n'est encore qualifié sur la Kobo** ; les statuts Wi-Fi/batterie de la maquette sont fictifs. Aucun changement du FIRST BOOT n'a été effectué lors de l'import des images.
+**Aucun launcher graphique embarqué n'est encore qualifié sur la Kobo** ; les valeurs d'énergie et réseau restent fictives. KOReader reçoit seulement une intention `open_reader`, sans lancement effectif. Le dock et la barre système n'activent aucun périphérique. Les illustrations validées, P1/P2/P3 et FIRST BOOT restent inchangés.
 
 ## Documentation
 

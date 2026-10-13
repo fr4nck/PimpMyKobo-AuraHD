@@ -41,7 +41,8 @@ Avant toute inspection sous Windows : [protéger la microSD](windows-preservatio
 
 ## Launcher e-ink expérimental
 
-- [Prototype Lua et README du launcher](../experimental/launcher-v0/README.md) : navigation simulée sur PC ; encore aucun backend framebuffer/tactile qualifié.
+- [Prototype Lua et README du launcher (V0.4/V0.5)](../experimental/launcher-v0/README.md) : navigation simulée sur PC ; aucun backend framebuffer/tactile qualifié.
+- [**Lancer le simulateur illustré sur PC**](../experimental/launcher-v0/simulator.html) : huit panneaux cliquables, états clair/sombre et dock applicatif distinct de la barre système (V0.5 en prototype). Les actions sont inertes.
 - [Graphismes V0.2 validés dans Git](../experimental/launcher-v0/assets/v02/) : original RGB, 16 gris, 4 gris, 1 bit, comparatif et manifeste.
 - [Qualification des graphismes V0.2](launcher-v02-asset-qualification-2026-10-13-fr.md) : poids, SHA-256, limites matérielles.
 

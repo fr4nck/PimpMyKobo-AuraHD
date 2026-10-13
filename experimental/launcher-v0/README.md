@@ -124,3 +124,14 @@ Le fichier local ouvre le navigateur Windows. En cas de restrictions locales sur
 `simulator.js` reprend à l'identique l'ordre des huit IDs Lua et les sept zones de V0.3. Cette interface DOM JavaScript ne réemploie pas directement l'exécution Lua, mais des tests automatiques contrôlent cette correspondance. Il n'y a ni backend réseau, ni usage de `fetch`, ni stockage local, ni accès aux partitions.
 
 Tests : `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v` et `node --test tests/test_launcher_simulator.cjs`; CI Python multi-OS et Node dans un seul job Linux. La vérification tactile réelle de l'Aura HD reste **UNQUALIFIED**.
+
+## V0.5 — dock applicatif et états clair/sombre (simulation)
+
+- Le **dock de lancement rapide** est rétabli en haut du bandeau inférieur, séparé de la **barre système** sur la seconde ligne. Le dock présente des icônes vectorielles monochromes compactes ; les contrôles système affichent toujours les données fictives. Cette implantation provisoire partage la hauteur de 66 pixels de la maquette (1080 × 1440) : **taille réelle des cibles tactiles à requalifier sur la liseuse**.
+- Favoris par défaut : **Livres, Notes, Recettes, Web**. Dans le simulateur, l'utilisateur peut choisir **1 à 5 favoris** parmi les huit rubriques, sans compte, accès disque, ni persistance entre sessions.
+- **Clair / sombre** : pour chaque vignette, la sélection fait commuter le rendu depuis **la même image PNG 16 gris approuvée**. La copie recadrée est inversée par CSS si nécessaire (notamment Livres et Web, foncés dans la source). Il s'agit de **deux états graphiques rendus dynamiquement**, et non de seize PNG de remplacement publiés. Les originaux 1086 × 1448 RGB et 1080 × 1440 16/4/1 bit restent octet pour octet intacts.
+- Clic sur une scène ou une icône de dock : **une seule action**. Livres = intention KOReader inerte ; toutes les autres entrées = indisponibles. Aucune commande système, réveil de service ni activation Wi-Fi.
+- Dans cette V0.5, `simulator.html` est une **simulation DOM/JavaScript** de la géométrie approuvée ; elle ne remplace pas le modèle Lua ni un backend e-ink. Une future interface embarquée devra mesurer le tactile, les rafraîchissements partiels et la mémoire, et définir une stratégie d'assets normal/sélectionné sans pénaliser le lecteur.
+- Contrôles automatiques : `node --test tests/test_launcher_simulator.cjs` et `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`, plus CI générale. L'ouverture et l'aspect sous navigateur PC restent à contrôler visuellement.
+
+**Aucune modification des illustrations V0.2, des partitions Kobo, de FIRST BOOT, de `rcS` ou de `pmkb-reader`.**

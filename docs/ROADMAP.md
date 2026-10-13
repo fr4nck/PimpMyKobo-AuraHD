@@ -6,6 +6,17 @@ Snapshot: 3 October 2026, `feat/rebuild-rootfs-spec`. Implemented code is distin
 
 This roadmap keeps the project focused on one principle: **preserve first, modify only after the original device can be recovered**.
 
+## 13 October 2026 addendum — experimental launcher (host only)
+
+| Milestone | Verified state | Remaining limit |
+| --- | --- | --- |
+| V0.2 — approved manga assets | **Committed**: RGB original, 16-gray 1080 × 1440 PNG (250,757 bytes), 4-gray and 1-bit alternatives, SHA-256 manifest | Not an embedded interface |
+| V0.3 — simulated Lua system status | **Implemented and tested**: battery, Wi-Fi, frontlight, contrast, refresh, sleep, settings | Inert requests; no physical readings |
+| V0.4 — [clickable illustrated PC preview](../experimental/launcher-v0/simulator.html) | **Merged into main**: eight approved scenes, keyboard/mouse navigation, dummy telemetry | KOReader launch and actual touch not implemented |
+| V0.5 — app dock and focus states | **Host prototype**: separate configurable session-only favorites dock; CSS-composited light/dark states; source art unchanged | Screen-space/readability and e-ink behavior pending hardware qualification |
+
+See the [launcher README](../experimental/launcher-v0/README.md) for reproduction. Approved layout remains **Books / Apps, Games / Web, Recipes / Notes, Store / Settings**. Do not redraw the approved PNG. FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 must remain intact. **Hardware display, touch, light, energy, wireless, sleep, boot and KOReader integration remain UNQUALIFIED.** No physical write is authorized by any launcher milestone.
+
 Status legend: **DONE** · **IMPLEMENTED** (hardware qualification pending where specified) · **IN PROGRESS** · **NEXT** · **PLANNED** · **EXPERIMENTAL**
 
 ## Current snapshot and next gates

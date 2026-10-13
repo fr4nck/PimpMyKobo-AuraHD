@@ -222,15 +222,17 @@ A read-only tool does not make the host operating system unable to write to the 
 - [ ] Integrate KOReader
 - [ ] Test a fully liberated microSD image
 
-## E-ink launcher — V0.2 concept art
+## E-ink launcher — V0.2 artwork, V0.4 preview and V0.5 dock
 
 An isolated host-side Lua prototype implements menu navigation and SVG preview. The approved **V0.2 manga/pixel-art design** and its graphic assets are now committed. **16 grayscale levels (4-bit indexed PNG, 250,757 bytes)** are the preferred starting point for future tests; the original RGB artwork is preserved unchanged.
 
-- [Launcher prototype and README](experimental/launcher-v0/README.md).
+- [Lua prototype, V0.4/V0.5 and launcher README](experimental/launcher-v0/README.md).
+- [**Open the V0.4/V0.5 local host simulator**](experimental/launcher-v0/simulator.html): unchanged approved 16-gray PNG, eight clickable tiles, keyboard navigation and **simulated** system telemetry.
+- **V0.5:** configurable session-only app shortcut dock, distinct from seven system controls; light/dark focus states composed on-screen without editing approved PNG files.
 - [Approved V0.2 assets (original, 16-gray, 4-gray, 1-bit, comparison and manifest)](experimental/launcher-v0/assets/v02/).
 - [Compression measurements and qualification limits (French)](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
 
-**No graphical launcher has been qualified on real Kobo hardware.** The Wi-Fi and battery values in the mockup are illustrative. Importing these assets did not alter FIRST BOOT.
+**No graphical launcher is qualified on the real Kobo.** All Wi-Fi/battery values are illustrative. KOReader remains an inert `open_reader` intent, not an executable launch. Dock/system buttons cannot change hardware; approved artwork, P1/P2/P3 and FIRST BOOT remain untouched.
 
 ## Documentation
 

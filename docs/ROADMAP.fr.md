@@ -4,6 +4,17 @@
 
 État au 3 octobre 2026, branche `feat/rebuild-rootfs-spec`. Une fonctionnalité codée et testée sur fichiers ne constitue pas une validation sur la vraie Kobo. Cette roadmap ne donne aucune autorisation d'écriture physique.
 
+## Ajout du 13 octobre 2026 — launcher expérimental (hôte uniquement)
+
+| Jalons | État vérifiable | Limitations |
+| --- | --- | --- |
+| V0.2 — composition manga et versions optimisées | **Validé et conservé dans Git** : PNG RGB, 16 gris (1080 × 1440, 250 757 octets), 4 gris, 1 bit et manifeste SHA-256 | Pas une interface embarquée |
+| V0.3 — barre système simulée Lua | **Implémenté et testé** : batterie, Wi-Fi, éclairage, contraste, rafraîchissement, veille et réglages | Demandes inertes ; aucune mesure réelle |
+| V0.4 — [accueil illustré cliquable sur PC](../experimental/launcher-v0/simulator.html) | **Fusionné dans main** : huit scènes approuvées, navigation clavier/souris et états fictifs | KOReader non lancé ; navigateur/tactile matériel non qualifiés |
+| V0.5 — dock et sélection | **Prototype hôte** : dock applicatif distinct, favoris configurables en session, états clair/sombre via composition CSS, sans modifier les images | Compromis d'espace et de contraste e-ink à valider sur matériel |
+
+Détails et commandes : [README du launcher](../experimental/launcher-v0/README.md). L'ordre approuvé reste **Livres / Applications, Jeux / Web, Recettes / Notes, Boutique / Réglages**. Le PNG original **ne doit pas être redessiné**. Le chemin FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 restent protégés. **Toute qualification matérielle (écran, tactile, frontlight, énergie, Wi-Fi, veille, boot, lancement KOReader) est en attente** ; aucune opération d'écriture n'est autorisée par ces versions.
+
 ## Où nous en sommes
 
 | Étape | État | Limite restante |
