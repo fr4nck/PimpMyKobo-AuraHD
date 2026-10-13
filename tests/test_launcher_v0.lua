@@ -3,6 +3,10 @@ local launcher = dofile("experimental/launcher-v0/launcher.lua")
 local function expect(value, message) assert(value, message) end
 local items = launcher.items()
 expect(#items == 8, "8 stable launcher entries")
+local wanted = {"books", "apps", "games", "web", "recipes", "notes", "store", "settings"}
+for i, id in ipairs(wanted) do
+  expect(items[i].id == id, "layout order slot " .. i .. ": " .. id)
+end
 expect(items[1].id == "books" and items[1].enabled, "only books active")
 for i = 2, #items do expect(not items[i].enabled, "future features inactive") end
 items[1].id = "tampered"
@@ -50,7 +54,7 @@ expect(s3.selected == 2 and b.kind == "unavailable", "keyboard never launches di
 local s4, c = launcher.handle(s2,{type="key",key="right"})
 expect(s4.selected == 2 and c.kind == "ignored", "no wrap across row")
 local s5, d = launcher.handle(s2,{type="key",key="down"})
-expect(s5.selected == 4 and d.kind == "moved", "grid navigation")
+expect(s5.selected == 4 and d.kind == "moved" and d.id == "web", "grid navigation: Web beside Games")
 local s6, e = launcher.handle(s,{type="key",key="bogus"})
 expect(s6 == s and e.kind == "ignored", "unrecognized key no side effects")
 expect(launcher.render_svg(s2):find("02 / 08", 1, true) ~= nil, "focus is rendered")
