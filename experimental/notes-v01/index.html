@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PMKB Notes V0.1 — éditeur et croquis</title>
+  <style>
+    * {box-sizing:border-box}
+    [hidden] {display:none!important}
+    :root {color-scheme:light}
+    body {margin:0;background:#ddd;color:#111;font:16px/1.45 system-ui,-apple-system,sans-serif}
+    button,input,textarea {font:inherit}
+    button {cursor:pointer;color:inherit;background:white;border:2px solid #111;border-radius:2px;padding:8px 12px}
+    button:hover,button:focus-visible {background:#e8e8e8;outline:2px solid #555;outline-offset:2px}
+    button.active,button.chosen {background:#111;color:white}
+    h1,h2,h3,p {margin-top:0}
+    header {padding:17px 22px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+    header h1 {font-size:1.2rem;letter-spacing:.04em;margin:0}
+    header small {color:#ccc}
+    .flag {border:1px solid #aaa;padding:4px 9px;font:12px monospace}
+    main {max-width:1350px;min-height:calc(100vh - 94px);margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(230px,310px) minmax(350px,1fr);gap:16px}
+    nav,article {background:#fafafa;border:2px solid #111;min-width:0}
+    nav {padding:15px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 125px)}
+    nav .section-head {display:flex;align-items:center;justify-content:space-between}
+    nav h2 {font-size:1rem;margin:0}
+    #search, #note-title {width:100%;background:white;border:2px solid #888;border-radius:0;padding:10px}
+    .note-list {overflow-y:auto;min-height:160px;display:flex;flex-direction:column;gap:8px}
+    .note-item {text-align:left;display:flex;flex-direction:column;gap:2px;min-height:58px}
+    .note-item strong {font-size:14px;overflow-wrap:anywhere}
+    .note-item small {font-size:12px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .no-match {font-size:13px;color:#666}
+    .backup {border-top:1px solid #999;padding-top:13px;display:grid;gap:8px}
+    .backup button {width:100%}
+    article {padding:18px;display:flex;flex-direction:column;gap:14px}
+    #empty-state {min-height:470px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px}
+    #empty-state h2 {font-size:1.45rem}
+    #editor {display:flex;flex-direction:column;gap:13px;min-height:0}
+    .editor-head {display:flex;gap:12px;align-items:center}
+    .editor-head #note-title {font-size:1.2rem;font-weight:700;min-width:0;flex:1}
+    .tabs {display:flex;gap:8px;border-bottom:2px solid #111;padding-bottom:10px}
+    .tabs button {min-width:120px}
+    #note-text {display:block;width:100%;min-height:430px;resize:vertical;border:2px solid #666;background:#fff;padding:18px;
+      font:17px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#111}
+    .hint {font-size:13px;color:#444}
+    .palette {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .palette .group {display:inline-flex;gap:5px;padding-right:10px;border-right:1px solid #aaa}
+    .palette button {min-width:42px}
+    .canvas-border {border:3px solid #111;background:#fff;touch-action:none;user-select:none}
+    #sketch {width:100%;height:auto;display:block;aspect-ratio:3/2;touch-action:none;cursor:crosshair}
+    .actions {display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .danger {border-style:dashed}
+    #save-status {border:2px solid #888;background:#fff;padding:10px;min-height:45px;font-size:13px}
+    #save-status.warning {border-color:#111;background:#eee;font-weight:700}
+    footer {max-width:1350px;margin:0 auto;padding:0 18px 20px;color:#444;font-size:12px}
+    @media(max-width:750px) {
+      main {display:flex;flex-direction:column;padding:10px}
+      nav {max-height:none}
+      .note-list {max-height:220px}
+      article {min-height:540px}
+      #note-text {min-height:340px}
+      .editor-head {flex-wrap:wrap}
+    }
+  </style>
+  <script src="notes-core.js"></script>
+  <script src="notes-app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>PMKB / NOTES <small>V0.1</small></h1>
+      <small>Texte et croquis · interface locale de démonstration</small>
+    </div>
+    <span class="flag">SIMULATEUR PC · HORS LIGNE · AUCUN ACCÈS KOBO</span>
+  </header>
+  <main>
+    <nav aria-label="Mes notes">
+      <div class="section-head">
+        <h2>MES NOTES</h2>
+        <span id="note-count">0 / 100</span>
+      </div>
+      <button id="new-note" type="button">+ Nouvelle note</button>
+      <label for="search">Rechercher</label>
+      <input id="search" type="search" autocomplete="off" placeholder="Titre ou contenu">
+      <div id="note-list" class="note-list" aria-label="Liste des notes"></div>
+      <div class="backup">
+        <strong>Sauvegarde et import</strong>
+        <button id="export-json" type="button">Exporter tout le carnet (.json)</button>
+        <button id="import-button" type="button">Importer un carnet (.json)</button>
+        <input id="import-file" hidden type="file" accept=".json,application/json">
+        <p class="hint">Le navigateur garde une copie locale, sans garantie de conservation. Exporter régulièrement le JSON ; l'import remplace le carnet après confirmation.</p>
+      </div>
+    </nav>
+    <article>
+      <div id="save-status" role="status" aria-live="polite">Chargement du carnet…</div>
+      <section id="empty-state">
+        <h2>Votre carnet PMKB</h2>
+        <p>Créez une note pour écrire ou dessiner. Aucun compte, aucune synchronisation et aucun service requis.</p>
+        <p class="hint">Les notes ne sont pas encore reliées au launcher ou au stockage de la liseuse.</p>
+      </section>
+      <section id="editor" hidden>
+        <div class="editor-head">
+          <label for="note-title" class="visually-label">Titre</label>
+          <input id="note-title" type="text" maxlength="100" placeholder="Titre">
+          <button id="save-now" type="button">Enregistrer</button>
+          <button id="delete-note" class="danger" type="button">Supprimer</button>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Mode de note">
+          <button id="tab-text" type="button" role="tab" aria-selected="true" class="active">Texte</button>
+          <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
+        </div>
+        <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
+          <label for="note-text">Contenu de la note</label>
+          <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
+          <div class="actions" style="margin-top:12px">
+            <button id="export-txt" type="button">Exporter la note (.txt)</button>
+            <span class="hint">UTF-8 · clavier de votre ordinateur pour ce prototype</span>
+          </div>
+        </div>
+        <div id="sketch-pane" role="tabpanel" aria-label="Palette graphique facultative" hidden>
+          <div class="palette" aria-label="Outils de dessin">
+            <div class="group">
+              <button type="button" data-tool="pen" class="active">Crayon</button>
+              <button type="button" data-tool="eraser">Gomme</button>
+            </div>
+            <div class="group" aria-label="Épaisseur">
+              <button type="button" data-width="2">Fin</button>
+              <button type="button" data-width="5" class="active">Moyen</button>
+              <button type="button" data-width="11">Épais</button>
+            </div>
+            <div class="group">
+              <button id="undo" type="button">Annuler</button>
+              <button id="redo" type="button">Rétablir</button>
+            </div>
+            <button id="clear-sketch" class="danger" type="button">Effacer le dessin</button>
+          </div>
+          <div class="canvas-border">
+            <canvas id="sketch" width="900" height="600" aria-label="Zone de croquis ; souris ou tactile"></canvas>
+          </div>
+          <p class="hint"><span id="tool-label">Crayon</span> · <span id="stroke-count">0 / 250 traits</span>. Tracés monochromes enregistrés avec la note.</p>
+          <div class="actions">
+            <button id="export-png" type="button">Exporter le dessin (.png)</button>
+            <span class="hint">Sauvegarde éditable du dessin dans l'export JSON du carnet.</span>
+          </div>
+        </div>
+      </section>
+    </article>
+  </main>
+  <footer>PMKB Notes V0.1 · Prototype HTML/JavaScript autonome. Aucune image approuvée du launcher modifiée ; ni pilote e-ink, ni sauvegarde sur microSD Kobo, ni accès réseau. Palette graphique optionnelle. Synchronisation et clavier e-ink à qualifier plus tard.</footer>
+</body>
+</html>

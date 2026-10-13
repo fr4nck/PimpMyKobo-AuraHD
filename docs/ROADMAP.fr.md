@@ -15,6 +15,17 @@
 
 Détails et commandes : [README du launcher](../experimental/launcher-v0/README.md). L'ordre approuvé reste **Livres / Applications, Jeux / Web, Recettes / Notes, Boutique / Réglages**. Le PNG original **ne doit pas être redessiné**. Le chemin FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 restent protégés. **Toute qualification matérielle (écran, tactile, frontlight, énergie, Wi-Fi, veille, boot, lancement KOReader) est en attente** ; aucune opération d'écriture n'est autorisée par ces versions.
 
+## Ajout du 13 octobre 2026 — Notes PDA V0.1
+
+| Composant | État | Qualification manquante |
+| --- | --- | --- |
+| [Notes : modèle portable](../experimental/notes-v01/README.md) | **Prototype hôte en PR** : carnet JSON `pmkb-notes-v1`, textes UTF-8, recherche, limites, export/import, validation stricte | Tests CI + essai manuel navigateur |
+| Notes : interface PC | **Prototype hôte en PR** : édition, sauvegarde locale navigateur, exports TXT/JSON et import avec confirmation | Persistance et téléchargement réels à vérifier ; stockage navigateur non garanti |
+| Palette graphique facultative | **Prototype hôte en PR** : crayon/gomme, 3 épaisseurs, annuler/rétablir, PNG et tracés éditables dans JSON | Précision au doigt, coût de rafraîchissement e-ink, visuel tactile |
+| Portabilité Kobo/Kindle | **Architecture préparée** : modèle indépendant des dimensions et du DOM | Pilotes, clavier virtuel, énergie, Wi-Fi et sauvegarde embarquée non développés |
+
+Notes reste indépendant de l'accueil : **aucune intégration dans la PR V0.6 du launcher (#25)** tant que celle-ci n'est pas validée visuellement. Aucun démarrage ni écriture Kobo autorisé.
+
 ## Où nous en sommes
 
 | Étape | État | Limite restante |

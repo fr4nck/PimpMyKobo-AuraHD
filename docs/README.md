@@ -46,6 +46,12 @@ Avant toute inspection sous Windows : [protéger la microSD](windows-preservatio
 - [Graphismes V0.2 validés dans Git](../experimental/launcher-v0/assets/v02/) : original RGB, 16 gris, 4 gris, 1 bit, comparatif et manifeste.
 - [Qualification des graphismes V0.2](launcher-v02-asset-qualification-2026-10-13-fr.md) : poids, SHA-256, limites matérielles.
 
+## Notes PDA (prototype indépendant)
+
+- [Notes V0.1 : guide français](../experimental/notes-v01/README.md) · [English](../experimental/notes-v01/README.en.md).
+- [Ouvrir le simulateur Notes](../experimental/notes-v01/index.html) : texte, recherche, croquis monochrome facultatif, fichiers JSON/TXT/PNG, hors ligne et sans Kobo.
+- La sauvegarde automatique dépend du navigateur ; un export JSON manuel reste nécessaire. La [PR V0.6 du launcher](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25) n'est pas fusionnée : le bouton Notes de l'accueil n'est pas encore relié à cette application.
+
 ## Données non publiées
 
 Le dépôt ne contient volontairement pas les dumps de microSD, `fs.tgz`, `db.tgz`, images P1/P2, U-Boot précompilés, kernels précompilés ni futures extractions de waveform provenant d'une liseuse.
