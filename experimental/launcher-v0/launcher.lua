@@ -6,10 +6,10 @@ local ITEMS = {
   {id = "books", label = "LIVRES", detail = "KOReader", enabled = true},
   {id = "apps", label = "APPLICATIONS", detail = "A VENIR", enabled = false},
   {id = "games", label = "JEUX", detail = "A VENIR", enabled = false},
-  {id = "store", label = "BOUTIQUE", detail = "A VENIR", enabled = false},
   {id = "web", label = "WEB", detail = "A VENIR", enabled = false},
-  {id = "notes", label = "NOTES", detail = "A VENIR", enabled = false},
   {id = "recipes", label = "RECETTES", detail = "A VENIR", enabled = false},
+  {id = "notes", label = "NOTES", detail = "A VENIR", enabled = false},
+  {id = "store", label = "BOUTIQUE", detail = "A VENIR", enabled = false},
   {id = "settings", label = "REGLAGES", detail = "A VENIR", enabled = false},
 }
 
