@@ -48,4 +48,4 @@ Tests locaux du lot réalisés avec `texlua` (Lua 5.3) : **PASS** sur le modèle
 
 ## Validation du lot V0.1
 
-Les tests Lua ont été **étendus dans Git** pour contrôler les huit marqueurs d'icônes, l'absence d'images externes et l'indicateur de sélection. Leur nouvelle exécution sur Lua/LuaJIT et la vérification XML des nouveaux aperçus sont encore à faire au moment de cet enregistrement ; les PASS du V0 antérieur ne qualifient pas automatiquement V0.1. Aucun test matériel effectué.
+Le 13 octobre 2026, une **copie hôte du code de la PR** a été testée avec **texlua (LuaTeX)** : suite `tests/test_launcher_v0.lua` **PASS** (géométrie portrait/paysage, navigation, actions inertes, huit icônes, pied de page). Les SVG `1080×1440`, `1440×1080` et la sélection `right down` ont été analysés en XML : **PASS**, huit tracés vectoriels chacun ; conversion PNG également **PASS**. Le rendu utilise un ordre d'attributs SVG déterministe. **LuaJIT ARM et matériel Kobo non testés pour la V0.1**. Le programme ne modifie toujours aucun init ni image.
