@@ -1,6 +1,20 @@
-# PMKB Notes V0.1 — texte + croquis (prototype PC)
+# PMKB Notes V0.2 — éditeur épuré, typographie et croquis (prototype PC)
 
 **Statut : prototype hôte indépendant, non installé sur la Kobo.** Cette application est le premier outil PDA PMKB : un carnet de notes avec une petite palette graphique optionnelle. Elle ne dépend pas du launcher et ne modifie aucun composant FIRST BOOT.
+
+
+## V0.2 — édition pleine largeur et choix de polices
+
+La V0.2 est développée **sur une branche empilée sur la PR Notes V0.1 (#26)**, indépendamment du launcher V0.6 (#25).
+
+- **Espace d'écriture prioritaire** : « Mes notes » est fermé au démarrage, accessible via « ☰ Mes notes », et refermé après ouverture d'une note. Liste, recherche et sauvegardes JSON restent dans ce panneau. Fermeture par ×, clic à l'extérieur ou Échap.
+- **Barre compacte** : nouvelle note, Mes notes, enregistrer, menu de suppression. Croquis reste facultatif et sa palette est désormais escamotable.
+- **Typographie par note** : polices système monospace, sans, serif et manuscrite générique, taille de 12 à 36 pixels, interligne de 1,2 à 2. Les préférences sont enregistrées dans le JSON pmkb-notes-v1 ; les notes V0.1 restent compatibles.
+- **Import local** : TTF, OTF, WOFF et WOFF2, jusqu'à 2 Mo, contrôle extension et signature, chargement avec FontFace. Les familles système de repli peuvent utiliser des polices Linux/Windows, sans prétendre inventorier toutes les polices installées.
+- **Limitation explicite** : les fichiers de polices importées ne sont **ni conservés ni intégrés au JSON**, seul leur identifiant y figure. Après actualisation, une police de repli est utilisée jusqu'au réimport. Le TXT ne conserve pas la typographie. Aucun téléchargement automatique depuis DaFont : respecter les licences.
+- Ni mise en forme caractère par caractère, ni export PDF dans ce lot. Pas de réseau, pas de dépendance cloud.
+
+**Qualification manuelle PC requise avant fusion** : panneau replié, import TTF/OTF, changement de note, rafraîchissement, lecture des notes V0.1, JSON, croquis. Aucune qualification e-ink, tactile ou système Kobo.
 
 ## Fonctions disponibles
 

@@ -27,6 +27,32 @@ class TestNotesHostAssets(unittest.TestCase):
                 self.assertIn(marker, self.html)
         self.assertIn("touch-action:none", self.html)
 
+    def test_v02_distraction_free_drawer_and_typography(self):
+        for marker in (
+            'id="notes-drawer"', 'id="drawer-backdrop"',
+            'id="open-notes"', 'aria-expanded="false"',
+            'id="close-drawer"', 'id="toolbar-new"',
+            'id="font-options"', 'id="font-family"',
+            'id="font-size"', 'id="font-lineheight"',
+            'id="font-file"', 'id="import-font"',
+            'id="sketch-tools"', 'class="more-actions"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.html)
+        self.assertIn('nav id="notes-drawer" aria-label="Mes notes" hidden', self.html)
+        self.assertIn('function toggleDrawer(open)', self.browser)
+        self.assertIn('function applyTypography()', self.browser)
+        self.assertIn('function changeTypography()', self.browser)
+        self.assertIn('new FontFace(family,bytes)', self.browser)
+        self.assertIn('window.crypto.subtle.digest("SHA-256",bytes)', self.browser)
+        self.assertIn('fontSignature(new Uint8Array(bytes))!==ext', self.browser)
+        self.assertIn('file.size>2000000', self.browser)
+        self.assertIn('loadedFonts=new Map()', self.browser)
+        self.assertIn('refs.text.style.fontFamily=', self.browser)
+        self.assertIn('function typography(value)', self.core)
+        self.assertNotIn('localStorage.setItem("font-', self.browser)
+        self.assertNotIn('indexedDB', self.browser)
+
     def test_no_external_code_or_network_transport(self):
         for value in (
             "http://", "https://", "<iframe", "<link rel=\"stylesheet\"",

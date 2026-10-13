@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PMKB Notes V0.1 — éditeur et croquis</title>
+  <title>PMKB Notes V0.2 — éditeur et typographie</title>
   <style>
     * {box-sizing:border-box}
     [hidden] {display:none!important}
@@ -18,9 +18,34 @@
     header h1 {font-size:1.2rem;letter-spacing:.04em;margin:0}
     header small {color:#ccc}
     .flag {border:1px solid #aaa;padding:4px 9px;font:12px monospace}
-    main {max-width:1350px;min-height:calc(100vh - 94px);margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(230px,310px) minmax(350px,1fr);gap:16px}
+    main {max-width:1350px;min-height:calc(100vh - 94px);margin:0 auto;padding:18px;display:block}
     nav,article {background:#fafafa;border:2px solid #111;min-width:0}
-    nav {padding:15px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 125px)}
+    nav {padding:15px;display:flex;flex-direction:column;gap:12px;position:fixed;top:0;left:0;bottom:0;
+      width:min(355px,90vw);max-height:100dvh;overflow-y:auto;z-index:21;box-shadow:4px 0 28px #0005}
+    .drawer-backdrop {position:fixed;inset:0;z-index:20;background:#0006}
+    .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px}
+    .main-toolbar {display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+    .main-toolbar > button {min-height:44px}
+    .more-actions {position:relative;margin-left:auto}
+    .more-actions summary,.font-options summary,.palette-details summary {cursor:pointer;font-weight:700;
+      list-style:none;padding:8px 12px;border:2px solid #111;background:white;user-select:none}
+    .more-actions summary::-webkit-details-marker,.font-options summary::-webkit-details-marker,
+      .palette-details summary::-webkit-details-marker {display:none}
+    .more-content {position:absolute;right:0;top:100%;min-width:230px;max-width:330px;padding:12px;
+      border:2px solid #111;background:white;box-shadow:0 3px 14px #0003;z-index:10}
+    .more-content button {width:100%}
+    .font-options {margin:2px 0 16px}
+    .type-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 0}
+    .type-grid label {font-size:13px;margin:0}
+    .type-grid select {width:100%;display:block;background:white;border:2px solid #777;padding:7px;font:inherit;min-height:44px}
+    .font-import {grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .palette-details {margin-bottom:12px}
+    .palette {margin:12px 0 4px}
+    @media(max-width:610px) {
+      .type-grid {grid-template-columns:1fr}
+      .main-toolbar > button {flex:1}
+      .more-actions {margin:0}
+    }
     nav .section-head {display:flex;align-items:center;justify-content:space-between}
     nav h2 {font-size:1rem;margin:0}
     #search, #note-title {width:100%;background:white;border:2px solid #888;border-radius:0;padding:10px}
@@ -53,9 +78,8 @@
     #save-status.warning {border-color:#111;background:#eee;font-weight:700}
     footer {max-width:1350px;margin:0 auto;padding:0 18px 20px;color:#444;font-size:12px}
     @media(max-width:750px) {
-      main {display:flex;flex-direction:column;padding:10px}
-      nav {max-height:none}
-      .note-list {max-height:220px}
+      main {padding:10px}
+      .note-list {max-height:50vh}
       article {min-height:540px}
       #note-text {min-height:340px}
       .editor-head {flex-wrap:wrap}
@@ -67,16 +91,19 @@
 <body>
   <header>
     <div>
-      <h1>PMKB / NOTES <small>V0.1</small></h1>
+      <h1>PMKB / NOTES <small>V0.2</small></h1>
       <small>Texte et croquis · interface locale de démonstration</small>
     </div>
     <span class="flag">SIMULATEUR PC · HORS LIGNE · AUCUN ACCÈS KOBO</span>
   </header>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <main>
-    <nav aria-label="Mes notes">
+    <nav id="notes-drawer" aria-label="Mes notes" hidden>
+
       <div class="section-head">
         <h2>MES NOTES</h2>
         <span id="note-count">0 / 100</span>
+        <button id="close-drawer" type="button" aria-label="Fermer Mes notes">×</button>
       </div>
       <button id="new-note" type="button">+ Nouvelle note</button>
       <label for="search">Rechercher</label>
@@ -91,6 +118,18 @@
       </div>
     </nav>
     <article>
+      <div class="main-toolbar" aria-label="Actions rapides">
+        <button id="toolbar-new" type="button">+ Nouvelle</button>
+        <button id="open-notes" type="button" aria-controls="notes-drawer" aria-expanded="false">☰ Mes notes</button>
+        <button id="save-now" type="button">Enregistrer</button>
+        <details class="more-actions" id="more-menu">
+          <summary>⋯ Plus</summary>
+          <div class="more-content">
+            <button id="delete-note" class="danger" type="button">Supprimer la note</button>
+            <p class="hint">Les exports TXT et PNG sont disponibles dans les onglets. L'export JSON du carnet est dans « Mes notes ».</p>
+          </div>
+        </details>
+      </div>
       <div id="save-status" role="status" aria-live="polite">Chargement du carnet…</div>
       <section id="empty-state">
         <h2>Votre carnet PMKB</h2>
@@ -101,14 +140,45 @@
         <div class="editor-head">
           <label for="note-title" class="visually-label">Titre</label>
           <input id="note-title" type="text" maxlength="100" placeholder="Titre">
-          <button id="save-now" type="button">Enregistrer</button>
-          <button id="delete-note" class="danger" type="button">Supprimer</button>
         </div>
         <div class="tabs" role="tablist" aria-label="Mode de note">
           <button id="tab-text" type="button" role="tab" aria-selected="true" class="active">Texte</button>
           <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
         </div>
         <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
+          <details id="font-options" class="font-options">
+            <summary>Typographie · police, taille et interligne</summary>
+            <div class="type-grid">
+              <label for="font-family">Police
+                <select id="font-family">
+                  <option value="mono">Monospace · système</option>
+                  <option value="sans">Sans serif · système</option>
+                  <option value="serif">Serif · système</option>
+                  <option value="handwriting">Manuscrite · système</option>
+                </select>
+              </label>
+              <label for="font-size">Taille
+                <select id="font-size">
+                  <option value="14">14 px</option><option value="17">17 px</option>
+                  <option value="20">20 px</option><option value="24">24 px</option>
+                  <option value="28">28 px</option><option value="32">32 px</option>
+                  <option value="36">36 px</option>
+                </select>
+              </label>
+              <label for="font-lineheight">Interligne
+                <select id="font-lineheight">
+                  <option value="1.2">1,2</option><option value="1.4">1,4</option>
+                  <option value="1.6">1,6</option><option value="1.8">1,8</option>
+                  <option value="2">2</option>
+                </select>
+              </label>
+              <div class="font-import">
+                <button id="import-font" type="button">Importer une police (.ttf / .otf / .woff / .woff2)</button>
+                <input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" hidden>
+                <span id="font-message" class="hint" role="status">Les polices importées restent en mémoire seulement pendant cette session.</span>
+              </div>
+            </div>
+          </details>
           <label for="note-text">Contenu de la note</label>
           <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
           <div class="actions" style="margin-top:12px">
@@ -117,6 +187,8 @@
           </div>
         </div>
         <div id="sketch-pane" role="tabpanel" aria-label="Palette graphique facultative" hidden>
+          <details id="sketch-tools" class="palette-details">
+          <summary>Palette de dessin · ouvrir / refermer</summary>
           <div class="palette" aria-label="Outils de dessin">
             <div class="group">
               <button type="button" data-tool="pen" class="active">Crayon</button>
@@ -133,6 +205,7 @@
             </div>
             <button id="clear-sketch" class="danger" type="button">Effacer le dessin</button>
           </div>
+          </details>
           <div class="canvas-border">
             <canvas id="sketch" width="900" height="600" aria-label="Zone de croquis ; souris ou tactile"></canvas>
           </div>
@@ -145,6 +218,6 @@
       </section>
     </article>
   </main>
-  <footer>PMKB Notes V0.1 · Prototype HTML/JavaScript autonome. Aucune image approuvée du launcher modifiée ; ni pilote e-ink, ni sauvegarde sur microSD Kobo, ni accès réseau. Palette graphique optionnelle. Synchronisation et clavier e-ink à qualifier plus tard.</footer>
+  <footer>PMKB Notes V0.2 · Prototype HTML/JavaScript autonome. Aucune image approuvée du launcher modifiée ; ni pilote e-ink, ni sauvegarde sur microSD Kobo, ni accès réseau. Palette graphique optionnelle. Synchronisation et clavier e-ink à qualifier plus tard.</footer>
 </body>
 </html>

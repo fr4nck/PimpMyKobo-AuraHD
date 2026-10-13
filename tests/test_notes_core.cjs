@@ -117,3 +117,47 @@ test("validating a notebook never retains imported mutable objects",()=>{
   parsed.notes[0].title="edited";
   assert.equal(source.notes[0].title,"changed");
 });
+
+test("V0.2 typography defaults preserve preexisting V0.1 JSON",()=>{
+  const note=N.blank("note_old",T1);
+  delete note.typography; // exported V0.1 had no typography key
+  const legacy=JSON.stringify({format:N.FORMAT,notes:[note]});
+  const restored=N.decode(legacy);
+  assert.deepEqual(restored.notes[0].typography,{font:"mono",size:17,lineHeight:1.6});
+  assert.equal(restored.notes[0].text,"");
+  assert.deepEqual(N.decode(N.encode(restored)),restored);
+  assert.deepEqual(N.FONTS,["mono","sans","serif","handwriting"]);
+});
+
+test("per-note font, font size and line spacing round trip without affecting strokes",()=>{
+  const n=N.blank("note_font",T1);
+  const customized={...n,title:"Typographie",text:"école",typography:{font:"serif",size:24,lineHeight:1.8}};
+  const book=N.upsert(N.empty(),customized);
+  const copy=N.decode(N.encode(book));
+  assert.deepEqual(copy.notes[0].typography,{font:"serif",size:24,lineHeight:1.8});
+  assert.deepEqual(N.blank("note_new",T1).typography,N.DEFAULT_TYPE);
+  assert.notStrictEqual(N.blank("note_new",T1).typography,N.DEFAULT_TYPE);
+  assert.equal(customized.text,"école");
+});
+
+test("imported font references remain identifiers (never raw CSS or binary)",()=>{
+  const id="import:123456789abc";
+  assert.deepEqual(N.typography({font:id,size:17,lineHeight:1.4}),{
+    font:id,size:17,lineHeight:1.4
+  });
+  const n={...N.blank("note_font",T1),typography:{font:id,size:20,lineHeight:1.6}};
+  assert.deepEqual(N.decode(N.encode(N.upsert(N.empty(),n))).notes[0].typography,n.typography);
+  for(const bad of [
+    {font:"url(javascript:alert(1))",size:17,lineHeight:1.6},
+    {font:"import:../../secret",size:17,lineHeight:1.6},
+    {font:"import:1234",size:17,lineHeight:1.6},
+    {font:"serif",size:7,lineHeight:1.6},
+    {font:"serif",size:37,lineHeight:1.6},
+    {font:"serif",size:"20",lineHeight:1.6},
+    {font:"mono",size:18,lineHeight:1.3},
+    {font:"mono",size:18,lineHeight:NaN},
+    {font:"mono",size:18,lineHeight:"1.6"},
+    {font:"mono",size:18},
+    null
+  ]) assert.throws(()=>N.typography(bad));
+});

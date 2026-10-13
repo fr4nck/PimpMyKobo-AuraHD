@@ -1,4 +1,4 @@
-/* PMKB Notes V0.1 — browser adapter for the portable Notes core.
+/* PMKB Notes V0.2 — browser adapter for the portable Notes core.
  * Deliberately no fetch(), external services, Kobo/SD I/O or app launcher integration.
  * Autosave is browser-local storage only; explicit JSON backup is essential.
  */
@@ -20,6 +20,119 @@
   let book=C.empty(),selected=null,pending=null,saving=null;
   let tab="text",tool="pen",width=5,drawing=null,redo=[];
   let storageEnabled=false;
+  const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
+  const fontNames={
+    mono:'ui-monospace,Consolas,"DejaVu Sans Mono",monospace',
+    sans:'"Noto Sans","Liberation Sans",Arial,sans-serif',
+    serif:'"Noto Serif","Liberation Serif",Georgia,serif',
+    handwriting:'"URW Chancery L","Comic Sans MS",cursive'
+  };
+  const fontFamily=$("font-family"), fontSize=$("font-size"),
+    fontLineheight=$("font-lineheight"),fontFile=$("font-file"),
+    fontMessage=$("font-message");
+  const drawer=$("notes-drawer"),backdrop=$("drawer-backdrop"),openNotes=$("open-notes");
+
+  function toggleDrawer(open) {
+    drawer.hidden=!open;
+    backdrop.hidden=!open;
+    openNotes.setAttribute("aria-expanded",open?"true":"false");
+    if(open) {
+      refs.search.focus();
+    } else if(drawer.contains(document.activeElement)) {
+      openNotes.focus();
+    }
+  }
+  function fontSignature(bytes) {
+    if(bytes.length<4)return null;
+    const magic=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3]);
+    if(magic==="OTTO")return "otf";
+    if(magic==="wOFF")return "woff";
+    if(magic==="wOF2")return "woff2";
+    if(magic==="true" || magic==="typ1" ||
+       (bytes[0]===0 && bytes[1]===1 && bytes[2]===0 && bytes[3]===0))return "ttf";
+    return null;
+  }
+  function renderFontOptions(activeId) {
+    for(const opt of [...fontFamily.options]) {
+      if(opt.value.startsWith("import:"))opt.remove();
+    }
+    for(const [id,entry] of loadedFonts) {
+      const option=document.createElement("option");
+      option.value=id;
+      option.textContent="Importée : "+entry.name;
+      fontFamily.appendChild(option);
+    }
+    if(activeId.startsWith("import:") && !loadedFonts.has(activeId)) {
+      const option=document.createElement("option");
+      option.value=activeId;
+      option.textContent="Police importée absente — réimporter";
+      fontFamily.appendChild(option);
+    }
+  }
+  function applyTypography() {
+    const item=current();
+    const style=item?C.typography(item.typography):C.typography();
+    renderFontOptions(style.font);
+    fontFamily.value=style.font;
+    fontSize.value=String(style.size);
+    fontLineheight.value=String(style.lineHeight);
+    const imported=loadedFonts.get(style.font);
+    refs.text.style.fontFamily=imported
+      ? '"'+imported.family+'",monospace'
+      : (fontNames[style.font] || fontNames.mono);
+    refs.text.style.fontSize=style.size+"px";
+    refs.text.style.lineHeight=String(style.lineHeight);
+    if(style.font.startsWith("import:") && !imported) {
+      fontMessage.textContent="Police importée absente : réimporte le fichier pour retrouver son rendu. Texte intact.";
+    } else {
+      fontMessage.textContent="Polices personnalisées en mémoire pendant cette session uniquement ; le JSON garde la préférence, pas le fichier de police.";
+    }
+  }
+  function changeTypography() {
+    const item=current();if(!item)return;
+    const next={
+      font:fontFamily.value,
+      size:Number(fontSize.value),
+      lineHeight:Number(fontLineheight.value)
+    };
+    try{
+      update({typography:C.typography(next)});
+      applyTypography();
+    }catch(err){status(err.message,true);}
+  }
+  async function importFont(event) {
+    const file=event.target.files[0];fontFile.value="";
+    if(!file)return;
+    const ext=(file.name.split(".").pop()||"").toLowerCase();
+    if(!["ttf","otf","woff","woff2"].includes(ext)||file.size<12||file.size>2000000){
+      fontMessage.textContent="Fichier refusé : TTF, OTF, WOFF ou WOFF2 de 2 Mo maximum.";
+      return;
+    }
+    if(!window.FontFace || !window.crypto?.subtle) {
+      fontMessage.textContent="Ce navigateur ne permet pas cet import local de polices.";
+      return;
+    }
+    try {
+      const bytes=await file.arrayBuffer();
+      if(fontSignature(new Uint8Array(bytes))!==ext)throw Error("Format de police non conforme");
+      const digest=new Uint8Array(await window.crypto.subtle.digest("SHA-256",bytes));
+      const id="import:"+Array.from(digest.slice(0,6),n=>n.toString(16).padStart(2,"0")).join("");
+      if(!loadedFonts.has(id)) {
+        const family="PMKBFont"+id.slice(7);
+        const face=new FontFace(family,bytes);
+        await face.load();
+        document.fonts.add(face);
+        loadedFonts.set(id,{family,name:file.name,face});
+      }
+      renderFontOptions(id);
+      if(current())update({typography:{...current().typography,font:id}});
+      applyTypography();
+      fontMessage.textContent="Police chargée pour cette session : "+file.name+
+        ". La sauvegarde JSON ne contient pas le fichier ; conserve une copie.";
+    }catch(error){
+      fontMessage.textContent="Import impossible : format non pris en charge ou fichier invalide.";
+    }
+  }
 
   function now(){return new Date().toISOString();}
   function status(msg,warning){
@@ -89,6 +202,8 @@
     refs.title.value=item.title;
     refs.text.value=item.text;
     setTab("text");
+    applyTypography();
+    toggleDrawer(false);
     renderList();
   }
   function update(patch){
@@ -252,6 +367,7 @@
       }
       selected=null;redo=[];drawing=null;
       refs.editor.hidden=true;refs.empty.hidden=false;
+      toggleDrawer(false);
       renderList();
       status("Import effectué. Sauvegarde dans ce navigateur uniquement.",false);
     }catch(err){status("Import refusé : "+err.message,true);}
@@ -275,6 +391,18 @@
   refs.text.addEventListener("input",()=>update({text:refs.text.value}));
   refs.search.addEventListener("input",renderList);
   $("new-note").addEventListener("click",create);
+  $("toolbar-new").addEventListener("click",create);
+  openNotes.addEventListener("click",()=>toggleDrawer(drawer.hidden));
+  $("close-drawer").addEventListener("click",()=>toggleDrawer(false));
+  backdrop.addEventListener("click",()=>toggleDrawer(false));
+  document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&!drawer.hidden)toggleDrawer(false);
+  });
+  fontFamily.addEventListener("change",changeTypography);
+  fontSize.addEventListener("change",changeTypography);
+  fontLineheight.addEventListener("change",changeTypography);
+  $("import-font").addEventListener("click",()=>fontFile.click());
+  fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
   $("save-now").addEventListener("click",persist);
   $("tab-text").addEventListener("click",()=>setTab("text"));
@@ -310,6 +438,9 @@
   stored();
   renderList();
   renderDrawing();
+  const mostRecent=C.sorted(book)[0];
+  if(mostRecent)showEditor(mostRecent.id);
+  else applyTypography();
   if(!book.notes.length)status("Carnet vide. Crée une note et exporte une sauvegarde JSON.",!storageEnabled);
   else if(storageEnabled)status("Notes locales chargées · export JSON conseillé",false);
 })();

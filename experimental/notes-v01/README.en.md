@@ -1,6 +1,20 @@
-# PMKB Notes V0.1 — text and sketch (PC prototype)
+# PMKB Notes V0.2 — distraction-free editor, fonts and sketch (PC prototype)
 
 **Status: standalone host-only prototype, not installed on the Kobo.** The first PMKB PDA app combines a full text note with an optional minimalist monochrome sketch palette. It neither depends on nor changes the launcher or FIRST BOOT.
+
+
+## V0.2 — full-width editor and local font selection
+
+V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of launcher V0.6 PR #25.
+
+- **Editing-first layout**: My Notes drawer is initially closed, opened through « ☰ Mes notes » and closed when selecting a note. Search, list and JSON backups remain in the drawer, dismissed by ×, outside click or Escape.
+- **Compact toolbar**: new note, my notes, save and overflow delete; optional Sketch tab has a collapsible palette.
+- **Per-note typography**: built-in system font stacks (mono, sans, serif, generic handwriting), sizes 12–36 px and line spacing 1.2–2.0. Stored in existing backwards-compatible pmkb-notes-v1 JSON; old V0.1 notes load with default values.
+- **Local font import**: TTF, OTF, WOFF, WOFF2, max 2 MB, extension and signature check, loaded through browser FontFace. Browser fallback stacks can use Linux/Windows installed fonts but do not enumerate them.
+- **Deliberate limitation**: uploaded font binaries are **session-only**. JSON keeps the font identifier, not the file; after refresh, notes fall back gracefully until the same font is reimported. TXT is plain text. No automatic DaFont download or licensing claims.
+- No per-character rich text or PDF output in this revision. No network, cloud or persistent service.
+
+**Manual host browser acceptance pending**: collapsed drawer, TTF/OTF import, switching notes, refresh, V0.1 import, JSON backup and sketch. No Kobo hardware or e-ink qualification.
 
 ## Implemented features
 
