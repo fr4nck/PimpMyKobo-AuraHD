@@ -24,7 +24,7 @@ lua experimental/launcher-v0/preview.lua 1080 1440 > /tmp/pmkb-launcher-portrait
 lua experimental/launcher-v0/preview.lua 1440 1080 > /tmp/pmkb-launcher-paysage.svg
 # Aperçu avec sélection déplacée : case APPS, puis case STORE
 lua experimental/launcher-v0/preview.lua 1080 1440 right > /tmp/pmkb-launcher-apps.svg
-lua experimental/launcher-v0/preview.lua 1080 1440 right down down > /tmp/pmkb-launcher-store.svg
+lua experimental/launcher-v0/preview.lua 1080 1440 right down > /tmp/pmkb-launcher-store.svg
 ```
 
 Les scripts sont exclusivement hors matériel ; `preview.lua` écrit le SVG sur la sortie standard. Les arguments directionnels ne font que changer la sélection dans une simulation **sans touche physique, sans action déclenchée et sans lecture/écriture de carte**. Sur une machine équipée uniquement de `texlua`, remplacer `lua` par `texlua`.
