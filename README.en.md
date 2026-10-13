@@ -234,6 +234,14 @@ An isolated host-side Lua prototype implements menu navigation and SVG preview. 
 
 **No graphical launcher is qualified on the real Kobo.** All Wi-Fi/battery values are illustrative. KOReader remains an inert `open_reader` intent, not an executable launch. Dock/system buttons cannot change hardware; approved artwork, P1/P2/P3 and FIRST BOOT remain untouched.
 
+## PMKB Notes V0.1 — first PDA app (PC prototype)
+
+[**Open the standalone note editor and sketch palette**](experimental/notes-v01/index.html) · [Notes English guide](experimental/notes-v01/README.en.md) · [Guide français](experimental/notes-v01/README.md).
+
+This offline host-only app provides UTF-8 text, search, browser-local autosave, JSON backup/import, TXT export and an **optional Sketch tab** (pen, eraser, three widths, undo/redo, PNG export). The versioned JSON backup retains editable drawing strokes. Browser storage is not a guaranteed backup. Touch drawing and a virtual e-ink keyboard remain unqualified.
+
+**No working launcher integration, Wi-Fi sync or Kobo partition access.** Launcher V0.6 has its [own PR awaiting visual validation](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25). Approved illustrations and FIRST BOOT remain untouched.
+
 ## Documentation
 
 - [Disassemble the Aura HD and access the internal microSD](docs/disassembly-en.md) — with original photos, iFixit/MobileRead sources and a Lynx-friendly text edition.

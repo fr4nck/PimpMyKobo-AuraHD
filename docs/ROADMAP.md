@@ -17,6 +17,17 @@ This roadmap keeps the project focused on one principle: **preserve first, modif
 
 See the [launcher README](../experimental/launcher-v0/README.md) for reproduction. Approved layout remains **Books / Apps, Games / Web, Recipes / Notes, Store / Settings**. Do not redraw the approved PNG. FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 must remain intact. **Hardware display, touch, light, energy, wireless, sleep, boot and KOReader integration remain UNQUALIFIED.** No physical write is authorized by any launcher milestone.
 
+## 13 October 2026 addendum — Notes PDA V0.1
+
+| Part | State | Remaining qualification |
+| --- | --- | --- |
+| [Portable Notes model](../experimental/notes-v01/README.en.md) | **Host-only PR candidate**: versioned `pmkb-notes-v1` notebook, UTF-8 text, search, validated JSON import/export, resource caps | CI plus real browser test |
+| Notes desktop editor | **Host-only PR candidate**: editing, browser-local autosave, JSON/TXT download, confirmed notebook import | Real persistence and download behavior unverified, browser storage not durable |
+| Optional sketch palette | **Host-only PR candidate**: pen/eraser, 3 widths, undo/redo, PNG export, editable strokes in JSON | Touch precision, refresh cost, visual accessibility |
+| Kobo/Kindle portability | **Design groundwork**: device-agnostic data model | Device display, touch/keyboard, power, Wi-Fi, on-device storage unimplemented |
+
+Notes is deliberately independent of the [separate, unmerged V0.6 launcher PR #25](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25). No Kobo boot/storage changes or physical writes.
+
 Status legend: **DONE** · **IMPLEMENTED** (hardware qualification pending where specified) · **IN PROGRESS** · **NEXT** · **PLANNED** · **EXPERIMENTAL**
 
 ## Current snapshot and next gates
