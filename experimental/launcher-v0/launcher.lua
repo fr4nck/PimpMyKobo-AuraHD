@@ -133,6 +133,19 @@ local function tag(name, attributes, text)
   return table.concat(fields)
 end
 
+-- Paths use a 100 x 100 logical grid. Native monochrome preview only.
+-- Stroke-only pictograms avoid external icon fonts and image resources.
+local ICON_PATHS = {
+  books = "M12 23 Q31 13 48 24 L48 84 Q30 72 12 80 Z M88 23 Q69 13 52 24 L52 84 Q70 72 88 80 Z M50 22 V84",
+  apps = "M13 13 H43 V43 H13 Z M57 13 H87 V43 H57 Z M13 57 H43 V87 H13 Z M57 57 H87 V87 H57 Z",
+  games = "M27 38 H73 C84 38 89 45 93 67 C96 80 85 86 76 78 L64 68 H36 L24 78 C15 86 4 80 7 67 C11 45 16 38 27 38 Z M23 55 H43 M33 45 V65 M68 53 H70 M78 61 H80",
+  store = "M16 39 L23 19 H77 L84 39 V82 H16 Z M16 39 Q24 52 33 39 Q41 52 50 39 Q59 52 67 39 Q76 52 84 39 M38 82 V56 H62 V82",
+  web = "M50 10 A40 40 0 1 0 50 90 A40 40 0 1 0 50 10 M10 50 H90 M50 10 C26 30 26 70 50 90 M50 10 C74 30 74 70 50 90 M18 31 H82 M18 69 H82",
+  notes = "M25 12 H70 L83 25 V88 H25 Z M70 12 V25 H83 M38 43 H70 M38 57 H70 M38 71 H61",
+  recipes = "M15 38 H85 V75 H15 Z M25 29 H75 M35 21 Q50 8 65 21 M15 50 H85 M35 75 V86 M65 75 V86",
+  settings = "M50 10 V24 M50 76 V90 M10 50 H24 M76 50 H90 M22 22 L32 32 M68 68 L78 78 M78 22 L68 32 M32 68 L22 78 M50 30 A20 20 0 1 0 50 70 A20 20 0 1 0 50 30 M50 43 A7 7 0 1 0 50 57 A7 7 0 1 0 50 43",
+}
+
 -- Preview only; SVG is not an Aura HD framebuffer backend.
 function M.render_svg(state)
   local out = {
@@ -153,9 +166,14 @@ function M.render_svg(state)
     local fill = tile.selected and "#000000" or "#ffffff"
     out[#out + 1] = tag("rect", {x=tile.x,y=tile.y,width=tile.width,height=tile.height,
       fill=fill,stroke="#000000",["stroke-width"]=tile.selected and 6 or 3})
-    out[#out + 1] = tag("text", {x=cx,y=tile.y+math.floor(tile.height * 0.36),
-      fill=primary,["text-anchor"]="middle",["font-family"]="monospace",
-      ["font-size"]=math.floor(tile.height * 0.18)}, string.format("%02d", i))
+    -- The icon remains legible in 1-bit preview and uses no external fonts.
+    local size = math.floor(math.min(tile.height * 0.36, tile.width * 0.31))
+    local icon_x = cx - math.floor(size / 2)
+    local icon_y = tile.y + math.floor(tile.height * 0.115)
+    out[#out + 1] = string.format('<g transform="translate(%d %d) scale(%.5f)" fill="none" stroke="%s" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">',
+      icon_x, icon_y, size / 100, primary)
+    out[#out + 1] = tag("path", {d=ICON_PATHS[tile.id], ["data-app"]=tile.id})
+    out[#out + 1] = "</g>"
     out[#out + 1] = tag("text", {x=cx,y=tile.y+math.floor(tile.height * 0.60),
       fill=primary,["text-anchor"]="middle",["font-family"]="sans-serif",
       ["font-size"]=math.floor(math.min(tile.height * 0.12,tile.width * 0.075)),
@@ -164,9 +182,15 @@ function M.render_svg(state)
       fill=primary,["text-anchor"]="middle",["font-family"]="sans-serif",
       ["font-size"]=math.floor(math.min(tile.height * 0.08,tile.width * 0.056))},tile.detail)
   end
+  local active = ITEMS[state.selected]
   out[#out + 1] = tag("text", {x=math.floor(state.width * 0.045),
-    y=math.floor(state.height * 0.965),fill="#000000",["font-family"]="sans-serif",
-    ["font-size"]=math.floor(state.height * 0.019)}, "EXPERIMENTAL / OFFLINE / NO HARDWARE ACCESS")
+    y=math.floor(state.height * 0.935),fill="#000000",["font-family"]="sans-serif",
+    ["font-size"]=math.floor(state.height * 0.023),["font-weight"]="bold"},
+    string.format("%02d / %02d   %s   -   %s",state.selected,#ITEMS,active.label,
+      active.enabled and "DISPONIBLE" or "BIENTOT"))
+  out[#out + 1] = tag("text", {x=math.floor(state.width * 0.045),
+    y=math.floor(state.height * 0.975),fill="#000000",["font-family"]="monospace",
+    ["font-size"]=math.floor(state.height * 0.015)}, "PMKB / HOST PREVIEW / NOT HARDWARE QUALIFIED")
   out[#out + 1] = "</svg>"
   return table.concat(out, "\n") .. "\n"
 end
