@@ -37,7 +37,7 @@
     .font-options {margin:2px 0 16px}
     .type-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 0}
     .type-grid label {font-size:13px;margin:0}
-    .type-grid select {width:100%;display:block;background:white;border:2px solid #777;padding:7px;font:inherit;min-height:44px}
+    .type-grid select,.type-grid input[type="number"] {width:100%;display:block;background:white;border:2px solid #777;padding:7px;font:inherit;min-height:44px}
     .font-import {grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .palette-details {margin-bottom:12px}
     .palette {margin:12px 0 4px}
@@ -158,12 +158,7 @@
                 </select>
               </label>
               <label for="font-size">Taille
-                <select id="font-size">
-                  <option value="14">14 px</option><option value="17">17 px</option>
-                  <option value="20">20 px</option><option value="24">24 px</option>
-                  <option value="28">28 px</option><option value="32">32 px</option>
-                  <option value="36">36 px</option>
-                </select>
+                <input id="font-size" type="number" min="12" max="36" step="1" value="17" aria-label="Taille de police en pixels">
               </label>
               <label for="font-lineheight">Interligne
                 <select id="font-lineheight">

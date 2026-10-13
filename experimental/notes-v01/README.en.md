@@ -36,7 +36,7 @@ Terminal: **Debian WSL**; repository \`fr4nck/PimpMyKobo-AuraHD\`:
 \`\`\`bash
 cd /home/Deniel/pmkb-test || exit 1
 git fetch origin
-git switch --detach origin/feat/pmkb-notes-v01-host
+git switch --detach origin/feat/pmkb-notes-v02-typography-drawer
 python3 -m http.server 8766 --bind 127.0.0.1
 \`\`\`
 

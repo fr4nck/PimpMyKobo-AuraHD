@@ -98,7 +98,7 @@
     try{
       update({typography:C.typography(next)});
       applyTypography();
-    }catch(err){status(err.message,true);}
+    }catch(err){applyTypography();status(err.message,true);}
   }
   async function importFont(event) {
     const file=event.target.files[0];fontFile.value="";
