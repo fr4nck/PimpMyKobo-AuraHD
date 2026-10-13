@@ -53,7 +53,7 @@ class ArtIntegrity(unittest.TestCase):
         self.assertIn('id="dock-shortcuts"', html)
         self.assertIn('id="system-controls"', html)
         self.assertIn('id="dock-picks"', html)
-        self.assertIn('class="tile-skin"', script)
+        self.assertIn('art.className = "tile-skin"', script)
         self.assertIn('function needsInversion(', script)
         self.assertIn('function renderDock()', script)
         self.assertIn('function dockChoice(', script)
