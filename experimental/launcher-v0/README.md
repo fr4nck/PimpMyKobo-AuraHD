@@ -99,3 +99,28 @@ lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.s
 ```
 
 Le scénario `status-preview.lua` injecte des valeurs **fictives et clairement simulées** (batterie 87 %, Wi-Fi coupé, frontlight 25 %) afin de vérifier visuellement la maquette technique. Aucune interaction matérielle.
+
+## V0.4 — accueil manga réel, simulateur tactile hors matériel
+
+Le fichier [`simulator.html`](simulator.html) ouvre l'illustration **16 gris / 4 bits validée** directement depuis `assets/v02/optimise/PMKB-V0.2-16gris.png` (250 757 octets, SHA dans le manifeste). **Aucun PNG n'est redessiné, recadré ni réenregistré** : l'image reste en fond et les huit surfaces cliquables se superposent à ses panneaux aux coordonnées fixes de 1080 × 1440. Cette maquette est portrait uniquement.
+
+La zone inférieure `x=58, y=1325, w=965, h=66` du PNG comporte des valeurs fictives : elle est **recouverte uniquement à l'affichage** par une nouvelle barre, dont les sept raccourcis reprennent les IDs du modèle Lua V0.3 (`battery`, `wifi`, `frontlight`, `contrast`, `refresh`, `sleep`, `settings`). L'image stockée dans Git reste octet pour octet identique à la source approuvée.
+
+Par défaut : données inconnues. Le panneau de démonstration propose des scénarios explicitement **fictifs**, plus des curseurs batterie/frontlight. Les clics des raccourcis n'allument aucun matériel : ils affichent uniquement `quick_request`. Les livres produisent l'intention inerte `open_reader` (ne lance **pas** KOReader) ; les sept autres rubriques restent « à venir ». Navigation par clic, flèches et Entrée.
+
+### Ouvrir sur le PC
+
+**Debian WSL, depuis la racine du dépôt** (aucune dépendance externe ni serveur nécessaires) :
+
+```bash
+cd /home/Deniel/pmkb-test
+git switch main
+git pull --ff-only origin main
+explorer.exe "$(wslpath -w experimental/launcher-v0/simulator.html)"
+```
+
+Le fichier local ouvre le navigateur Windows. En cas de restrictions locales sur les fichiers `file://`, démarrer depuis la racine du dépôt `python3 -m http.server 8765 --bind 127.0.0.1` et ouvrir `http://localhost:8765/experimental/launcher-v0/simulator.html` (serveur **local** seulement).
+
+`simulator.js` reprend à l'identique l'ordre des huit IDs Lua et les sept zones de V0.3. Cette interface DOM JavaScript ne réemploie pas directement l'exécution Lua, mais des tests automatiques contrôlent cette correspondance. Il n'y a ni backend réseau, ni usage de `fetch`, ni stockage local, ni accès aux partitions.
+
+Tests : `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v` et `node --test tests/test_launcher_simulator.cjs`; CI Python multi-OS et Node dans un seul job Linux. La vérification tactile réelle de l'Aura HD reste **UNQUALIFIED**.
