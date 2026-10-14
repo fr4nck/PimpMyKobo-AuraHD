@@ -45,18 +45,32 @@ function browser({readError=false, initial=null}={}) {
     tick(){const jobs=[...timers.values()];timers.clear();for(const job of jobs)job();}};
 }
 
-test('empty, pending and saved states remain compact; success has no error',()=>{
+test('idle status occupies no space; pending and saved feedback is temporary',()=>{
   const b=browser();
-  assert.equal(b.get('save-status').textContent,'Carnet vide');
+  assert.equal(b.get('save-status').textContent,'');
+  assert.equal(b.get('save-status').hidden,true);
   assert.equal(b.get('notes-error').hidden,true);
   assert.equal(b.get('backup-result').hidden,true);
   b.event('toolbar-new','click');
-  assert.equal(b.get('save-status').textContent,'Enregistré localement');
+  assert.equal(b.get('save-status').textContent,'Enregistré');
+  assert.equal(b.get('save-status').hidden,false);
   b.get('note-text').value='Texte conservé';b.event('note-text','input');
   assert.equal(b.get('save-status').textContent,'En attente…');
+  assert.equal(b.get('save-status').hidden,false);
   b.tick();
   assert.equal(C.decode(b.stored()).notes[0].text,'Texte conservé');
+  assert.equal(b.get('save-status').textContent,'Enregistré');
+  b.tick();
+  assert.equal(b.get('save-status').hidden,true);
+  assert.equal(b.get('save-status').textContent,'');
   assert.equal(b.get('notes-error').hidden,true);
+});
+
+test('loading existing notes has no permanent toolbar status',()=>{
+  const book=C.upsert(C.empty(),C.blank('existing','2026-10-14T08:00:00.000Z'));
+  const b=browser({initial:C.encode(book)});
+  assert.equal(b.get('save-status').hidden,true);
+  assert.equal(b.get('save-status').textContent,'');
 });
 
 test('write failure stays visible through JSON export; successful retry clears it',()=>{
@@ -64,6 +78,8 @@ test('write failure stays visible through JSON export; successful retry clears i
   b.get('note-text').value='À sauvegarder';b.event('note-text','input');b.tick();
   assert.equal(b.get('save-status').textContent,'Non enregistré');
   assert.equal(b.get('notes-error').hidden,false);
+  b.tick();
+  assert.equal(b.get('save-status').hidden,false);
   assert.match(b.get('notes-error').textContent,/exporter en JSON/);
   b.event('export-json','click');
   assert.deepEqual(b.downloads,['PMKB-Notes-sauvegarde.json']);

@@ -21,6 +21,7 @@
   let book=C.empty(),selected=null,pending=null,saving=null;
   let tab="text",tool="pen",width=5,drawing=null,redo=[];
   let storageEnabled=false;
+  let feedbackTimer=null;
   const errors=new Map();
   const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
   const fontNames={
@@ -151,8 +152,11 @@
     refs.backupResult.textContent=warning?"":msg;
     refs.backupResult.hidden=warning||!msg;
   }
-  function saveStatus(msg){
+  function saveStatus(msg,transient=false){
+    clearTimeout(feedbackTimer);feedbackTimer=null;
     refs.badge.textContent=msg;
+    refs.badge.hidden=!msg;
+    if(transient)feedbackTimer=setTimeout(()=>saveStatus(""),2000);
   }
   function stored(){
     try {
@@ -173,7 +177,7 @@
       const value=C.encode(book);
       if(!storageEnabled)throw Error("Stockage local désactivé");
       window.localStorage.setItem(STORAGE,value);
-      saveStatus("Enregistré localement");
+      saveStatus("Enregistré",true);
       status("",false,"storage");
       return true;
     }catch(error){
@@ -475,5 +479,4 @@
   const mostRecent=C.sorted(book)[0];
   if(mostRecent)showEditor(mostRecent.id);
   else applyTypography();
-  if(storageEnabled)saveStatus(book.notes.length?"Notes locales chargées":"Carnet vide");
 })();

@@ -40,6 +40,8 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertEqual(save["ancestors"][-1]["attrs"]["class"], "save-control")
         self.assertEqual(status["tag"], "span")
         self.assertEqual(status["attrs"]["role"], "status")
+        self.assertIn("hidden", status["attrs"])
+        self.assertNotIn("Notes locales chargées", self.browser)
         self.assertEqual(save["attrs"]["aria-describedby"], "save-status")
         error = nodes["notes-error"]["attrs"]
         self.assertIn("hidden", error)
@@ -60,6 +62,19 @@ class TestNotesHostAssets(unittest.TestCase):
         ci = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
         self.assertIn("tests/test_notes_app.cjs", ci)
         self.assertIn("feat/pmkb-notes-v02-typography-drawer", ci)
+
+    def test_entire_editor_header_is_limited_to_two_rows(self):
+        nodes = NotesStructure(self.html).nodes
+        title_parent = nodes["note-title"]["ancestors"][-1]
+        self.assertIn(title_parent, nodes["tab-text"]["ancestors"])
+        self.assertIn(title_parent, nodes["tab-sketch"]["ancestors"])
+        self.assertNotIn("<header>", self.html)
+        self.assertIn("flex-wrap:nowrap", self.html)
+        self.assertTrue(any(n["attrs"].get("id") == "more-menu"
+                            for n in nodes["sketch-tools"]["ancestors"]))
+        self.assertEqual(nodes["toolbar-new"]["attrs"]["aria-label"], "Nouvelle note")
+        self.assertEqual(nodes["open-notes"]["attrs"]["aria-label"], "Mes notes")
+        self.assertIn('.save-control:has(#save-status:not([hidden]))', self.html)
 
     def test_standalone_ui_has_editing_and_optional_sketch(self):
         for marker in (
