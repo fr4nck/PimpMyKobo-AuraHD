@@ -243,7 +243,15 @@
       const next=C.note(Object.assign({},old,patch,{updated:now()}));
       replace(next);
       renderList();
-    }catch(err){status("Édition refusée : "+err.message,true);}
+      if(errors.has("editing"))status("",false,"editing");
+    }catch(err){
+      const message=Object.prototype.hasOwnProperty.call(patch,"title")
+        ?"Titre requis (100 caractères maximum)."
+        :Object.prototype.hasOwnProperty.call(patch,"text")
+        ?"Texte trop long (120 000 caractères maximum)."
+        :"Modification refusée : "+err.message;
+      status(message,true,"editing");
+    }
   }
   function renderList(){
     refs.list.replaceChildren();
@@ -279,6 +287,8 @@
     $("tab-sketch").classList.toggle("active",isSketch);
     $("tab-text").setAttribute("aria-selected",isSketch?"false":"true");
     $("tab-sketch").setAttribute("aria-selected",isSketch?"true":"false");
+    $("tab-text").tabIndex=isSketch?-1:0;
+    $("tab-sketch").tabIndex=isSketch?0:-1;
     if(isSketch) {
       toggleTypography(false);
       renderDrawing();
@@ -423,6 +433,12 @@
   refs.canvas.addEventListener("lostpointercapture",()=>{if(drawing)cancel();});
   refs.title.maxLength=C.MAX_TITLE;refs.text.maxLength=C.MAX_TEXT;
   refs.title.addEventListener("input",()=>update({title:refs.title.value||"Sans titre"}));
+  refs.title.addEventListener("blur",()=>{
+    if(!refs.title.value.trim()){
+      refs.title.value="Sans titre";
+      update({title:refs.title.value});
+    }
+  });
   refs.text.addEventListener("input",()=>update({text:refs.text.value}));
   refs.search.addEventListener("input",renderList);
   $("new-note").addEventListener("click",create);
@@ -455,17 +471,34 @@
   $("quit-notes").addEventListener("click",quitNotes);
   $("tab-text").addEventListener("click",()=>setTab("text"));
   $("tab-sketch").addEventListener("click",()=>setTab("sketch"));
+  function onTabKey(event){
+    const next=event.key==="Home"?"text":event.key==="End"?"sketch":
+      (event.key==="ArrowLeft"||event.key==="ArrowRight")
+        ?(tab==="text"?"sketch":"text"):null;
+    if(!next)return;
+    event.preventDefault();
+    setTab(next);
+    $(next==="text"?"tab-text":"tab-sketch").focus();
+  }
+  $("tab-text").addEventListener("keydown",onTabKey);
+  $("tab-sketch").addEventListener("keydown",onTabKey);
   for(const el of document.querySelectorAll("[data-tool]")){
     el.addEventListener("click",()=>{
       tool=el.dataset.tool;
-      for(const b of document.querySelectorAll("[data-tool]"))b.classList.toggle("active",b===el);
+      for(const b of document.querySelectorAll("[data-tool]")){
+        b.classList.toggle("active",b===el);
+        b.setAttribute("aria-pressed",b===el?"true":"false");
+      }
       refs.tool.textContent=tool==="pen"?"Crayon":"Gomme";
     });
   }
   for(const el of document.querySelectorAll("[data-width]")){
     el.addEventListener("click",()=>{
       width=Number(el.dataset.width);
-      for(const b of document.querySelectorAll("[data-width]"))b.classList.toggle("active",b===el);
+      for(const b of document.querySelectorAll("[data-width]")){
+        b.classList.toggle("active",b===el);
+        b.setAttribute("aria-pressed",b===el?"true":"false");
+      }
     });
   }
   $("undo").addEventListener("click",undoStroke);

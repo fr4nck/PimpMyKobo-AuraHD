@@ -20,9 +20,10 @@
     nav {padding:15px;display:flex;flex-direction:column;gap:12px;position:fixed;top:0;left:0;bottom:0;
       width:min(355px,90vw);max-height:100dvh;overflow-y:auto;z-index:21;box-shadow:4px 0 28px #0005}
     .drawer-backdrop {position:fixed;inset:0;z-index:20;background:#0006}
-    .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px}
+    .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px;min-height:var(--touch-target);min-width:var(--touch-target)}
+    #new-note {align-self:flex-start;min-height:var(--touch-target);min-width:var(--touch-target);font-weight:700}
     .main-toolbar {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
-    .main-toolbar > button {min-height:44px;min-width:44px}
+    .main-toolbar > button {min-height:var(--touch-target);min-width:var(--touch-target)}
     .icon {width:var(--icon-size);height:var(--icon-size);display:block;fill:currentColor}
     .more-actions {position:relative}
     .more-actions summary,.palette-details summary {cursor:pointer;font-weight:700;
@@ -31,9 +32,9 @@
     .more-content {position:absolute;right:0;top:100%;width:min(330px,calc(100vw - 24px));max-height:75dvh;overflow:auto;padding:12px;
       border:2px solid #111;background:white;box-shadow:0 3px 14px #0003;z-index:10}
     .more-content > button {width:100%}
-    .more-actions > summary {min-height:44px}
+    .more-actions > summary {min-height:var(--touch-target)}
     .type-menu {position:relative}
-    .type-menu > button {min-height:44px;min-width:44px;font-weight:700}
+    .type-menu > button {min-height:var(--touch-target);min-width:var(--touch-target);font-weight:700}
     .type-panel {position:absolute;top:calc(100% + 5px);left:0;width:min(420px, calc(100vw - 35px));
       max-height:75vh;overflow:auto;padding:12px;background:#fff;border:2px solid #111;
       box-shadow:0 4px 18px #0004;z-index:15}
@@ -50,7 +51,7 @@
     @media(max-width:610px) {
       .main-toolbar {gap:4px}
       .main-toolbar .control-label,.editor-head .control-label {display:none}
-      .main-toolbar > button,.main-toolbar summary {min-width:44px;min-height:44px;padding:6px}
+      .main-toolbar > button,.main-toolbar summary {min-width:var(--touch-target);min-height:var(--touch-target);padding:6px}
       .type-panel {position:fixed;top:58px;left:10px;right:10px;width:auto;max-height:calc(100dvh - 70px)}
     }
     nav .section-head {display:flex;align-items:center;justify-content:space-between;gap:var(--control-gap);flex-wrap:wrap}
@@ -69,17 +70,18 @@
     #editor {display:flex;flex-direction:column;gap:8px;min-height:0}
     .editor-head {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
     .editor-head label {font-size:.75rem}
-    .editor-head #note-title {font-size:1rem;font-weight:700;min-width:0;flex:1;width:0;padding:6px;min-height:44px}
+    .editor-head .title-label {flex:none}
+    .editor-head #note-title {font-size:1rem;font-weight:700;min-width:0;flex:1;width:0;padding:6px;min-height:var(--touch-target)}
     .tabs {display:flex;gap:4px;flex:none}
     .tabs button {min-width:var(--touch-target);min-height:var(--touch-target);padding:8px}
     .export-control {display:flex;flex:none}
-    .export-control button {min-width:44px;min-height:44px;padding:6px;font-size:.8125rem;white-space:nowrap}
+    .export-control button {min-width:var(--touch-target);min-height:var(--touch-target);padding:6px;font-size:.8125rem;white-space:nowrap}
     #note-text {display:block;width:100%;min-height:430px;resize:vertical;border:2px solid #666;background:#fff;padding:18px;
       font:17px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#111}
     .hint {font-size:13px;color:#444}
     .palette {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
     .palette .group {display:inline-flex;gap:5px;padding-right:10px;border-right:1px solid #aaa}
-    .palette button {min-width:42px}
+    .palette button {min-width:var(--touch-target);min-height:var(--touch-target)}
     .canvas-border {border:3px solid #111;background:#fff;touch-action:none;user-select:none}
     #sketch {width:100%;height:auto;display:block;aspect-ratio:3/2;touch-action:none;cursor:crosshair}
     .danger {border-style:dashed}
@@ -111,7 +113,7 @@
         <span id="note-count">0 / 100</span>
         <button id="close-drawer" type="button" aria-label="Fermer Mes notes">×</button>
       </div>
-      <button id="new-note" type="button">+ Nouvelle note</button>
+      <button id="new-note" type="button" aria-label="Nouvelle note" title="Nouvelle note">+</button>
       <label for="search">Rechercher</label>
       <input id="search" type="search" autocomplete="off" placeholder="Titre ou contenu">
       <div id="note-list" class="note-list" aria-label="Liste des notes"></div>
@@ -164,13 +166,13 @@
           <summary>Palette de dessin · ouvrir / refermer</summary>
           <div class="palette" aria-label="Outils de dessin">
             <div class="group">
-              <button type="button" data-tool="pen" class="active">Crayon</button>
-              <button type="button" data-tool="eraser">Gomme</button>
+              <button type="button" data-tool="pen" class="active" aria-pressed="true">Crayon</button>
+              <button type="button" data-tool="eraser" aria-pressed="false">Gomme</button>
             </div>
             <div class="group" aria-label="Épaisseur">
-              <button type="button" data-width="2">Fin</button>
-              <button type="button" data-width="5" class="active">Moyen</button>
-              <button type="button" data-width="11">Épais</button>
+              <button type="button" data-width="2" aria-pressed="false">Fin</button>
+              <button type="button" data-width="5" class="active" aria-pressed="true">Moyen</button>
+              <button type="button" data-width="11" aria-pressed="false">Épais</button>
             </div>
             <div class="group">
               <button id="undo" type="button">Annuler</button>
@@ -193,22 +195,22 @@
       </section>
       <section id="editor" hidden>
         <div class="editor-head">
-          <label for="note-title" class="sr-only">Titre</label>
+          <label for="note-title" class="title-label">Titre</label>
           <input id="note-title" type="text" maxlength="100" placeholder="Titre">
           <div id="note-modes" class="tabs" role="tablist" aria-label="Mode de note">
-          <button id="tab-text" type="button" data-icon-role="notes.text" role="tab" aria-label="Texte" title="Texte" aria-selected="true" class="active"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-text"/></svg></button>
-          <button id="tab-sketch" type="button" data-icon-role="notes.sketch" role="tab" aria-label="Croquis" title="Croquis" aria-selected="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-sketch"/></svg></button>
+          <button id="tab-text" type="button" data-icon-role="notes.text" role="tab" aria-label="Texte" title="Texte" aria-controls="text-pane" aria-selected="true" tabindex="0" class="active"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-text"/></svg></button>
+          <button id="tab-sketch" type="button" data-icon-role="notes.sketch" role="tab" aria-label="Croquis" title="Croquis" aria-controls="sketch-pane" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-sketch"/></svg></button>
           </div>
           <div class="export-control">
             <button id="export-txt" type="button" data-icon-role="action.export" aria-label="Exporter la note (.txt)" title="Exporter la note (.txt)"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
             <button id="export-png" type="button" data-icon-role="action.export" aria-label="Exporter le dessin (.png)" title="Exporter le dessin (.png)" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
           </div>
         </div>
-        <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
+        <div id="text-pane" role="tabpanel" aria-labelledby="tab-text">
           <label for="note-text" class="sr-only">Contenu de la note</label>
           <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
         </div>
-        <div id="sketch-pane" role="tabpanel" aria-label="Palette graphique facultative" hidden>
+        <div id="sketch-pane" role="tabpanel" aria-labelledby="tab-sketch" hidden>
 
           <div class="canvas-border">
             <canvas id="sketch" width="900" height="600" aria-label="Zone de croquis ; souris ou tactile"></canvas>

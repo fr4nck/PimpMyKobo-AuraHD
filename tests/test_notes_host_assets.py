@@ -95,6 +95,18 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertTrue(any(n["attrs"].get("id") == "more-menu"
                             for n in nodes["sketch-tools"]["ancestors"]))
         self.assertEqual(nodes["toolbar-new"]["attrs"]["aria-label"], "Nouvelle note")
+        self.assertEqual(nodes["new-note"]["attrs"]["aria-label"], "Nouvelle note")
+        self.assertEqual(nodes["new-note"]["attrs"]["title"], "Nouvelle note")
+        self.assertIn('for="note-title" class="title-label">Titre', self.html)
+        self.assertNotIn("44px", self.html)
+        for mode, panel in (("tab-text", "text-pane"), ("tab-sketch", "sketch-pane")):
+            self.assertEqual(nodes[mode]["attrs"]["aria-controls"], panel)
+            self.assertEqual(nodes[panel]["attrs"]["aria-labelledby"], mode)
+        for control in ("save-now", "tab-text", "tab-sketch", "export-txt", "export-png"):
+            self.assertTrue(nodes[control]["attrs"]["aria-label"])
+        for name in ("pen", "eraser"):
+            self.assertIn(f'data-tool="{name}"', self.html)
+        self.assertIn('aria-pressed="true"', self.html)
         self.assertEqual(nodes["open-notes"]["attrs"]["aria-label"], "Mes notes")
         self.assertTrue(any(n["attrs"].get("id") == "more-menu"
                             for n in nodes["quit-notes"]["ancestors"]))

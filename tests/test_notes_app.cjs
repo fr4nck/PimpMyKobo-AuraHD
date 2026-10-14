@@ -42,8 +42,10 @@ function browser({readError=false, initial=null, confirmReply=true}={}) {
     clearTimeout(id){timers.delete(id);},console
   });
   return {get:id=>elements.get(id), downloads, stored:()=>stored, destination:()=>destination,
+    active:()=>document.activeElement,
     failWrites(value){writeError=value;},
-    event(id,name){const item=elements.get(id);return item.listeners[name]({target:item});},
+    event(id,name,params={}){const item=elements.get(id);
+      return item.listeners[name]({target:item,currentTarget:item,preventDefault(){this.defaultPrevented=true;},...params});},
     tick(){const jobs=[...timers.values()];timers.clear();for(const job of jobs)job();}};
 }
 
@@ -162,4 +164,36 @@ test('failed import retains previous notebook and pending text',async()=>{
   assert.equal(C.decode(b.stored()).notes[0].text,'Original');
   b.failWrites(false);b.event('save-now','click');
   assert.equal(C.decode(b.stored()).notes[0].text,'Original');
+});
+
+
+test('ADR-005: mode tabs use roving keyboard focus, arrows, Home and End',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  assert.equal(b.get('tab-text').tabIndex,0);
+  assert.equal(b.get('tab-sketch').tabIndex,-1);
+  b.event('tab-text','keydown',{key:'ArrowRight'});
+  assert.equal(b.get('tab-text').attrs['aria-selected'],'false');
+  assert.equal(b.get('tab-sketch').attrs['aria-selected'],'true');
+  assert.equal(b.get('tab-sketch').tabIndex,0);
+  assert.equal(b.active(),b.get('tab-sketch'));
+  b.event('tab-sketch','keydown',{key:'Home'});
+  assert.equal(b.get('tab-text').attrs['aria-selected'],'true');
+  assert.equal(b.active(),b.get('tab-text'));
+  b.event('tab-text','keydown',{key:'End'});
+  assert.equal(b.get('tab-sketch').attrs['aria-selected'],'true');
+  b.event('tab-sketch','keydown',{key:'ArrowLeft'});
+  assert.equal(b.get('tab-text').attrs['aria-selected'],'true');
+});
+
+test('ADR-005: invalid title error clears on repair, empty title normalizes on blur',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  b.get('note-title').value='   ';b.event('note-title','input');
+  assert.match(b.get('notes-error').textContent,/Titre requis/);
+  b.get('note-title').value='Carnet';b.event('note-title','input');
+  assert.equal(b.get('notes-error').hidden,true);
+  b.get('note-title').value='';b.event('note-title','input');
+  b.event('note-title','blur');
+  assert.equal(b.get('note-title').value,'Sans titre');
+  b.tick();
+  assert.equal(C.decode(b.stored()).notes[0].title,'Sans titre');
 });
