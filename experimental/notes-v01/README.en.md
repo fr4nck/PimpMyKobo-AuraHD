@@ -19,6 +19,8 @@ V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of
 
 ## Implemented features
 
+The lone “+” creates a note. Exit through **More → Quit Notes**, checking saves before returning to the host launcher simulator. Failed storage requires an explicit exit confirmation and a JSON export reminder. This browser navigation does not enable the launcher Notes tile or integrate with hardware.
+
 Note export is in the header beside the title and Text/Sketch tabs: TXT in Text mode, PNG in Sketch mode. Format details and [design references](../../docs/notes-ux-policy.md) are documented; notebook JSON export remains in My Notes.
 
 **Mandatory enduring UX rule**: [Notes policy derived from ADR-005](../../docs/notes-ux-policy.md). Short storage status sits beside Save without a large box. Actionable errors appear only when needed; the JSON backup reminder belongs in My Notes. Short controls use shared semantic widths. PRs #25/#26/#27 require explicit user visual acceptance before merging.

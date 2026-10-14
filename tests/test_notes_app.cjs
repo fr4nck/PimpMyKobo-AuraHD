@@ -7,9 +7,9 @@ const vm = require('node:vm');
 const C = require('../experimental/notes-v01/notes-core.js');
 const app = path.join(__dirname, '../experimental/notes-v01');
 
-function browser({readError=false, initial=null}={}) {
+function browser({readError=false, initial=null, confirmReply=true}={}) {
   const elements = new Map(), timers = new Map(), downloads = [];
-  let serial=0, stored=initial, writeError=false;
+  let serial=0, stored=initial, writeError=false, destination=null;
   function element(id='') {
     return {id, hidden:false, value:'', textContent:'', style:{}, options:[], files:[],
       dataset:{}, children:[], listeners:{}, attrs:{},
@@ -32,7 +32,8 @@ function browser({readError=false, initial=null}={}) {
   const document={activeElement:null, body:element(), fonts:{add(){}},
     getElementById:id=>elements.get(id), createElement:()=>element(),
     querySelectorAll:()=>[], addEventListener(){}};
-  const window={PMKBNotesCore:C, confirm:()=>true, addEventListener(){},
+  const window={PMKBNotesCore:C, confirm:()=>confirmReply, addEventListener(){},
+    location:{assign(url){destination=url;}},
     localStorage:{getItem(){if(readError)throw Error('blocked');return stored;},
       setItem(key,value){if(writeError)throw Error('quota');stored=value;}}};
   vm.runInNewContext(fs.readFileSync(path.join(app,'notes-app.js'),'utf8'),{
@@ -40,7 +41,7 @@ function browser({readError=false, initial=null}={}) {
     setTimeout(callback){timers.set(++serial,callback);return serial;},
     clearTimeout(id){timers.delete(id);},console
   });
-  return {get:id=>elements.get(id), downloads, stored:()=>stored,
+  return {get:id=>elements.get(id), downloads, stored:()=>stored, destination:()=>destination,
     failWrites(value){writeError=value;},
     event(id,name){const item=elements.get(id);return item.listeners[name]({target:item});},
     tick(){const jobs=[...timers.values()];timers.clear();for(const job of jobs)job();}};
@@ -72,6 +73,25 @@ test('loading existing notes has no permanent toolbar status',()=>{
   const b=browser({initial:C.encode(book)});
   assert.equal(b.get('save-status').hidden,true);
   assert.equal(b.get('save-status').textContent,'');
+});
+
+test('quit saves pending edits before returning to the host launcher',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  b.get('note-text').value='Avant de quitter';b.event('note-text','input');
+  b.event('quit-notes','click');
+  assert.equal(C.decode(b.stored()).notes[0].text,'Avant de quitter');
+  assert.equal(b.destination(),'../launcher-v0/simulator.html');
+});
+
+test('failed save requires an explicit choice before quitting',()=>{
+  for(const confirmReply of [false,true]) {
+    const b=browser({confirmReply});b.event('toolbar-new','click');b.failWrites(true);
+    b.get('note-text').value='En mémoire';b.event('note-text','input');
+    b.event('quit-notes','click');
+    assert.equal(b.destination(),confirmReply?'../launcher-v0/simulator.html':null);
+    assert.equal(b.get('note-text').value,'En mémoire');
+    assert.equal(b.get('notes-error').hidden,false);
+  }
 });
 
 test('header export follows Text or Sketch mode and keeps both download formats',()=>{

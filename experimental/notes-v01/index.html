@@ -22,7 +22,7 @@
     .drawer-backdrop {position:fixed;inset:0;z-index:20;background:#0006}
     .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px}
     .main-toolbar {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
-    .main-toolbar > button {min-height:44px}
+    .main-toolbar > button {min-height:44px;min-width:44px}
     .more-actions {position:relative}
     .more-actions summary,.palette-details summary {cursor:pointer;font-weight:700;
       list-style:none;padding:8px 12px;border:2px solid #111;background:white;user-select:none}
@@ -125,7 +125,7 @@
     </nav>
     <article>
       <div class="main-toolbar" aria-label="Actions rapides">
-        <button id="toolbar-new" type="button" aria-label="Nouvelle note" title="Nouvelle note">+<span class="control-label"> Nouvelle</span></button>
+        <button id="toolbar-new" type="button" aria-label="Nouvelle note" title="Nouvelle note">+</button>
         <button id="open-notes" type="button" aria-label="Mes notes" title="Mes notes" aria-controls="notes-drawer" aria-expanded="false">☰<span class="control-label"> Mes notes</span></button>
         <div class="save-control">
           <button id="save-now" type="button" aria-label="Enregistrer" aria-describedby="save-status"><span class="save-label">Enregistrer</span></button>
@@ -156,6 +156,7 @@
         <details class="more-actions" id="more-menu">
           <summary aria-label="Plus" title="Plus">⋯<span class="control-label"> Plus</span></summary>
           <div class="more-content">
+            <button id="quit-notes" type="button">Quitter Notes</button>
             <button id="delete-note" class="danger" type="button">Supprimer la note</button>
             <p class="hint">Exporter en haut de la note : TXT en mode Texte, PNG en mode Croquis. Le TXT est en UTF-8 ; le PNG est une image. L'export JSON dans Mes notes conserve le carnet et les traits éditables.</p>
           <details id="sketch-tools" class="palette-details">

@@ -77,6 +77,8 @@ class TestNotesHostAssets(unittest.TestCase):
                             for n in nodes["sketch-tools"]["ancestors"]))
         self.assertEqual(nodes["toolbar-new"]["attrs"]["aria-label"], "Nouvelle note")
         self.assertEqual(nodes["open-notes"]["attrs"]["aria-label"], "Mes notes")
+        self.assertTrue(any(n["attrs"].get("id") == "more-menu"
+                            for n in nodes["quit-notes"]["ancestors"]))
         self.assertIn('.save-control:has(#save-status:not([hidden]))', self.html)
 
     def test_standalone_ui_has_editing_and_optional_sketch(self):

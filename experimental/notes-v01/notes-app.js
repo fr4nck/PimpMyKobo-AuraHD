@@ -192,6 +192,12 @@
     saving=setTimeout(persist,350);
   }
   function flush(){if(saving!==null)persist();}
+  function quitNotes(){
+    if(book.notes.length || saving!==null || errors.has("storage")) {
+      if(!persist() && !window.confirm("Enregistrement local impossible. Exportez le carnet en JSON depuis Mes notes avant de partir. Quitter quand même ?"))return;
+    }
+    window.location.assign("../launcher-v0/simulator.html");
+  }
   function current(){return book.notes.find(n=>n.id===selected)||null;}
   function replace(note){
     book=C.upsert(book,note);
@@ -445,6 +451,7 @@
   fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
   $("save-now").addEventListener("click",persist);
+  $("quit-notes").addEventListener("click",quitNotes);
   $("tab-text").addEventListener("click",()=>setTab("text"));
   $("tab-sketch").addEventListener("click",()=>setTab("sketch"));
   for(const el of document.querySelectorAll("[data-tool]")){
