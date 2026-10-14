@@ -30,6 +30,25 @@ Toute évolution de Notes doit respecter cette règle, actualiser les garde-fous
 
 ## Sources d'inspiration complémentaires
 
+### Référentiel PMSL relu le 14 octobre 2026
+
+L'ADR-005 est complétée par les règles de [DESIGN_SYSTEM.md](https://github.com/fr4nck/PMSL-Arch/blob/main/docs/DESIGN_SYSTEM.md) (`2dd8b7a9d787d07ac44f1b152cdfe98e8f37be04`), [ICON_CATALOG.md](https://github.com/fr4nck/PMSL-Arch/blob/main/docs/ICON_CATALOG.md) (`00c63cb30c764d195f789d5ecb24bdf8ed7145b5`), [ICONOGRAPHIE_FONCTIONNELLE.md](https://github.com/fr4nck/PMSL-Arch/blob/main/docs/ICONOGRAPHIE_FONCTIONNELLE.md) (`e0b13f0045a62b837e8c6d516b33cd9ccd6242c1`), du [manifest du lot 1](https://github.com/fr4nck/PMSL-Arch/blob/main/docs/MANIFEST_ICONOGRAPHIE_LOT1.md) et du [protocole de diagnostic UI](https://github.com/fr4nck/PMSL-Arch/blob/main/docs/REX_DIAGNOSTIC_UI_THEME_TEAMWORKS_NOETHYS.md), lus intégralement. Corriger les composants communs, diagnostiquer la cause réelle, vérifier les dimensions et le rendu ; ne pas accumuler les exceptions locales.
+
+L'index mentionne `DESIGN_SYSTEM_UI_UX.md`, mais ce fichier est absent de l'arbre `main` de PMSL-Arch (`b29859835b83cdc2c8b2ceac9fcb486dd8000fca`) et la recherche ne retrouve que son renvoi dans l'index. Il n'est donc pas considéré comme relu.
+
+**Doctrine utilisateur « Ikea » : privilégier les commandes visuelles compréhensibles sans texte**, sans supprimer les noms accessibles et infobulles. Les champs conservent leurs labels associés ; le titre de la note reste sa donnée propre. Actions rares/risquées, erreurs et confirmations gardent du texte explicite. Cette doctrine réduit le texte visible à traduire, sans prétendre éliminer la traduction pour l'accessibilité.
+
+Le rendu commun de Notes est `notes-icons.svg`, sous-ensemble de quatre glyphes Fluent Filled 24 px, monochromes via `currentColor`, avec licence MIT dans `icons-LICENSE.txt`. La direction Style B/manifest récent précise les variantes Filled pour les barres denses ; pas de tuiles multicolores sur e-ink, pas d'emoji dépendant de la police du système. Cibles tactiles et taille des icônes sont des tokens communs. Les noms sémantiques rendent le sens indépendant du fichier fournisseur.
+
+| Rôle | Symbole local | Glyphe Fluent | SHA source |
+|---|---|---|---|
+| `action.save` | `action-save` | Save 24 Filled (disquette) | `a1773606ae13aeb9181bda7538b2fe447c9a5e18` |
+| `action.export` | `action-export` | Arrow Export 24 Filled | `deec62ff2c5fd979ac6da20f01ab17cd2f388105` |
+| `notes.text` | `notes-text` | Text T 24 Filled | `c6a5adbcc85a6bcb0af9ae6f8cbdd7eed6a71876` |
+| `notes.sketch` | `notes-sketch` | Edit 24 Filled (crayon) | `7ed339404337297f1142bbc06c21ffeae04c2deb` |
+
+Sources : `microsoft/fluentui-system-icons`, `assets/<famille>/SVG/ic_fluent_<nom>_24_filled.svg`. Les deux rôles `notes.*` sont des modes locaux, distincts des actions ; ils ne changent pas le catalogue transversal PMSL. Ajouter, Mes notes, Aa et Plus conservent leurs signes familiers (`+`, `☰`, `Aa`, `⋯`). Retour visuel dans la surface de la disquette : `…`, `✓`, `!` ; message complet annoncé par le statut accessible. Aucun emplacement permanent ajouté.
+
 Consultées le 14 octobre 2026 ; l'ADR-005 et la contrainte utilisateur des deux lignes restent normatives.
 
 - [GNOME HIG — Header Bars](https://developer.gnome.org/hig/patterns/containers/header-bars.html) : peu de commandes, contenu adapté au mode actif, infobulles et groupes fonctionnels. Application dans Notes : l'export suit Texte/Croquis. Les contraintes de déplacement d'une fenêtre desktop ne sont pas transposées à la liseuse.

@@ -1,6 +1,7 @@
 """PMKB Notes: host-only UI contract and safety guardrails (no browser dependency)."""
 import unittest
 from html.parser import HTMLParser
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,24 @@ class TestNotesHostAssets(unittest.TestCase):
         ci = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
         self.assertIn("tests/test_notes_app.cjs", ci)
         self.assertIn("feat/pmkb-notes-v02-typography-drawer", ci)
+
+    def test_semantic_monochrome_icons_keep_accessible_names(self):
+        nodes = NotesStructure(self.html).nodes
+        for name, role in (("save-now", "action.save"), ("export-txt", "action.export"),
+                           ("export-png", "action.export"), ("tab-text", "notes.text"),
+                           ("tab-sketch", "notes.sketch")):
+            self.assertEqual(nodes[name]["attrs"]["data-icon-role"], role)
+            self.assertTrue(nodes[name]["attrs"]["aria-label"])
+            self.assertTrue(nodes[name]["attrs"]["title"])
+        root = ET.parse(APP / "notes-icons.svg").getroot()
+        ns = "{http://www.w3.org/2000/svg}"
+        self.assertEqual({s.get("id") for s in root.findall(ns + "symbol")},
+                         {"action-save", "action-export", "notes-text", "notes-sketch"})
+        for element in root.iter():
+            self.assertIn(element.tag, {ns + "svg", ns + "symbol", ns + "path"})
+            if element.tag == ns + "path":
+                self.assertEqual(element.get("fill"), "currentColor")
+        self.assertIn("MIT License", (APP / "icons-LICENSE.txt").read_text())
 
     def test_entire_editor_header_is_limited_to_two_rows(self):
         nodes = NotesStructure(self.html).nodes

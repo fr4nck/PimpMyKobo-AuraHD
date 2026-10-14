@@ -155,6 +155,7 @@
   function saveStatus(msg,transient=false){
     clearTimeout(feedbackTimer);feedbackTimer=null;
     refs.badge.textContent=msg;
+    refs.badge.dataset.symbol=msg==="En attente…"?"…":msg==="Enregistré"?"✓":msg?"!":"";
     refs.badge.hidden=!msg;
     if(transient)feedbackTimer=setTimeout(()=>saveStatus(""),2000);
   }

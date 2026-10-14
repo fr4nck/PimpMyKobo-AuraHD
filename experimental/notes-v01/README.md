@@ -19,6 +19,8 @@ La V0.2 est développée **sur une branche empilée sur la PR Notes V0.1 (#26)**
 
 ## Fonctions disponibles
 
+Les commandes courantes sont des pictogrammes : disquette pour enregistrer, T/crayon pour les modes, flèche sortante pour l'export. La famille Fluent est embarquée localement, avec licence MIT ; noms accessibles et infobulles restent présents. Pas de bibliothèque distante ni de police d'icônes. La politique UX documente désormais le Design System et l'iconographie PMSL, en plus de l'ADR-005.
+
 Le bouton « + » seul crée une note. Pour sortir : **Plus → Quitter Notes**, avec vérification de l'enregistrement avant retour au simulateur du launcher. Si le stockage échoue, un rappel d'export JSON et une confirmation précèdent la sortie. Ce retour navigateur n'active pas la tuile Notes du launcher et n'est pas une intégration matériel.
 
 L'export de la note est en haut, sur la même ligne que le titre et Texte/Croquis : TXT en mode Texte, PNG en mode Croquis. Les détails des formats et les [sources d'inspiration](../../docs/notes-ux-policy.md#sources-dinspiration-complémentaires) sont documentés ; l'export JSON du carnet reste dans Mes notes.

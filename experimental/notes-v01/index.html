@@ -7,7 +7,7 @@
   <style>
     * {box-sizing:border-box}
     [hidden] {display:none!important}
-    :root {color-scheme:light;--field-number:7ch;--field-font:22ch;--control-gap:.5rem}
+    :root {color-scheme:light;--field-number:7ch;--field-font:22ch;--control-gap:.5rem;--icon-size:1.5rem;--touch-target:2.75rem}
     body {margin:0;background:#ddd;color:#111;font:16px/1.45 system-ui,-apple-system,sans-serif}
     button,input,textarea {font:inherit}
     button {cursor:pointer;color:inherit;background:white;border:2px solid #111;border-radius:2px;padding:8px 12px}
@@ -23,6 +23,7 @@
     .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px}
     .main-toolbar {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
     .main-toolbar > button {min-height:44px;min-width:44px}
+    .icon {width:var(--icon-size);height:var(--icon-size);display:block;fill:currentColor}
     .more-actions {position:relative}
     .more-actions summary,.palette-details summary {cursor:pointer;font-weight:700;
       list-style:none;padding:8px 12px;border:2px solid #111;background:white;user-select:none}
@@ -70,7 +71,7 @@
     .editor-head label {font-size:.75rem}
     .editor-head #note-title {font-size:1rem;font-weight:700;min-width:0;flex:1;width:0;padding:6px;min-height:44px}
     .tabs {display:flex;gap:4px;flex:none}
-    .tabs button {font-size:.8125rem;min-height:44px;padding:6px}
+    .tabs button {min-width:var(--touch-target);min-height:var(--touch-target);padding:8px}
     .export-control {display:flex;flex:none}
     .export-control button {min-width:44px;min-height:44px;padding:6px;font-size:.8125rem;white-space:nowrap}
     #note-text {display:block;width:100%;min-height:430px;resize:vertical;border:2px solid #666;background:#fff;padding:18px;
@@ -83,9 +84,10 @@
     #sketch {width:100%;height:auto;display:block;aspect-ratio:3/2;touch-action:none;cursor:crosshair}
     .danger {border-style:dashed}
     .save-control {display:inline-flex;position:relative;flex:none}
-    .save-control button {min-height:44px;min-width:6.5rem;padding:6px}
+    .save-control button {width:var(--touch-target);min-height:var(--touch-target);min-width:var(--touch-target);padding:8px}
     .save-control:has(#save-status:not([hidden])) .save-label {visibility:hidden}
-    #save-status {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;pointer-events:none;white-space:nowrap}
+    #save-status {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0;pointer-events:none;white-space:nowrap}
+    #save-status::after {content:attr(data-symbol);font-size:1.25rem}
     #notes-error {margin:0;font-size:.875rem;font-weight:700;overflow-wrap:anywhere}
     select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible {outline:2px solid #555;outline-offset:2px}
     @media(max-width:750px) {
@@ -94,7 +96,6 @@
       article {min-height:540px;padding:6px}
       #note-text {min-height:340px}
       .editor-head {gap:4px}
-      .save-control button {min-width:5.5rem;font-size:.75rem}
     }
   </style>
   <script src="notes-core.js"></script>
@@ -126,9 +127,9 @@
     <article>
       <div class="main-toolbar" aria-label="Actions rapides">
         <button id="toolbar-new" type="button" aria-label="Nouvelle note" title="Nouvelle note">+</button>
-        <button id="open-notes" type="button" aria-label="Mes notes" title="Mes notes" aria-controls="notes-drawer" aria-expanded="false">☰<span class="control-label"> Mes notes</span></button>
+        <button id="open-notes" type="button" aria-label="Mes notes" title="Mes notes" aria-controls="notes-drawer" aria-expanded="false">☰</button>
         <div class="save-control">
-          <button id="save-now" type="button" aria-label="Enregistrer" aria-describedby="save-status"><span class="save-label">Enregistrer</span></button>
+          <button id="save-now" type="button" data-icon-role="action.save" aria-label="Enregistrer" title="Enregistrer" aria-describedby="save-status"><span class="save-label"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-save"/></svg></span></button>
           <span id="save-status" role="status" aria-live="polite" hidden></span>
         </div>
         <div id="type-menu" class="type-menu">
@@ -154,7 +155,7 @@
           </div>
         </div>
         <details class="more-actions" id="more-menu">
-          <summary aria-label="Plus" title="Plus">⋯<span class="control-label"> Plus</span></summary>
+          <summary aria-label="Plus" title="Plus">⋯</summary>
           <div class="more-content">
             <button id="quit-notes" type="button">Quitter Notes</button>
             <button id="delete-note" class="danger" type="button">Supprimer la note</button>
@@ -192,15 +193,15 @@
       </section>
       <section id="editor" hidden>
         <div class="editor-head">
-          <label for="note-title" class="visually-label">Titre</label>
+          <label for="note-title" class="sr-only">Titre</label>
           <input id="note-title" type="text" maxlength="100" placeholder="Titre">
           <div id="note-modes" class="tabs" role="tablist" aria-label="Mode de note">
-          <button id="tab-text" type="button" role="tab" aria-selected="true" class="active">Texte</button>
-          <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
+          <button id="tab-text" type="button" data-icon-role="notes.text" role="tab" aria-label="Texte" title="Texte" aria-selected="true" class="active"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-text"/></svg></button>
+          <button id="tab-sketch" type="button" data-icon-role="notes.sketch" role="tab" aria-label="Croquis" title="Croquis" aria-selected="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-sketch"/></svg></button>
           </div>
           <div class="export-control">
-            <button id="export-txt" type="button" aria-label="Exporter la note (.txt)" title="Exporter la note (.txt)"><span aria-hidden="true">↓</span><span class="control-label"> Exporter</span></button>
-            <button id="export-png" type="button" aria-label="Exporter le dessin (.png)" title="Exporter le dessin (.png)" hidden><span aria-hidden="true">↓</span><span class="control-label"> Exporter</span></button>
+            <button id="export-txt" type="button" data-icon-role="action.export" aria-label="Exporter la note (.txt)" title="Exporter la note (.txt)"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
+            <button id="export-png" type="button" data-icon-role="action.export" aria-label="Exporter le dessin (.png)" title="Exporter le dessin (.png)" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
           </div>
         </div>
         <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">

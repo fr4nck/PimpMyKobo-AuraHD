@@ -97,4 +97,11 @@ regression tests and targeted visual acceptance. PRs #25/#26/#27 require explici
 user visual validation before merging. This rule does not authorize changes to
 FIRST BOOT, partitions or approved images.
 
+Notes also follows PMSL-Arch DESIGN_SYSTEM, ICON_CATALOG, ICONOGRAPHIE_FONCTIONNELLE
+and the icon manifest as adapted in that policy. Common commands use recognisable
+icons with accessible names and tooltips; explanatory text is kept for errors and
+rare/risky actions. Resolve icons through local semantic SVG symbols, centralise
+metrics, and retain monochrome e-ink contrast. Do not silently claim to have read
+the detailed DESIGN_SYSTEM_UI_UX source while it is absent from PMSL-Arch main.
+
 PMKB is intended to become an independent e-ink environment, not a general-purpose tablet OS. Prefer designs that exploit e-ink characteristics: static pages, partial refreshes, touch-first interaction and low background activity. Avoid introducing heavy frameworks or permanent services without a demonstrated need on this 512 MiB device.

@@ -19,6 +19,8 @@ V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of
 
 ## Implemented features
 
+Common commands use pictograms: floppy disk for save, T/pencil for modes, outgoing arrow for export. A local MIT-licensed Fluent subset retains accessible names and tooltips, without a remote library or icon font. The UX policy documents the PMSL Design System and iconography alongside ADR-005.
+
 The lone “+” creates a note. Exit through **More → Quit Notes**, checking saves before returning to the host launcher simulator. Failed storage requires an explicit exit confirmation and a JSON export reminder. This browser navigation does not enable the launcher Notes tile or integrate with hardware.
 
 Note export is in the header beside the title and Text/Sketch tabs: TXT in Text mode, PNG in Sketch mode. Format details and [design references](../../docs/notes-ux-policy.md) are documented; notebook JSON export remains in My Notes.
