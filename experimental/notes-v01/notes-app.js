@@ -266,6 +266,8 @@
     const isSketch=tab==="sketch";
     refs.textPane.hidden=isSketch;
     refs.sketchPane.hidden=!isSketch;
+    $("export-txt").hidden=isSketch;
+    $("export-png").hidden=!isSketch;
     $("tab-text").classList.toggle("active",!isSketch);
     $("tab-sketch").classList.toggle("active",isSketch);
     $("tab-text").setAttribute("aria-selected",isSketch?"false":"true");

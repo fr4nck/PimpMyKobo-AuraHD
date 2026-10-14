@@ -21,7 +21,8 @@ function browser({readError=false, initial=null}={}) {
       replaceChildren(){this.children=[];},
       focus(){document.activeElement=this;}, select(){}, contains(target){return target===this;},
       click(){if(this.download)downloads.push(this.download); return this.listeners.click?.({target:this});},
-      remove(){}, getContext(){return {fillRect(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){}}}
+      remove(){}, toBlob(callback){callback(new Blob(['synthetic PNG'],{type:'image/png'}));},
+      getContext(){return {fillRect(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){}}}
     };
   }
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
@@ -71,6 +72,22 @@ test('loading existing notes has no permanent toolbar status',()=>{
   const b=browser({initial:C.encode(book)});
   assert.equal(b.get('save-status').hidden,true);
   assert.equal(b.get('save-status').textContent,'');
+});
+
+test('header export follows Text or Sketch mode and keeps both download formats',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  assert.equal(b.get('export-txt').hidden,false);
+  assert.equal(b.get('export-png').hidden,true);
+  b.event('export-txt','click');
+  assert.match(b.downloads[0],/\.txt$/);
+  b.event('tab-sketch','click');
+  assert.equal(b.get('export-txt').hidden,true);
+  assert.equal(b.get('export-png').hidden,false);
+  b.event('export-png','click');
+  assert.match(b.downloads[1],/\.png$/);
+  b.event('tab-text','click');
+  assert.equal(b.get('export-txt').hidden,false);
+  assert.equal(b.get('export-png').hidden,true);
 });
 
 test('write failure stays visible through JSON export; successful retry clears it',()=>{

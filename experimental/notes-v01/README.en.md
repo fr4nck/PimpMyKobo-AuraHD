@@ -19,6 +19,8 @@ V0.2 is developed **as a stacked branch on Notes V0.1 PR #26**, independently of
 
 ## Implemented features
 
+Note export is in the header beside the title and Text/Sketch tabs: TXT in Text mode, PNG in Sketch mode. Format details and [design references](../../docs/notes-ux-policy.md) are documented; notebook JSON export remains in My Notes.
+
 **Mandatory enduring UX rule**: [Notes policy derived from ADR-005](../../docs/notes-ux-policy.md). Short storage status sits beside Save without a large box. Actionable errors appear only when needed; the JSON backup reminder belongs in My Notes. Short controls use shared semantic widths. PRs #25/#26/#27 require explicit user visual acceptance before merging.
 
 - Create, select, rename, search and delete notes, with confirmation before deletion.

@@ -19,6 +19,8 @@ La V0.2 est développée **sur une branche empilée sur la PR Notes V0.1 (#26)**
 
 ## Fonctions disponibles
 
+L'export de la note est en haut, sur la même ligne que le titre et Texte/Croquis : TXT en mode Texte, PNG en mode Croquis. Les détails des formats et les [sources d'inspiration](../../docs/notes-ux-policy.md#sources-dinspiration-complémentaires) sont documentés ; l'export JSON du carnet reste dans Mes notes.
+
 **Règle UX durable et obligatoire** : [politique Notes issue de l'ADR-005](../../docs/notes-ux-policy.md). L'état court est placé près d'Enregistrer, sans grande case. Les erreurs apparaissent seulement si nécessaires et proposent une correction ; le rappel d'export JSON est dans Mes notes. Les contrôles courts utilisent des largeurs sémantiques communes. La fusion des PR #25/#26/#27 exige la validation visuelle explicite de l'utilisateur.
 
 - Liste de notes : création, sélection, renommage, recherche plein texte et suppression avec confirmation.

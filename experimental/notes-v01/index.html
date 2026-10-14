@@ -48,7 +48,7 @@
     .palette {margin:12px 0 4px}
     @media(max-width:610px) {
       .main-toolbar {gap:4px}
-      .main-toolbar .control-label {display:none}
+      .main-toolbar .control-label,.editor-head .control-label {display:none}
       .main-toolbar > button,.main-toolbar summary {min-width:44px;min-height:44px;padding:6px}
       .type-panel {position:fixed;top:58px;left:10px;right:10px;width:auto;max-height:calc(100dvh - 70px)}
     }
@@ -71,6 +71,8 @@
     .editor-head #note-title {font-size:1rem;font-weight:700;min-width:0;flex:1;width:0;padding:6px;min-height:44px}
     .tabs {display:flex;gap:4px;flex:none}
     .tabs button {font-size:.8125rem;min-height:44px;padding:6px}
+    .export-control {display:flex;flex:none}
+    .export-control button {min-width:44px;min-height:44px;padding:6px;font-size:.8125rem;white-space:nowrap}
     #note-text {display:block;width:100%;min-height:430px;resize:vertical;border:2px solid #666;background:#fff;padding:18px;
       font:17px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#111}
     .hint {font-size:13px;color:#444}
@@ -79,7 +81,6 @@
     .palette button {min-width:42px}
     .canvas-border {border:3px solid #111;background:#fff;touch-action:none;user-select:none}
     #sketch {width:100%;height:auto;display:block;aspect-ratio:3/2;touch-action:none;cursor:crosshair}
-    .actions {display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .danger {border-style:dashed}
     .save-control {display:inline-flex;position:relative;flex:none}
     .save-control button {min-height:44px;min-width:6.5rem;padding:6px}
@@ -156,7 +157,7 @@
           <summary aria-label="Plus" title="Plus">⋯<span class="control-label"> Plus</span></summary>
           <div class="more-content">
             <button id="delete-note" class="danger" type="button">Supprimer la note</button>
-            <p class="hint">Les exports TXT et PNG sont disponibles dans les onglets. L'export JSON du carnet est dans « Mes notes ».</p>
+            <p class="hint">Exporter en haut de la note : TXT en mode Texte, PNG en mode Croquis. Le TXT est en UTF-8 ; le PNG est une image. L'export JSON dans Mes notes conserve le carnet et les traits éditables.</p>
           <details id="sketch-tools" class="palette-details">
           <summary>Palette de dessin · ouvrir / refermer</summary>
           <div class="palette" aria-label="Outils de dessin">
@@ -196,14 +197,14 @@
           <button id="tab-text" type="button" role="tab" aria-selected="true" class="active">Texte</button>
           <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
           </div>
+          <div class="export-control">
+            <button id="export-txt" type="button" aria-label="Exporter la note (.txt)" title="Exporter la note (.txt)"><span aria-hidden="true">↓</span><span class="control-label"> Exporter</span></button>
+            <button id="export-png" type="button" aria-label="Exporter le dessin (.png)" title="Exporter le dessin (.png)" hidden><span aria-hidden="true">↓</span><span class="control-label"> Exporter</span></button>
+          </div>
         </div>
         <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
           <label for="note-text" class="sr-only">Contenu de la note</label>
           <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
-          <div class="actions" style="margin-top:12px">
-            <button id="export-txt" type="button">Exporter la note (.txt)</button>
-            <span class="hint">UTF-8 · clavier de votre ordinateur pour ce prototype</span>
-          </div>
         </div>
         <div id="sketch-pane" role="tabpanel" aria-label="Palette graphique facultative" hidden>
 
@@ -211,10 +212,6 @@
             <canvas id="sketch" width="900" height="600" aria-label="Zone de croquis ; souris ou tactile"></canvas>
           </div>
           <p class="hint"><span id="tool-label">Crayon</span> · <span id="stroke-count">0 / 250 traits</span>. Tracés monochromes enregistrés avec la note.</p>
-          <div class="actions">
-            <button id="export-png" type="button">Exporter le dessin (.png)</button>
-            <span class="hint">Sauvegarde éditable du dessin dans l'export JSON du carnet.</span>
-          </div>
         </div>
       </section>
     </article>

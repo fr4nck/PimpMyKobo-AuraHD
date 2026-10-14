@@ -68,6 +68,9 @@ class TestNotesHostAssets(unittest.TestCase):
         title_parent = nodes["note-title"]["ancestors"][-1]
         self.assertIn(title_parent, nodes["tab-text"]["ancestors"])
         self.assertIn(title_parent, nodes["tab-sketch"]["ancestors"])
+        self.assertIn(title_parent, nodes["export-txt"]["ancestors"])
+        self.assertIn(title_parent, nodes["export-png"]["ancestors"])
+        self.assertIn("hidden", nodes["export-png"]["attrs"])
         self.assertNotIn("<header>", self.html)
         self.assertIn("flex-wrap:nowrap", self.html)
         self.assertTrue(any(n["attrs"].get("id") == "more-menu"
