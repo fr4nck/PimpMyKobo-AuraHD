@@ -17,6 +17,17 @@ This roadmap keeps the project focused on one principle: **preserve first, modif
 
 See the [launcher README](../experimental/launcher-v0/README.md) for reproduction. Approved layout remains **Books / Apps, Games / Web, Recipes / Notes, Store / Settings**. Do not redraw the approved PNG. FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 must remain intact. **Hardware display, touch, light, energy, wireless, sleep, boot and KOReader integration remain UNQUALIFIED.** No physical write is authorized by any launcher milestone.
 
+## 13 October 2026 addendum — Notes V0.2 (stacked on PR #26)
+
+| Feature | Status | Qualification missing |
+| --- | --- | --- |
+| Collapsible My Notes drawer | Implemented in V0.2 branch | Manual browser layout/keyboard test |
+| Compact typography | Implemented: on-demand « Aa » popover with short font/size controls; V0.1 JSON compatible; existing line spacing preserved but not exposed | No per-line/selection rich formatting; system fonts vary |
+| TTF/OTF/WOFF/WOFF2 import | Host-only file checks and FontFace loading | Manual rendering; font binary not stored; re-import after refresh |
+| Collapsible drawing palette | Implemented | Real touch/e-ink refresh pending |
+
+This branch is stacked on Notes #26 and separate from launcher #25. No Kobo/FIRST BOOT changes.
+
 ## 13 October 2026 addendum — Notes PDA V0.1
 
 | Part | State | Remaining qualification |

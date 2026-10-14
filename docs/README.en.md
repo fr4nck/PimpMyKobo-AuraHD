@@ -48,8 +48,8 @@ Before any inspection on Windows: [protect the microSD](windows-preservation-en.
 
 ## PDA Notes (standalone prototype)
 
-- [Notes V0.1 English guide](../experimental/notes-v01/README.en.md) · [Français](../experimental/notes-v01/README.md).
-- [Open the Notes host-only simulator](../experimental/notes-v01/index.html): offline text, search, optional monochrome sketch, JSON/TXT/PNG exports.
+- [Notes V0.2 English guide](../experimental/notes-v01/README.en.md) · [Français](../experimental/notes-v01/README.md).
+- [Open the Notes host-only simulator](../experimental/notes-v01/index.html): full-width editor, collapsible notes drawer, local TTF/OTF/WOFF fonts and compact « Aa » note-wide font/size popover, optional sketch and JSON/TXT/PNG exports.
 - Browser autosave is not a guaranteed backup: export JSON regularly. [Launcher V0.6 PR #25](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25) is still unmerged, and its Notes tile does not launch this app.
 
 ## Data intentionally not published

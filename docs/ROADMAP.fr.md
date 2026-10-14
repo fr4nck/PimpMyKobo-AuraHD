@@ -15,6 +15,17 @@
 
 Détails et commandes : [README du launcher](../experimental/launcher-v0/README.md). L'ordre approuvé reste **Livres / Applications, Jeux / Web, Recettes / Notes, Boutique / Réglages**. Le PNG original **ne doit pas être redessiné**. Le chemin FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 restent protégés. **Toute qualification matérielle (écran, tactile, frontlight, énergie, Wi-Fi, veille, boot, lancement KOReader) est en attente** ; aucune opération d'écriture n'est autorisée par ces versions.
 
+## Ajout du 13 octobre 2026 — Notes V0.2 (sur PR #26)
+
+| Fonction | État | Limite |
+| --- | --- | --- |
+| Mes notes escamotable | Implémenté sur branche V0.2 | Ergonomie navigateur à vérifier |
+| Typographie compacte par note | Implémentée : bouton « Aa » ouvrant une palette police/taille courte, sauvegarde JSON V0.1 compatible ; interligne ancien conservé, mais non éditable ici | Pas de style par ligne/passage ; polices système selon environnement |
+| Import TTF/OTF/WOFF/WOFF2 | Prototype hôte validant signatures et tailles | Contrôle visuel ; polices non embarquées, réimport après rafraîchissement |
+| Palette graphique escamotable | Implémentée | Toucher et rafraîchissement e-ink non qualifiés |
+
+Cette branche reste empilée sur Notes #26, distincte du launcher #25. Aucune modification Kobo/FIRST BOOT.
+
 ## Ajout du 13 octobre 2026 — Notes PDA V0.1
 
 | Composant | État | Qualification manquante |

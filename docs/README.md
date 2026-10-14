@@ -48,8 +48,8 @@ Avant toute inspection sous Windows : [protéger la microSD](windows-preservatio
 
 ## Notes PDA (prototype indépendant)
 
-- [Notes V0.1 : guide français](../experimental/notes-v01/README.md) · [English](../experimental/notes-v01/README.en.md).
-- [Ouvrir le simulateur Notes](../experimental/notes-v01/index.html) : texte, recherche, croquis monochrome facultatif, fichiers JSON/TXT/PNG, hors ligne et sans Kobo.
+- [Notes V0.2 : guide français](../experimental/notes-v01/README.md) · [English](../experimental/notes-v01/README.en.md).
+- [Ouvrir le simulateur Notes](../experimental/notes-v01/index.html) : édition pleine largeur, panneau Mes notes à la demande, bouton typographie « Aa » compact par note, import TTF/OTF/WOFF local et croquis facultatif, JSON/TXT/PNG. Aucun accès Kobo.
 - La sauvegarde automatique dépend du navigateur ; un export JSON manuel reste nécessaire. La [PR V0.6 du launcher](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25) n'est pas fusionnée : le bouton Notes de l'accueil n'est pas encore relié à cette application.
 
 ## Données non publiées

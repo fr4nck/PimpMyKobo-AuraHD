@@ -1,4 +1,4 @@
-/* PMKB Notes V0.1 — portable host-only data model.
+/* PMKB Notes V0.2 — portable host-only data model.
  * No filesystem, network, hardware access, timers or DOM dependencies.
  */
 (function(root) {
@@ -12,6 +12,18 @@
   const MAX_IMPORT_BYTES=3000000;
   const PAGE=Object.freeze({width:900,height:600});
   const BRUSHES=Object.freeze([2,5,11]);
+  const FONTS=Object.freeze(["mono","sans","serif","handwriting"]);
+  const DEFAULT_TYPE=Object.freeze({font:"mono",size:17,lineHeight:1.6});
+  function typography(value) {
+    if(value===undefined) return {...DEFAULT_TYPE}; // V0.1 JSON compatibility
+    if(!plain(value) || typeof value.font!=="string" ||
+      !(FONTS.includes(value.font)||/^import:[a-f0-9]{12}$/.test(value.font)) ||
+      !Number.isInteger(value.size) || value.size<12 || value.size>36 ||
+      ![1.2,1.4,1.6,1.8,2].includes(value.lineHeight)) {
+      fail("Typographie invalide");
+    }
+    return {font:value.font,size:value.size,lineHeight:value.lineHeight};
+  }
 
   function fail(message) {throw new Error(message);}
   function plain(value) {return value!==null && typeof value==="object" && !Array.isArray(value);}
@@ -41,7 +53,7 @@
   }
   function blank(id,now) {
     if(!goodId(id)||!date(now)) fail("Identifiant ou date invalide");
-    return {id,title:"Sans titre",text:"",strokes:[],created:now,updated:now};
+    return {id,title:"Sans titre",text:"",strokes:[],typography:typography(),created:now,updated:now};
   }
   function note(value) {
     if(!plain(value) || !goodId(value.id) || typeof value.title!=="string" ||
@@ -52,7 +64,7 @@
       fail("Note invalide");
     }
     return {
-      id:value.id,title:value.title,text:value.text,
+      id:value.id,title:value.title,text:value.text,typography:typography(value.typography),
       strokes:value.strokes.map(s=>{
         if(!plain(s)) fail("Trait invalide");
         return stroke(s.tool,s.width,s.points);
@@ -131,7 +143,7 @@
     return (name||"note")+"."+ext;
   }
   const API={FORMAT,MAX_NOTES,MAX_TITLE,MAX_TEXT,MAX_STROKES,MAX_POINTS,
-    MAX_IMPORT_BYTES,PAGE,BRUSHES,point,stroke,blank,note,empty,validate,upsert,
+    MAX_IMPORT_BYTES,PAGE,BRUSHES,FONTS,DEFAULT_TYPE,typography,point,stroke,blank,note,empty,validate,upsert,
     remove,sorted,encode,decode,addStroke,dropStroke,safeFilename};
   if(typeof module!=="undefined"&&module.exports)module.exports=API;
   if(root&&root.document)root.PMKBNotesCore=API;

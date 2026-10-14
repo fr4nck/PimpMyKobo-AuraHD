@@ -3,25 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PMKB Notes V0.1 — éditeur et croquis</title>
+  <title>PMKB Notes V0.2 — éditeur et typographie</title>
   <style>
     * {box-sizing:border-box}
     [hidden] {display:none!important}
-    :root {color-scheme:light}
+    :root {color-scheme:light;--field-number:7ch;--field-font:22ch;--control-gap:.5rem;--icon-size:1.5rem;--touch-target:2.75rem}
     body {margin:0;background:#ddd;color:#111;font:16px/1.45 system-ui,-apple-system,sans-serif}
     button,input,textarea {font:inherit}
     button {cursor:pointer;color:inherit;background:white;border:2px solid #111;border-radius:2px;padding:8px 12px}
     button:hover,button:focus-visible {background:#e8e8e8;outline:2px solid #555;outline-offset:2px}
     button.active,button.chosen {background:#111;color:white}
     h1,h2,h3,p {margin-top:0}
-    header {padding:17px 22px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-    header h1 {font-size:1.2rem;letter-spacing:.04em;margin:0}
-    header small {color:#ccc}
-    .flag {border:1px solid #aaa;padding:4px 9px;font:12px monospace}
-    main {max-width:1350px;min-height:calc(100vh - 94px);margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(230px,310px) minmax(350px,1fr);gap:16px}
+    .sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+    main {max-width:1350px;min-height:100vh;margin:0 auto;padding:8px;display:block}
     nav,article {background:#fafafa;border:2px solid #111;min-width:0}
-    nav {padding:15px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 125px)}
-    nav .section-head {display:flex;align-items:center;justify-content:space-between}
+    nav {padding:15px;display:flex;flex-direction:column;gap:12px;position:fixed;top:0;left:0;bottom:0;
+      width:min(355px,90vw);max-height:100dvh;overflow-y:auto;z-index:21;box-shadow:4px 0 28px #0005}
+    .drawer-backdrop {position:fixed;inset:0;z-index:20;background:#0006}
+    .section-head #close-drawer {margin-left:auto;font-size:22px;line-height:1;padding:4px 12px;min-height:var(--touch-target);min-width:var(--touch-target)}
+    #new-note {align-self:flex-start;min-height:var(--touch-target);min-width:var(--touch-target);font-weight:700}
+    .main-toolbar {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
+    .main-toolbar > button {min-height:var(--touch-target);min-width:var(--touch-target)}
+    .icon {width:var(--icon-size);height:var(--icon-size);display:block;fill:currentColor}
+    .more-actions {position:relative}
+    .more-actions summary,.palette-details summary {cursor:pointer;font-weight:700;
+      list-style:none;padding:8px 12px;border:2px solid #111;background:white;user-select:none}
+    .more-actions summary::-webkit-details-marker,.palette-details summary::-webkit-details-marker {display:none}
+    .more-content {position:absolute;right:0;top:100%;width:min(330px,calc(100vw - 24px));max-height:75dvh;overflow:auto;padding:12px;
+      border:2px solid #111;background:white;box-shadow:0 3px 14px #0003;z-index:10}
+    .more-content > button {width:100%}
+    .more-actions > summary {min-height:var(--touch-target)}
+    .type-menu {position:relative}
+    .type-menu > button {min-height:var(--touch-target);min-width:var(--touch-target);font-weight:700}
+    .type-panel {position:absolute;top:calc(100% + 5px);left:0;width:min(420px, calc(100vw - 35px));
+      max-height:75vh;overflow:auto;padding:12px;background:#fff;border:2px solid #111;
+      box-shadow:0 4px 18px #0004;z-index:15}
+    .type-controls {display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .type-controls label {display:flex;flex-direction:column;gap:4px;font-size:12px;margin:0}
+    .type-controls select,.type-controls input {min-height:38px;padding:4px 7px;border:1px solid #666;
+      background:white;color:#111;font-size:14px}
+    #font-family {width:var(--field-font);max-width:100%}
+    #font-size {width:var(--field-number)}
+    .type-panel .hint {margin:7px 0 0}
+    .import-type-button {padding:5px 9px;font-size:13px;min-height:36px}
+    .palette-details {margin-bottom:12px}
+    .palette {margin:12px 0 4px}
+    @media(max-width:610px) {
+      .main-toolbar {gap:4px}
+      .main-toolbar .control-label,.editor-head .control-label {display:none}
+      .main-toolbar > button,.main-toolbar summary {min-width:var(--touch-target);min-height:var(--touch-target);padding:6px}
+      .type-panel {position:fixed;top:58px;left:10px;right:10px;width:auto;max-height:calc(100dvh - 70px)}
+    }
+    nav .section-head {display:flex;align-items:center;justify-content:space-between;gap:var(--control-gap);flex-wrap:wrap}
     nav h2 {font-size:1rem;margin:0}
     #search, #note-title {width:100%;background:white;border:2px solid #888;border-radius:0;padding:10px}
     .note-list {overflow-y:auto;min-height:160px;display:flex;flex-direction:column;gap:8px}
@@ -31,54 +64,56 @@
     .no-match {font-size:13px;color:#666}
     .backup {border-top:1px solid #999;padding-top:13px;display:grid;gap:8px}
     .backup button {width:100%}
-    article {padding:18px;display:flex;flex-direction:column;gap:14px}
+    article {padding:8px;display:flex;flex-direction:column;gap:8px}
     #empty-state {min-height:470px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px}
     #empty-state h2 {font-size:1.45rem}
-    #editor {display:flex;flex-direction:column;gap:13px;min-height:0}
-    .editor-head {display:flex;gap:12px;align-items:center}
-    .editor-head #note-title {font-size:1.2rem;font-weight:700;min-width:0;flex:1}
-    .tabs {display:flex;gap:8px;border-bottom:2px solid #111;padding-bottom:10px}
-    .tabs button {min-width:120px}
+    #editor {display:flex;flex-direction:column;gap:8px;min-height:0}
+    .editor-head {display:flex;gap:var(--control-gap);align-items:center;flex-wrap:nowrap}
+    .editor-head label {font-size:.75rem}
+    .editor-head .title-label {flex:none}
+    .editor-head #note-title {font-size:1rem;font-weight:700;min-width:0;flex:1;width:0;padding:6px;min-height:var(--touch-target)}
+    .tabs {display:flex;gap:4px;flex:none}
+    .tabs button {min-width:var(--touch-target);min-height:var(--touch-target);padding:8px}
+    .export-control {display:flex;flex:none}
+    .export-control button {min-width:var(--touch-target);min-height:var(--touch-target);padding:6px;font-size:.8125rem;white-space:nowrap}
     #note-text {display:block;width:100%;min-height:430px;resize:vertical;border:2px solid #666;background:#fff;padding:18px;
       font:17px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#111}
     .hint {font-size:13px;color:#444}
     .palette {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
     .palette .group {display:inline-flex;gap:5px;padding-right:10px;border-right:1px solid #aaa}
-    .palette button {min-width:42px}
+    .palette button {min-width:var(--touch-target);min-height:var(--touch-target)}
     .canvas-border {border:3px solid #111;background:#fff;touch-action:none;user-select:none}
     #sketch {width:100%;height:auto;display:block;aspect-ratio:3/2;touch-action:none;cursor:crosshair}
-    .actions {display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .danger {border-style:dashed}
-    #save-status {border:2px solid #888;background:#fff;padding:10px;min-height:45px;font-size:13px}
-    #save-status.warning {border-color:#111;background:#eee;font-weight:700}
-    footer {max-width:1350px;margin:0 auto;padding:0 18px 20px;color:#444;font-size:12px}
+    .save-control {display:inline-flex;position:relative;flex:none}
+    .save-control button {width:var(--touch-target);min-height:var(--touch-target);min-width:var(--touch-target);padding:8px}
+    .save-control:has(#save-status:not([hidden])) .save-label {visibility:hidden}
+    #save-status {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0;pointer-events:none;white-space:nowrap}
+    #save-status::after {content:attr(data-symbol);font-size:1.25rem}
+    #notes-error {margin:0;font-size:.875rem;font-weight:700;overflow-wrap:anywhere}
+    select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible {outline:2px solid #555;outline-offset:2px}
     @media(max-width:750px) {
-      main {display:flex;flex-direction:column;padding:10px}
-      nav {max-height:none}
-      .note-list {max-height:220px}
-      article {min-height:540px}
+      main {padding:4px}
+      .note-list {max-height:50vh}
+      article {min-height:540px;padding:6px}
       #note-text {min-height:340px}
-      .editor-head {flex-wrap:wrap}
+      .editor-head {gap:4px}
     }
   </style>
   <script src="notes-core.js"></script>
   <script src="notes-app.js" defer></script>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>PMKB / NOTES <small>V0.1</small></h1>
-      <small>Texte et croquis · interface locale de démonstration</small>
-    </div>
-    <span class="flag">SIMULATEUR PC · HORS LIGNE · AUCUN ACCÈS KOBO</span>
-  </header>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <main>
-    <nav aria-label="Mes notes">
+    <nav id="notes-drawer" aria-label="Mes notes" hidden>
+
       <div class="section-head">
         <h2>MES NOTES</h2>
         <span id="note-count">0 / 100</span>
+        <button id="close-drawer" type="button" aria-label="Fermer Mes notes">×</button>
       </div>
-      <button id="new-note" type="button">+ Nouvelle note</button>
+      <button id="new-note" type="button" aria-label="Nouvelle note" title="Nouvelle note">+</button>
       <label for="search">Rechercher</label>
       <input id="search" type="search" autocomplete="off" placeholder="Titre ou contenu">
       <div id="note-list" class="note-list" aria-label="Liste des notes"></div>
@@ -87,45 +122,57 @@
         <button id="export-json" type="button">Exporter tout le carnet (.json)</button>
         <button id="import-button" type="button">Importer un carnet (.json)</button>
         <input id="import-file" hidden type="file" accept=".json,application/json">
-        <p class="hint">Le navigateur garde une copie locale, sans garantie de conservation. Exporter régulièrement le JSON ; l'import remplace le carnet après confirmation.</p>
+        <p id="backup-reminder" class="hint">Le navigateur garde une copie locale, sans garantie de conservation. Exporter régulièrement le JSON ; l'import remplace le carnet après confirmation.</p>
+        <p id="backup-result" class="hint" role="status" hidden></p>
       </div>
     </nav>
     <article>
-      <div id="save-status" role="status" aria-live="polite">Chargement du carnet…</div>
-      <section id="empty-state">
-        <h2>Votre carnet PMKB</h2>
-        <p>Créez une note pour écrire ou dessiner. Aucun compte, aucune synchronisation et aucun service requis.</p>
-        <p class="hint">Les notes ne sont pas encore reliées au launcher ou au stockage de la liseuse.</p>
-      </section>
-      <section id="editor" hidden>
-        <div class="editor-head">
-          <label for="note-title" class="visually-label">Titre</label>
-          <input id="note-title" type="text" maxlength="100" placeholder="Titre">
-          <button id="save-now" type="button">Enregistrer</button>
-          <button id="delete-note" class="danger" type="button">Supprimer</button>
+      <div class="main-toolbar" aria-label="Actions rapides">
+        <button id="toolbar-new" type="button" aria-label="Nouvelle note" title="Nouvelle note">+</button>
+        <button id="open-notes" type="button" aria-label="Mes notes" title="Mes notes" aria-controls="notes-drawer" aria-expanded="false">☰</button>
+        <div class="save-control">
+          <button id="save-now" type="button" data-icon-role="action.save" aria-label="Enregistrer" title="Enregistrer" aria-describedby="save-status"><span class="save-label"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-save"/></svg></span></button>
+          <span id="save-status" role="status" aria-live="polite" hidden></span>
         </div>
-        <div class="tabs" role="tablist" aria-label="Mode de note">
-          <button id="tab-text" type="button" role="tab" aria-selected="true" class="active">Texte</button>
-          <button id="tab-sketch" type="button" role="tab" aria-selected="false">Croquis</button>
-        </div>
-        <div id="text-pane" role="tabpanel" aria-label="Bloc-notes texte">
-          <label for="note-text">Contenu de la note</label>
-          <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
-          <div class="actions" style="margin-top:12px">
-            <button id="export-txt" type="button">Exporter la note (.txt)</button>
-            <span class="hint">UTF-8 · clavier de votre ordinateur pour ce prototype</span>
+        <div id="type-menu" class="type-menu">
+          <button id="open-fonts" type="button" aria-label="Typographie (police et taille pour toute la note)" aria-controls="font-options" aria-expanded="false" title="Typographie de la note">Aa</button>
+          <div id="font-options" class="type-panel" role="group" aria-label="Typographie de la note entière" hidden>
+            <div class="type-controls">
+              <label for="font-family">Police
+                <select id="font-family">
+                  <option value="mono">Monospace</option>
+                  <option value="sans">Sans serif</option>
+                  <option value="serif">Serif</option>
+                  <option value="handwriting">Manuscrite</option>
+                </select>
+              </label>
+              <label for="font-size">Taille (px)
+                <input id="font-size" type="number" min="12" max="36" step="1" value="17" inputmode="numeric">
+              </label>
+            </div>
+            <button id="import-font" type="button" class="import-type-button">Importer une police…</button>
+            <input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" hidden>
+            <p id="font-message" class="hint" role="status">Polices locales TTF, OTF, WOFF ou WOFF2.</p>
+            <p class="hint">Ces réglages concernent la note entière. La mise en forme d'un passage et l'interligne par paragraphe ne sont pas encore disponibles.</p>
           </div>
         </div>
-        <div id="sketch-pane" role="tabpanel" aria-label="Palette graphique facultative" hidden>
+        <details class="more-actions" id="more-menu">
+          <summary aria-label="Plus" title="Plus">⋯</summary>
+          <div class="more-content">
+            <button id="quit-notes" type="button">Quitter Notes</button>
+            <button id="delete-note" class="danger" type="button">Supprimer la note</button>
+            <p class="hint">Exporter en haut de la note : TXT en mode Texte, PNG en mode Croquis. Le TXT est en UTF-8 ; le PNG est une image. L'export JSON dans Mes notes conserve le carnet et les traits éditables.</p>
+          <details id="sketch-tools" class="palette-details">
+          <summary>Palette de dessin · ouvrir / refermer</summary>
           <div class="palette" aria-label="Outils de dessin">
             <div class="group">
-              <button type="button" data-tool="pen" class="active">Crayon</button>
-              <button type="button" data-tool="eraser">Gomme</button>
+              <button type="button" data-tool="pen" class="active" aria-pressed="true">Crayon</button>
+              <button type="button" data-tool="eraser" aria-pressed="false">Gomme</button>
             </div>
             <div class="group" aria-label="Épaisseur">
-              <button type="button" data-width="2">Fin</button>
-              <button type="button" data-width="5" class="active">Moyen</button>
-              <button type="button" data-width="11">Épais</button>
+              <button type="button" data-width="2" aria-pressed="false">Fin</button>
+              <button type="button" data-width="5" class="active" aria-pressed="true">Moyen</button>
+              <button type="button" data-width="11" aria-pressed="false">Épais</button>
             </div>
             <div class="group">
               <button id="undo" type="button">Annuler</button>
@@ -133,18 +180,45 @@
             </div>
             <button id="clear-sketch" class="danger" type="button">Effacer le dessin</button>
           </div>
+          </details>
+            <h1 style="font-size:1rem">PMKB Notes V0.2</h1>
+            <p class="hint">SIMULATEUR PC · HORS LIGNE · AUCUN ACCÈS KOBO. Texte et croquis · interface locale de démonstration.</p>
+            <p class="hint">Prototype autonome ; ni pilote e-ink, ni sauvegarde sur microSD Kobo, ni accès réseau. Clavier e-ink et synchronisation à qualifier.</p>
+          </div>
+        </details>
+      </div>
+      <p id="notes-error" role="alert" hidden></p>
+      <section id="empty-state">
+        <h2>Votre carnet PMKB</h2>
+        <p>Créez une note pour écrire ou dessiner. Aucun compte, aucune synchronisation et aucun service requis.</p>
+        <p class="hint">Les notes ne sont pas encore reliées au launcher ou au stockage de la liseuse.</p>
+      </section>
+      <section id="editor" hidden>
+        <div class="editor-head">
+          <label for="note-title" class="title-label">Titre</label>
+          <input id="note-title" type="text" maxlength="100" placeholder="Titre">
+          <div id="note-modes" class="tabs" role="tablist" aria-label="Mode de note">
+          <button id="tab-text" type="button" data-icon-role="notes.text" role="tab" aria-label="Texte" title="Texte" aria-controls="text-pane" aria-selected="true" tabindex="0" class="active"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-text"/></svg></button>
+          <button id="tab-sketch" type="button" data-icon-role="notes.sketch" role="tab" aria-label="Croquis" title="Croquis" aria-controls="sketch-pane" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#notes-sketch"/></svg></button>
+          </div>
+          <div class="export-control">
+            <button id="export-txt" type="button" data-icon-role="action.export" aria-label="Exporter la note (.txt)" title="Exporter la note (.txt)"><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
+            <button id="export-png" type="button" data-icon-role="action.export" aria-label="Exporter le dessin (.png)" title="Exporter le dessin (.png)" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="notes-icons.svg#action-export"/></svg></button>
+          </div>
+        </div>
+        <div id="text-pane" role="tabpanel" aria-labelledby="tab-text">
+          <label for="note-text" class="sr-only">Contenu de la note</label>
+          <textarea id="note-text" maxlength="120000" spellcheck="true" placeholder="Écrire ici…"></textarea>
+        </div>
+        <div id="sketch-pane" role="tabpanel" aria-labelledby="tab-sketch" hidden>
+
           <div class="canvas-border">
             <canvas id="sketch" width="900" height="600" aria-label="Zone de croquis ; souris ou tactile"></canvas>
           </div>
           <p class="hint"><span id="tool-label">Crayon</span> · <span id="stroke-count">0 / 250 traits</span>. Tracés monochromes enregistrés avec la note.</p>
-          <div class="actions">
-            <button id="export-png" type="button">Exporter le dessin (.png)</button>
-            <span class="hint">Sauvegarde éditable du dessin dans l'export JSON du carnet.</span>
-          </div>
         </div>
       </section>
     </article>
   </main>
-  <footer>PMKB Notes V0.1 · Prototype HTML/JavaScript autonome. Aucune image approuvée du launcher modifiée ; ni pilote e-ink, ni sauvegarde sur microSD Kobo, ni accès réseau. Palette graphique optionnelle. Synchronisation et clavier e-ink à qualifier plus tard.</footer>
 </body>
 </html>

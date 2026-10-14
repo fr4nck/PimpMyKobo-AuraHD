@@ -1,4 +1,4 @@
-/* PMKB Notes V0.1 — browser adapter for the portable Notes core.
+/* PMKB Notes V0.2 — browser adapter for the portable Notes core.
  * Deliberately no fetch(), external services, Kobo/SD I/O or app launcher integration.
  * Autosave is browser-local storage only; explicit JSON backup is essential.
  */
@@ -11,6 +11,7 @@
   const refs={
     list:$("note-list"),search:$("search"),title:$("note-title"),text:$("note-text"),
     empty:$("empty-state"),editor:$("editor"),badge:$("save-status"),
+    error:$("notes-error"),backupResult:$("backup-result"),
     count:$("note-count"),canvas:$("sketch"),screen:$("sketch-pane"),
     textPane:$("text-pane"),sketchPane:$("sketch-pane"),file:$("import-file"),
     tool:$("tool-label")
@@ -20,11 +21,143 @@
   let book=C.empty(),selected=null,pending=null,saving=null;
   let tab="text",tool="pen",width=5,drawing=null,redo=[];
   let storageEnabled=false;
+  let feedbackTimer=null;
+  const errors=new Map();
+  const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
+  const fontNames={
+    mono:'ui-monospace,Consolas,"DejaVu Sans Mono",monospace',
+    sans:'"Noto Sans","Liberation Sans",Arial,sans-serif',
+    serif:'"Noto Serif","Liberation Serif",Georgia,serif',
+    handwriting:'"URW Chancery L","Comic Sans MS",cursive'
+  };
+  const fontFamily=$("font-family"), fontSize=$("font-size"),
+    fontFile=$("font-file"),fontMessage=$("font-message");
+  const fontPanel=$("font-options"),fontToggle=$("open-fonts"),fontContainer=$("type-menu");
+  function toggleTypography(open) {
+    fontPanel.hidden=!open;
+    fontToggle.setAttribute("aria-expanded",open?"true":"false");
+    if(open) fontFamily.focus();
+    else if(fontPanel.contains(document.activeElement))fontToggle.focus();
+  }
+  const drawer=$("notes-drawer"),backdrop=$("drawer-backdrop"),openNotes=$("open-notes");
+
+  function toggleDrawer(open) {
+    drawer.hidden=!open;
+    backdrop.hidden=!open;
+    openNotes.setAttribute("aria-expanded",open?"true":"false");
+    if(open) {
+      refs.search.focus();
+    } else if(drawer.contains(document.activeElement)) {
+      openNotes.focus();
+    }
+  }
+  function fontSignature(bytes) {
+    if(bytes.length<4)return null;
+    const magic=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3]);
+    if(magic==="OTTO")return "otf";
+    if(magic==="wOFF")return "woff";
+    if(magic==="wOF2")return "woff2";
+    if(magic==="true" || magic==="typ1" ||
+       (bytes[0]===0 && bytes[1]===1 && bytes[2]===0 && bytes[3]===0))return "ttf";
+    return null;
+  }
+  function renderFontOptions(activeId) {
+    for(const opt of [...fontFamily.options]) {
+      if(opt.value.startsWith("import:"))opt.remove();
+    }
+    for(const [id,entry] of loadedFonts) {
+      const option=document.createElement("option");
+      option.value=id;
+      option.textContent="Importée : "+entry.name;
+      fontFamily.appendChild(option);
+    }
+    if(activeId.startsWith("import:") && !loadedFonts.has(activeId)) {
+      const option=document.createElement("option");
+      option.value=activeId;
+      option.textContent="Police importée absente — réimporter";
+      fontFamily.appendChild(option);
+    }
+  }
+  function applyTypography() {
+    const item=current();
+    const style=item?C.typography(item.typography):C.typography();
+    renderFontOptions(style.font);
+    fontFamily.value=style.font;
+    fontSize.value=String(style.size);
+    const imported=loadedFonts.get(style.font);
+    refs.text.style.fontFamily=imported
+      ? '"'+imported.family+'",monospace'
+      : (fontNames[style.font] || fontNames.mono);
+    refs.text.style.fontSize=style.size+"px";
+    refs.text.style.lineHeight=String(style.lineHeight);
+    if(style.font.startsWith("import:") && !imported) {
+      fontMessage.textContent="Police importée absente : réimporte le fichier pour retrouver son rendu. Texte intact.";
+    } else {
+      fontMessage.textContent="Polices personnalisées en mémoire pendant cette session uniquement ; le JSON garde la préférence, pas le fichier de police.";
+    }
+  }
+  function changeTypography() {
+    const item=current();if(!item)return;
+    const next={
+      font:fontFamily.value,
+      size:Number(fontSize.value),
+      lineHeight:C.typography(item.typography).lineHeight
+    };
+    try{
+      update({typography:C.typography(next)});
+      applyTypography();
+    }catch(err){applyTypography();fontMessage.textContent="Taille refusée : choisir un nombre entre 12 et 36 px.";}
+  }
+  async function importFont(event) {
+    const file=event.target.files[0];fontFile.value="";
+    if(!file)return;
+    const ext=(file.name.split(".").pop()||"").toLowerCase();
+    if(!["ttf","otf","woff","woff2"].includes(ext)||file.size<12||file.size>2000000){
+      fontMessage.textContent="Fichier refusé : TTF, OTF, WOFF ou WOFF2 de 2 Mo maximum.";
+      return;
+    }
+    if(!window.FontFace || !window.crypto?.subtle) {
+      fontMessage.textContent="Ce navigateur ne permet pas cet import local de polices.";
+      return;
+    }
+    try {
+      const bytes=await file.arrayBuffer();
+      if(fontSignature(new Uint8Array(bytes))!==ext)throw Error("Format de police non conforme");
+      const digest=new Uint8Array(await window.crypto.subtle.digest("SHA-256",bytes));
+      const id="import:"+Array.from(digest.slice(0,6),n=>n.toString(16).padStart(2,"0")).join("");
+      if(!loadedFonts.has(id)) {
+        const family="PMKBFont"+id.slice(7);
+        const face=new FontFace(family,bytes);
+        await face.load();
+        document.fonts.add(face);
+        loadedFonts.set(id,{family,name:file.name,face});
+      }
+      renderFontOptions(id);
+      if(current())update({typography:{...current().typography,font:id}});
+      applyTypography();
+      fontMessage.textContent="Police chargée pour cette session : "+file.name+
+        ". La sauvegarde JSON ne contient pas le fichier ; conserve une copie.";
+    }catch(error){
+      fontMessage.textContent="Import impossible : format non pris en charge ou fichier invalide.";
+    }
+  }
 
   function now(){return new Date().toISOString();}
-  function status(msg,warning){
+  function status(msg,warning,scope="action"){
+    if(warning)errors.set(scope,msg);
+    else errors.delete(scope);
+    refs.error.textContent=[...errors.values()].join(" · ");
+    refs.error.hidden=errors.size===0;
+    if(scope==="storage")return;
+    refs.backupResult.textContent=warning?"":msg;
+    refs.backupResult.hidden=warning||!msg;
+  }
+  function saveStatus(msg,transient=false){
+    clearTimeout(feedbackTimer);feedbackTimer=null;
     refs.badge.textContent=msg;
-    refs.badge.classList.toggle("warning",Boolean(warning));
+    refs.badge.dataset.symbol=msg==="En attente…"?"…":msg==="Enregistré"?"✓":msg?"!":"";
+    refs.badge.hidden=!msg;
+    if(transient)feedbackTimer=setTimeout(()=>saveStatus(""),2000);
   }
   function stored(){
     try {
@@ -35,7 +168,8 @@
     }catch(error){
       book=C.empty();
       storageEnabled=false;
-      status("Stockage du navigateur indisponible : exporter les notes en JSON",true);
+      saveStatus("Non enregistré");
+      status("Stockage local inaccessible ou carnet illisible : conserver les données du navigateur et exporter les notes en JSON depuis Mes notes.",true,"storage");
     }
   }
   function persist(){
@@ -44,19 +178,27 @@
       const value=C.encode(book);
       if(!storageEnabled)throw Error("Stockage local désactivé");
       window.localStorage.setItem(STORAGE,value);
-      status("Enregistré dans ce navigateur · exporter pour sauvegarder",false);
+      saveStatus("Enregistré",true);
+      status("",false,"storage");
       return true;
     }catch(error){
-      status("Sauvegarde auto indisponible : exporter en JSON !",true);
+      saveStatus("Non enregistré");
+      status("Enregistrement local impossible : libérer du stockage ou exporter en JSON depuis Mes notes.",true,"storage");
       return false;
     }
   }
   function queueSave(){
-    status("Modification en attente…",false);
+    saveStatus("En attente…");
     clearTimeout(saving);
     saving=setTimeout(persist,350);
   }
   function flush(){if(saving!==null)persist();}
+  function quitNotes(){
+    if(book.notes.length || saving!==null || errors.has("storage")) {
+      if(!persist() && !window.confirm("Enregistrement local impossible. Exportez le carnet en JSON depuis Mes notes avant de partir. Quitter quand même ?"))return;
+    }
+    window.location.assign("../launcher-v0/simulator.html");
+  }
   function current(){return book.notes.find(n=>n.id===selected)||null;}
   function replace(note){
     book=C.upsert(book,note);
@@ -89,6 +231,9 @@
     refs.title.value=item.title;
     refs.text.value=item.text;
     setTab("text");
+    toggleTypography(false);
+    applyTypography();
+    toggleDrawer(false);
     renderList();
   }
   function update(patch){
@@ -98,7 +243,15 @@
       const next=C.note(Object.assign({},old,patch,{updated:now()}));
       replace(next);
       renderList();
-    }catch(err){status("Édition refusée : "+err.message,true);}
+      if(errors.has("editing"))status("",false,"editing");
+    }catch(err){
+      const message=Object.prototype.hasOwnProperty.call(patch,"title")
+        ?"Titre requis (100 caractères maximum)."
+        :Object.prototype.hasOwnProperty.call(patch,"text")
+        ?"Texte trop long (120 000 caractères maximum)."
+        :"Modification refusée : "+err.message;
+      status(message,true,"editing");
+    }
   }
   function renderList(){
     refs.list.replaceChildren();
@@ -128,11 +281,18 @@
     const isSketch=tab==="sketch";
     refs.textPane.hidden=isSketch;
     refs.sketchPane.hidden=!isSketch;
+    $("export-txt").hidden=isSketch;
+    $("export-png").hidden=!isSketch;
     $("tab-text").classList.toggle("active",!isSketch);
     $("tab-sketch").classList.toggle("active",isSketch);
     $("tab-text").setAttribute("aria-selected",isSketch?"false":"true");
     $("tab-sketch").setAttribute("aria-selected",isSketch?"true":"false");
-    if(isSketch)renderDrawing();
+    $("tab-text").tabIndex=isSketch?-1:0;
+    $("tab-sketch").tabIndex=isSketch?0:-1;
+    if(isSketch) {
+      toggleTypography(false);
+      renderDrawing();
+    }
   }
   function drawStroke(stroke){
     const pts=stroke.points;
@@ -252,8 +412,9 @@
       }
       selected=null;redo=[];drawing=null;
       refs.editor.hidden=true;refs.empty.hidden=false;
+      toggleDrawer(false);
       renderList();
-      status("Import effectué. Sauvegarde dans ce navigateur uniquement.",false);
+      status("Import effectué.",false);
     }catch(err){status("Import refusé : "+err.message,true);}
   }
   function deleteCurrent(){
@@ -272,24 +433,72 @@
   refs.canvas.addEventListener("lostpointercapture",()=>{if(drawing)cancel();});
   refs.title.maxLength=C.MAX_TITLE;refs.text.maxLength=C.MAX_TEXT;
   refs.title.addEventListener("input",()=>update({title:refs.title.value||"Sans titre"}));
+  refs.title.addEventListener("blur",()=>{
+    if(!refs.title.value.trim()){
+      refs.title.value="Sans titre";
+      update({title:refs.title.value});
+    }
+  });
   refs.text.addEventListener("input",()=>update({text:refs.text.value}));
   refs.search.addEventListener("input",renderList);
   $("new-note").addEventListener("click",create);
+  $("toolbar-new").addEventListener("click",create);
+  openNotes.addEventListener("click",()=>toggleDrawer(drawer.hidden));
+  $("close-drawer").addEventListener("click",()=>toggleDrawer(false));
+  backdrop.addEventListener("click",()=>toggleDrawer(false));
+  document.addEventListener("keydown",event=>{
+    if(event.key!=="Escape")return;
+    if(!fontPanel.hidden) {
+      event.preventDefault();
+      toggleTypography(false);
+    } else if(!drawer.hidden) {
+      event.preventDefault();
+      toggleDrawer(false);
+    }
+  });
+  document.addEventListener("pointerdown",event=>{
+    if(!fontPanel.hidden && !fontContainer.contains(event.target)) {
+      toggleTypography(false);
+    }
+  });
+  fontToggle.addEventListener("click",()=>toggleTypography(fontPanel.hidden));
+  fontFamily.addEventListener("change",changeTypography);
+  fontSize.addEventListener("change",changeTypography);
+  $("import-font").addEventListener("click",()=>fontFile.click());
+  fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
   $("save-now").addEventListener("click",persist);
+  $("quit-notes").addEventListener("click",quitNotes);
   $("tab-text").addEventListener("click",()=>setTab("text"));
   $("tab-sketch").addEventListener("click",()=>setTab("sketch"));
+  function onTabKey(event){
+    const next=event.key==="Home"?"text":event.key==="End"?"sketch":
+      (event.key==="ArrowLeft"||event.key==="ArrowRight")
+        ?(tab==="text"?"sketch":"text"):null;
+    if(!next)return;
+    event.preventDefault();
+    setTab(next);
+    $(next==="text"?"tab-text":"tab-sketch").focus();
+  }
+  $("tab-text").addEventListener("keydown",onTabKey);
+  $("tab-sketch").addEventListener("keydown",onTabKey);
   for(const el of document.querySelectorAll("[data-tool]")){
     el.addEventListener("click",()=>{
       tool=el.dataset.tool;
-      for(const b of document.querySelectorAll("[data-tool]"))b.classList.toggle("active",b===el);
+      for(const b of document.querySelectorAll("[data-tool]")){
+        b.classList.toggle("active",b===el);
+        b.setAttribute("aria-pressed",b===el?"true":"false");
+      }
       refs.tool.textContent=tool==="pen"?"Crayon":"Gomme";
     });
   }
   for(const el of document.querySelectorAll("[data-width]")){
     el.addEventListener("click",()=>{
       width=Number(el.dataset.width);
-      for(const b of document.querySelectorAll("[data-width]"))b.classList.toggle("active",b===el);
+      for(const b of document.querySelectorAll("[data-width]")){
+        b.classList.toggle("active",b===el);
+        b.setAttribute("aria-pressed",b===el?"true":"false");
+      }
     });
   }
   $("undo").addEventListener("click",undoStroke);
@@ -310,6 +519,7 @@
   stored();
   renderList();
   renderDrawing();
-  if(!book.notes.length)status("Carnet vide. Crée une note et exporte une sauvegarde JSON.",!storageEnabled);
-  else if(storageEnabled)status("Notes locales chargées · export JSON conseillé",false);
+  const mostRecent=C.sorted(book)[0];
+  if(mostRecent)showEditor(mostRecent.id);
+  else applyTypography();
 })();
