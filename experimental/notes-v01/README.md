@@ -38,6 +38,18 @@ L'export de la note est en haut, sur la même ligne que le titre et Texte/Croqui
 
 Le stockage du navigateur **n'est pas une sauvegarde durable garantie**. Il peut être effacé lors du nettoyage des données du navigateur, d'un changement de profil ou d'origine HTTP, ou bloqué selon le navigateur. **Exporter régulièrement le fichier JSON** : il contient textes et croquis. L'import remplace volontairement le carnet actuel **après confirmation**. Le format JSON est versionné (\`pmkb-notes-v1\`), avec validation stricte et limites de taille ; aucun HTML/script importé n'est interprété.
 
+### Protection multi-onglets — correctif de sauvegarde
+
+Si deux onglets Notes utilisent la même origine du navigateur, chaque écriture vérifie que le carnet stocké est toujours celui que l'onglet avait chargé. En cas de changement externe, **l'ancienne version n'écrase pas la nouvelle** : l'enregistrement est refusé, une erreur explicite apparaît et les modifications restent en mémoire dans l'onglet concerné. Mes notes → **Exporter tout le carnet (.json)** permet alors de conserver cette version avant de recharger. L'import JSON remplace toujours le carnet, il ne fusionne pas les notes. Le signalement via `storage` est immédiat quand l'événement arrive ; la vérification avant chaque écriture fonctionne même sans cet événement.
+
+Ce contrôle est une précaution contre les pertes accidentelles, **pas** une transaction multi-onglets atomique ni une sauvegarde permanente. Fermer l'onglet en conflit sans exporter peut perdre ses modifications. L'interface normale reste inchangée (aucun message au repos). Tests automatiques avec stockage partagé simulé ; essai multi-onglets sur navigateur réel restant nécessaire.
+
+### Annuler et rétablir les actions
+
+`Ctrl+Z` annule et `Ctrl+Y` / `Ctrl+Maj+Z` rétablit les actions de carnet et de croquis (sur macOS, utiliser Cmd). Les mêmes commandes sont dans **Plus**, et dans la palette de dessin pour l'écran tactile. Sont pris en charge : création et duplication de note, suppression d'une note, ajout de trait et effacement du croquis. Le bouton **Dupliquer la note** dans Plus crée une copie indépendante avec un nouvel identifiant et conserve le texte et les traits de l'original.
+
+Lorsque le curseur est dans un champ de texte, les raccourcis restent confiés au navigateur pour l'annulation de la saisie ; l'historique des actions PMKB ne prétend pas remplacer celui de l'éditeur. L'historique des actions est limité à **24 entrées en mémoire**, perdu à la fermeture et effacé après import d'un carnet. Une nouvelle saisie supprime la branche Rétablir, pour éviter de réappliquer une action ancienne sur des données modifiées. Les annulations sont soumises à la même protection multi-onglets que les sauvegardes : aucun contournement des conflits. La sauvegarde JSON reste indispensable.
+
 ## Démarrage sur PC — Debian WSL
 
 Terminal **Debian WSL**, dépôt \`fr4nck/PimpMyKobo-AuraHD\` :

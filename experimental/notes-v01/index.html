@@ -159,8 +159,11 @@
         <details class="more-actions" id="more-menu">
           <summary aria-label="Plus" title="Plus">⋯</summary>
           <div class="more-content">
-            <button id="quit-notes" type="button">Quitter Notes</button>
+            <button id="undo-action" type="button" title="Annuler une action Notes (Ctrl+Z)" aria-label="Annuler la dernière action Notes" disabled>↶ Annuler</button>
+            <button id="redo-action" type="button" title="Rétablir une action Notes (Ctrl+Y)" aria-label="Rétablir la dernière action Notes" disabled>↷ Rétablir</button>
+            <button id="duplicate-note" type="button" title="Dupliquer la note sélectionnée">Dupliquer la note</button>
             <button id="delete-note" class="danger" type="button">Supprimer la note</button>
+            <button id="quit-notes" type="button">Quitter Notes</button>
             <p class="hint">Exporter en haut de la note : TXT en mode Texte, PNG en mode Croquis. Le TXT est en UTF-8 ; le PNG est une image. L'export JSON dans Mes notes conserve le carnet et les traits éditables.</p>
           <details id="sketch-tools" class="palette-details">
           <summary>Palette de dessin · ouvrir / refermer</summary>
@@ -175,8 +178,8 @@
               <button type="button" data-width="11" aria-pressed="false">Épais</button>
             </div>
             <div class="group">
-              <button id="undo" type="button">Annuler</button>
-              <button id="redo" type="button">Rétablir</button>
+              <button id="undo" type="button" title="Annuler la dernière action Notes" disabled>Annuler</button>
+              <button id="redo" type="button" title="Rétablir la dernière action Notes" disabled>Rétablir</button>
             </div>
             <button id="clear-sketch" class="danger" type="button">Effacer le dessin</button>
           </div>
