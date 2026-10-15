@@ -342,6 +342,7 @@ test('draw stroke, undo, redo and clear sketch preserve strokes',()=>{
     pointerId:1,clientX:20,clientY:30});
   b.event('sketch','pointermove',{pointerId:1,clientX:34,clientY:40});
   b.event('sketch','pointerup',{pointerId:1});
+  b.tick(); // Sketch strokes use the same 350 ms autosave as text.
   let strokes=C.decode(b.stored()).notes[0].strokes;
   assert.equal(strokes.length,1);
   assert.deepEqual(strokes[0].points,[[20,30],[34,40]]);
@@ -350,6 +351,7 @@ test('draw stroke, undo, redo and clear sketch preserve strokes',()=>{
   b.event('redo','click');
   assert.equal(C.decode(b.stored()).notes[0].strokes.length,1);
   b.event('clear-sketch','click');
+  b.tick(); // Wait for deferred persistence before checking the stored carnet.
   assert.equal(C.decode(b.stored()).notes[0].strokes.length,0);
   b.key('z',{ctrlKey:true});
   assert.equal(C.decode(b.stored()).notes[0].strokes.length,1);
