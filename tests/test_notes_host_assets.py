@@ -111,6 +111,13 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertTrue(any(n["attrs"].get("id") == "more-menu"
                             for n in nodes["quit-notes"]["ancestors"]))
         self.assertIn('.save-control:has(#save-status:not([hidden]))', self.html)
+        for action in ("undo-action", "redo-action", "duplicate-note"):
+            self.assertTrue(any(n["attrs"].get("id") == "more-menu"
+                                for n in nodes[action]["ancestors"]))
+        for action in ("undo-action", "redo-action"):
+            self.assertIn("disabled", nodes[action]["attrs"])
+        self.assertIn("HISTORY_LIMIT=24", self.browser)
+        self.assertIn('target===refs.text||target===refs.title', self.browser)
 
     def test_standalone_ui_has_editing_and_optional_sketch(self):
         for marker in (

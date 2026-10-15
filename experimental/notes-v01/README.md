@@ -44,6 +44,12 @@ Si deux onglets Notes utilisent la même origine du navigateur, chaque écriture
 
 Ce contrôle est une précaution contre les pertes accidentelles, **pas** une transaction multi-onglets atomique ni une sauvegarde permanente. Fermer l'onglet en conflit sans exporter peut perdre ses modifications. L'interface normale reste inchangée (aucun message au repos). Tests automatiques avec stockage partagé simulé ; essai multi-onglets sur navigateur réel restant nécessaire.
 
+### Annuler et rétablir les actions
+
+`Ctrl+Z` annule et `Ctrl+Y` / `Ctrl+Maj+Z` rétablit les actions de carnet et de croquis (sur macOS, utiliser Cmd). Les mêmes commandes sont dans **Plus**, et dans la palette de dessin pour l'écran tactile. Sont pris en charge : création et duplication de note, suppression d'une note, ajout de trait et effacement du croquis. Le bouton **Dupliquer la note** dans Plus crée une copie indépendante avec un nouvel identifiant et conserve le texte et les traits de l'original.
+
+Lorsque le curseur est dans un champ de texte, les raccourcis restent confiés au navigateur pour l'annulation de la saisie ; l'historique des actions PMKB ne prétend pas remplacer celui de l'éditeur. L'historique des actions est limité à **24 entrées en mémoire**, perdu à la fermeture et effacé après import d'un carnet. Une nouvelle saisie supprime la branche Rétablir, pour éviter de réappliquer une action ancienne sur des données modifiées. Les annulations sont soumises à la même protection multi-onglets que les sauvegardes : aucun contournement des conflits. La sauvegarde JSON reste indispensable.
+
 ## Démarrage sur PC — Debian WSL
 
 Terminal **Debian WSL**, dépôt \`fr4nck/PimpMyKobo-AuraHD\` :

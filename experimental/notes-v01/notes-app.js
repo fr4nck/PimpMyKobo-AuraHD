@@ -19,7 +19,9 @@
   const ctx=refs.canvas.getContext("2d");
   const page=C.PAGE;
   let book=C.empty(),selected=null,pending=null,saving=null;
-  let tab="text",tool="pen",width=5,drawing=null,redo=[];
+  let tab="text",tool="pen",width=5,drawing=null;
+  // Short, session-only history of reversible operations. Native text undo remains native.
+  const HISTORY_LIMIT=24,historyUndo=[],historyRedo=[];
   let storageEnabled=false,storageRevision=null;
   let feedbackTimer=null;
   const errors=new Map();
@@ -214,6 +216,98 @@
     window.location.assign("../launcher-v0/simulator.html");
   }
   function current(){return book.notes.find(n=>n.id===selected)||null;}
+  function historyControls(){
+    const canUndo=historyUndo.length>0,canRedo=historyRedo.length>0;
+    for(const id of ["undo","undo-action"])$(id).disabled=!canUndo;
+    for(const id of ["redo","redo-action"])$(id).disabled=!canRedo;
+  }
+  function recordAction(action){
+    historyUndo.push(action);
+    if(historyUndo.length>HISTORY_LIMIT)historyUndo.shift();
+    historyRedo.length=0;
+    historyControls();
+  }
+  function discardRedo(){
+    if(!historyRedo.length)return;
+    historyRedo.length=0;
+    historyControls();
+  }
+  function resetHistory(){
+    historyUndo.length=0;
+    historyRedo.length=0;
+    historyControls();
+  }
+  function sameStrokes(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+  function travelHistory(undo){
+    const source=undo?historyUndo:historyRedo;
+    if(!source.length)return;
+    const action=source[source.length-1];
+    const existing=book.notes.find(n=>n.id===action.noteId)||null;
+    let restoreId=null,restoreTab="text";
+    try {
+      if(action.kind==="create"){
+        if(undo){
+          if(!existing)throw Error("Note absente");
+          action.note=C.note(existing); // Redo restores text entered after creation.
+          book=C.remove(book,action.noteId);
+          restoreId=action.previousSelected;
+          restoreTab=action.previousTab;
+        }else{
+          if(existing)throw Error("La note existe déjà");
+          book=C.upsert(book,action.note);
+          restoreId=action.noteId;
+        }
+      }else if(action.kind==="delete"){
+        if(undo){
+          if(existing)throw Error("Identifiant déjà utilisé");
+          book=C.upsert(book,action.note);
+          restoreId=action.noteId;
+          restoreTab=action.previousTab;
+        }else{
+          if(!existing)throw Error("Note absente");
+          book=C.remove(book,action.noteId);
+        }
+      }else if(action.kind==="stroke"){
+        if(!existing)throw Error("Note absente");
+        if(undo){
+          if(!sameStrokes(existing.strokes.at(-1),action.stroke))
+            throw Error("Le dernier trait a changé");
+          book=C.upsert(book,C.dropStroke(existing,now()));
+        }else{
+          book=C.upsert(book,C.addStroke(existing,action.stroke,now()));
+        }
+        restoreId=action.noteId;restoreTab="sketch";
+      }else if(action.kind==="clear-sketch"){
+        if(!existing)throw Error("Note absente");
+        const expected=undo?[]:action.strokes;
+        if(!sameStrokes(existing.strokes,expected))
+          throw Error("Le croquis a changé");
+        book=C.upsert(book,C.note({...existing,
+          strokes:undo?action.strokes:[],updated:now()}));
+        restoreId=action.noteId;restoreTab="sketch";
+      }else{
+        throw Error("Action inconnue");
+      }
+    }catch(error){
+      status("Impossible d'annuler ou de rétablir cette action : "+error.message+
+        ". Les notes sont conservées.",true,"history");
+      return;
+    }
+    source.pop();
+    (undo?historyRedo:historyUndo).push(action);
+    historyControls();
+    drawing=null;
+    queueSave();
+    if(restoreId && book.notes.some(n=>n.id===restoreId)){
+      showEditor(restoreId);
+      setTab(restoreTab);
+    }else{
+      selected=null;
+      refs.editor.hidden=true;refs.empty.hidden=false;
+      renderList();
+    }
+    if(errors.has("history"))status("",false,"history");
+  }
   function replace(note){
     book=C.upsert(book,note);
     selected=note.id;
@@ -229,18 +323,36 @@
     flush();
     if(book.notes.length>=C.MAX_NOTES){status("Limite de 100 notes atteinte",true);return;}
     const item=C.blank(uniqueId(),now());
+    const previousSelected=selected,previousTab=tab;
     replace(item);
-    redo=[];
+    recordAction({kind:"create",noteId:item.id,note:item,previousSelected,previousTab});
     refs.search.value="";
     showEditor(item.id);
     refs.title.focus();
     refs.title.select();
   }
+  function duplicateCurrent(){
+    const original=current();
+    if(!original)return;
+    flush();
+    if(book.notes.length>=C.MAX_NOTES){
+      status("Limite de 100 notes atteinte : duplication impossible.",true);return;
+    }
+    const timestamp=now(),previousSelected=selected,previousTab=tab;
+    const copy=C.note({...original,id:uniqueId(),
+      title:("Copie de "+original.title).slice(0,C.MAX_TITLE),
+      created:timestamp,updated:timestamp});
+    replace(copy);
+    recordAction({kind:"create",noteId:copy.id,note:copy,previousSelected,previousTab});
+    refs.search.value="";
+    showEditor(copy.id);
+    refs.title.focus();
+  }
   function showEditor(id){
     flush();
     const item=book.notes.find(n=>n.id===id);
     if(!item)return;
-    selected=id;redo=[];drawing=null;
+    selected=id;drawing=null;
     refs.empty.hidden=true;refs.editor.hidden=false;
     refs.title.value=item.title;
     refs.text.value=item.text;
@@ -256,6 +368,7 @@
     try {
       const next=C.note(Object.assign({},old,patch,{updated:now()}));
       replace(next);
+      discardRedo(); // Fresh text/typography changes invalidate the redo branch.
       renderList();
       if(errors.has("editing"))status("",false,"editing");
     }catch(err){
@@ -268,6 +381,8 @@
     }
   }
   function renderList(){
+    $("duplicate-note").disabled=!current()||book.notes.length>=C.MAX_NOTES;
+    $("delete-note").disabled=!current();
     refs.list.replaceChildren();
     const found=C.sorted(book,refs.search.value);
     refs.count.textContent=book.notes.length+" / "+C.MAX_NOTES;
@@ -342,7 +457,6 @@
       status("Limite de traits atteinte : exporter ou effacer",true);return;
     }
     event.preventDefault();
-    redo=[];
     drawing={tool,width,points:[coordinate(event)]};
     if(refs.canvas.setPointerCapture)refs.canvas.setPointerCapture(event.pointerId);
     renderDrawing();
@@ -360,24 +474,15 @@
     if(!drawing)return;
     event.preventDefault();
     const finished=drawing;drawing=null;
-    try{replace(C.addStroke(current(),finished,now()));}
-    catch(error){status("Croquis : "+error.message,true);}
+    try{
+      const updated=C.addStroke(current(),finished,now());
+      replace(updated);
+      recordAction({kind:"stroke",noteId:updated.id,
+        stroke:C.stroke(finished.tool,finished.width,finished.points)});
+    }catch(error){status("Croquis : "+error.message,true);}
     renderDrawing();
   }
   function cancel(){drawing=null;renderDrawing();}
-  function undoStroke(){
-    const item=current();if(!item||!item.strokes.length)return;
-    redo.push(item.strokes[item.strokes.length-1]);
-    replace(C.dropStroke(item,now()));
-    renderDrawing();
-  }
-  function redoStroke(){
-    if(!current()||!redo.length)return;
-    const s=redo.pop();
-    try{replace(C.addStroke(current(),s,now()));}
-    catch(err){status("Rétablissement impossible",true);}
-    renderDrawing();
-  }
   function download(filename,blob){
     const url=URL.createObjectURL(blob);
     const anchor=document.createElement("a");
@@ -424,7 +529,8 @@
         status("Import non enregistré : carnet précédent conservé",true);
         return;
       }
-      selected=null;redo=[];drawing=null;
+      selected=null;drawing=null;
+      resetHistory(); // A notebook replacement invalidates all prior undo targets.
       refs.editor.hidden=true;refs.empty.hidden=false;
       toggleDrawer(false);
       renderList();
@@ -434,7 +540,9 @@
   function deleteCurrent(){
     const item=current();if(!item)return;
     if(!window.confirm("Supprimer définitivement « "+item.title+" » de ce navigateur ?"))return;
-    book=C.remove(book,item.id);selected=null;redo=[];drawing=null;
+    const snapshot=C.note(item),previousTab=tab;
+    book=C.remove(book,item.id);selected=null;drawing=null;
+    recordAction({kind:"delete",noteId:item.id,note:snapshot,previousTab});
     refs.editor.hidden=true;refs.empty.hidden=false;
     queueSave();renderList();
   }
@@ -461,6 +569,22 @@
   $("close-drawer").addEventListener("click",()=>toggleDrawer(false));
   backdrop.addEventListener("click",()=>toggleDrawer(false));
   document.addEventListener("keydown",event=>{
+    const key=typeof event.key==="string"?event.key.toLowerCase():"";
+    if((event.ctrlKey||event.metaKey)&&!event.altKey&&(key==="z"||key==="y")){
+      const target=event.target;
+      // Do not hijack the browser's native undo/redo for typing and form inputs.
+      if(target===refs.text||target===refs.title||target===refs.search||
+         target===fontSize||target===fontFamily||
+         target?.isContentEditable||
+         ["input","textarea","select"].includes(target?.tagName?.toLowerCase()))return;
+      const isRedo=(key==="z"&&event.shiftKey)||(key==="y"&&!event.shiftKey);
+      const isUndo=(key==="z"&&!event.shiftKey);
+      if((isRedo&&historyRedo.length)||(isUndo&&historyUndo.length)){
+        event.preventDefault();
+        travelHistory(isUndo);
+      }
+      return;
+    }
     if(event.key!=="Escape")return;
     if(!fontPanel.hidden) {
       event.preventDefault();
@@ -481,6 +605,9 @@
   $("import-font").addEventListener("click",()=>fontFile.click());
   fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
+  $("duplicate-note").addEventListener("click",duplicateCurrent);
+  $("undo-action").addEventListener("click",()=>travelHistory(true));
+  $("redo-action").addEventListener("click",()=>travelHistory(false));
   $("save-now").addEventListener("click",persist);
   $("quit-notes").addEventListener("click",quitNotes);
   $("tab-text").addEventListener("click",()=>setTab("text"));
@@ -515,13 +642,15 @@
       }
     });
   }
-  $("undo").addEventListener("click",undoStroke);
-  $("redo").addEventListener("click",redoStroke);
+  $("undo").addEventListener("click",()=>travelHistory(true));
+  $("redo").addEventListener("click",()=>travelHistory(false));
   $("clear-sketch").addEventListener("click",()=>{
     const item=current();
     if(item && item.strokes.length && window.confirm("Effacer le croquis de cette note ?")){
+      const strokes=item.strokes.map(s=>C.stroke(s.tool,s.width,s.points));
       replace(C.note({...item,strokes:[],updated:now()}));
-      redo=[];renderDrawing();
+      recordAction({kind:"clear-sketch",noteId:item.id,strokes});
+      renderDrawing();
     }
   });
   $("export-json").addEventListener("click",exportBackup);
@@ -539,6 +668,7 @@
     storageConflict();
   });
   stored();
+  historyControls();
   renderList();
   renderDrawing();
   const mostRecent=C.sorted(book)[0];

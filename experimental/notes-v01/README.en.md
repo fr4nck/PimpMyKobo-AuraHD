@@ -44,6 +44,12 @@ When two Notes tabs use the same browser origin, each write checks whether local
 
 This is best-effort conflict detection, not an atomic cross-tab transaction or a permanent backup. Closing a conflicted tab without exporting can lose its unsaved edits. No persistent idle banner is added. Synthetic shared-storage tests cover the contract; real-browser multi-tab acceptance is still pending.
 
+### Undo / redo actions
+
+`Ctrl+Z` undoes and `Ctrl+Y` / `Ctrl+Shift+Z` redoes notebook and sketch operations (Cmd on macOS). Touch-accessible buttons live under **More** and in the optional sketch palette, without a new toolbar row. Supported operations are creation, duplication and deletion of a note, adding a stroke and clearing a sketch. **Duplicate note** creates a distinct copy while preserving the original text and strokes.
+
+When a text field is active, the browser retains native typing undo/redo; PMKB does not hijack it. The notebook action history is limited to **24 in-memory entries**, is cleared on JSON import and is not kept after the browser session. Fresh typing invalidates pending redo operations. Undo/redo writes must pass the same optimistic multi-tab conflict check as any save; export a rescue JSON if a conflict arises.
+
 ## Run on PC — Debian WSL
 
 Terminal: **Debian WSL**; repository \`fr4nck/PimpMyKobo-AuraHD\`:
