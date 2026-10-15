@@ -38,6 +38,12 @@ Note export is in the header beside the title and Text/Sketch tabs: TXT in Text 
 
 Browser-local storage can be cleared, disabled or isolated between URL origins or browser profiles. **Export JSON backups regularly**; they retain both text and editable strokes. Import deliberately replaces the current notebook after confirmation. The format is strictly checked and versioned (\`pmkb-notes-v1\`); imported text is not executed.
 
+### Multi-tab protection — save safety patch
+
+When two Notes tabs use the same browser origin, each write checks whether localStorage still contains the notebook version loaded by that tab. If another tab has changed it, the older tab **does not overwrite the new data**. It retains its own edits in memory, shows a useful error and allows **My Notes → Export entire notebook (.json)** for rescue before refreshing. JSON import still **replaces** the notebook; it does not merge versions. Browser `storage` events warn early, while the pre-write check applies even if the event is missed.
+
+This is best-effort conflict detection, not an atomic cross-tab transaction or a permanent backup. Closing a conflicted tab without exporting can lose its unsaved edits. No persistent idle banner is added. Synthetic shared-storage tests cover the contract; real-browser multi-tab acceptance is still pending.
+
 ## Run on PC — Debian WSL
 
 Terminal: **Debian WSL**; repository \`fr4nck/PimpMyKobo-AuraHD\`:

@@ -20,7 +20,7 @@
   const page=C.PAGE;
   let book=C.empty(),selected=null,pending=null,saving=null;
   let tab="text",tool="pen",width=5,drawing=null,redo=[];
-  let storageEnabled=false;
+  let storageEnabled=false,storageRevision=null;
   let feedbackTimer=null;
   const errors=new Map();
   const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
@@ -159,12 +159,19 @@
     refs.badge.hidden=!msg;
     if(transient)feedbackTimer=setTimeout(()=>saveStatus(""),2000);
   }
+  const conflictMessage="Ce carnet a changé dans un autre onglet. Rien n'a été écrasé. Depuis Mes notes, exportez votre version en JSON avant de recharger ; l'import remplace le carnet et ne fusionne pas les modifications.";
+  function storageConflict(){
+    saveStatus("Non enregistré");
+    status(conflictMessage,true,"storage");
+  }
   function stored(){
     try {
       const existing=window.localStorage.getItem(STORAGE);
-      storageEnabled=true;
-      if(existing)book=C.decode(existing);
+      // An empty string is corrupt stored JSON, not an empty notebook.
+      if(existing!==null)book=C.decode(existing);
       else book=C.empty();
+      storageRevision=existing;
+      storageEnabled=true;
     }catch(error){
       book=C.empty();
       storageEnabled=false;
@@ -177,7 +184,14 @@
     try{
       const value=C.encode(book);
       if(!storageEnabled)throw Error("Stockage local désactivé");
+      // Optimistic stale-tab guard: do not overwrite an externally changed value.
+      // This is not an atomic transaction and does not merge notebooks.
+      if(window.localStorage.getItem(STORAGE)!==storageRevision){
+        storageConflict();
+        return false;
+      }
       window.localStorage.setItem(STORAGE,value);
+      storageRevision=value; // Only a successful write advances this tab's baseline.
       saveStatus("Enregistré",true);
       status("",false,"storage");
       return true;
@@ -516,6 +530,14 @@
   $("import-button").addEventListener("click",()=>refs.file.click());
   refs.file.addEventListener("change",importBackup);
   window.addEventListener("pagehide",flush);
+  window.addEventListener("storage",event=>{
+    if(event.storageArea!==window.localStorage ||
+       (event.key!==STORAGE && event.key!==null) ||
+       event.newValue===storageRevision)return;
+    // Keep pending edits in memory for export; never flush a stale save.
+    clearTimeout(saving);saving=null;
+    storageConflict();
+  });
   stored();
   renderList();
   renderDrawing();

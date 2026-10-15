@@ -7,9 +7,10 @@ const vm = require('node:vm');
 const C = require('../experimental/notes-v01/notes-core.js');
 const app = path.join(__dirname, '../experimental/notes-v01');
 
-function browser({readError=false, initial=null, confirmReply=true}={}) {
-  const elements = new Map(), timers = new Map(), downloads = [];
-  let serial=0, stored=initial, writeError=false, destination=null;
+function browser({readError=false, initial=null, confirmReply=true, sharedStorage=null}={}) {
+  const elements = new Map(), timers = new Map(), downloads = [], blobs = [];
+  const events = new Map(), store = sharedStorage || {value:initial};
+  let serial=0, writeError=false, destination=null;
   function element(id='') {
     return {id, hidden:false, value:'', textContent:'', style:{}, options:[], files:[],
       dataset:{}, children:[], listeners:{}, attrs:{},
@@ -32,17 +33,21 @@ function browser({readError=false, initial=null, confirmReply=true}={}) {
   const document={activeElement:null, body:element(), fonts:{add(){}},
     getElementById:id=>elements.get(id), createElement:()=>element(),
     querySelectorAll:()=>[], addEventListener(){}};
-  const window={PMKBNotesCore:C, confirm:()=>confirmReply, addEventListener(){},
+  const window={PMKBNotesCore:C, confirm:()=>confirmReply,
+    addEventListener(type, callback){events.set(type,callback);},
     location:{assign(url){destination=url;}},
-    localStorage:{getItem(){if(readError)throw Error('blocked');return stored;},
-      setItem(key,value){if(writeError)throw Error('quota');stored=value;}}};
+    localStorage:{getItem(){if(readError)throw Error('blocked');return store.value;},
+      setItem(key,value){if(writeError)throw Error('quota');store.value=value;}}};
   vm.runInNewContext(fs.readFileSync(path.join(app,'notes-app.js'),'utf8'),{
-    window,document,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},
+    window,document,Blob,URL:{createObjectURL:blob=>{blobs.push(blob);return 'blob:test';},revokeObjectURL(){}},
     setTimeout(callback){timers.set(++serial,callback);return serial;},
     clearTimeout(id){timers.delete(id);},console
   });
-  return {get:id=>elements.get(id), downloads, stored:()=>stored, destination:()=>destination,
-    active:()=>document.activeElement,
+  return {get:id=>elements.get(id), downloads, blobs, stored:()=>store.value,
+    destination:()=>destination, active:()=>document.activeElement,
+    signalStorage(newValue,key='pmkb-notes-host-v1'){
+      events.get('storage')?.({key,newValue,storageArea:window.localStorage});
+    },
     failWrites(value){writeError=value;},
     event(id,name,params={}){const item=elements.get(id);
       return item.listeners[name]({target:item,currentTarget:item,preventDefault(){this.defaultPrevented=true;},...params});},
@@ -196,4 +201,64 @@ test('ADR-005: invalid title error clears on repair, empty title normalizes on b
   assert.equal(b.get('note-title').value,'Sans titre');
   b.tick();
   assert.equal(C.decode(b.stored()).notes[0].title,'Sans titre');
+});
+
+test('two tabs refuse stale writes and export a rescue JSON without overwriting another tab',async()=>{
+  const note=C.blank('note_001','2026-10-15T08:00:00.000Z');
+  const sharedStorage={value:C.encode(C.upsert(C.empty(),note))};
+  const first=browser({sharedStorage}),second=browser({sharedStorage});
+  first.get('note-text').value='Version de A';
+  first.event('note-text','input');first.tick();
+  assert.equal(C.decode(sharedStorage.value).notes[0].text,'Version de A');
+  second.get('note-text').value='Version de B';
+  second.event('note-text','input');second.tick();
+  assert.equal(C.decode(sharedStorage.value).notes[0].text,'Version de A');
+  assert.equal(second.get('note-text').value,'Version de B');
+  assert.equal(second.get('save-status').textContent,'Non enregistré');
+  assert.match(second.get('notes-error').textContent,/autre onglet/);
+  second.event('save-now','click');
+  assert.equal(C.decode(sharedStorage.value).notes[0].text,'Version de A');
+  second.event('export-json','click');
+  assert.deepEqual(second.downloads,['PMKB-Notes-sauvegarde.json']);
+  assert.equal(C.decode(await second.blobs[0].text()).notes[0].text,'Version de B');
+  assert.equal(second.get('notes-error').hidden,false);
+  const reopened=browser({sharedStorage});
+  assert.equal(reopened.get('note-text').value,'Version de A');
+});
+
+test('storage event warns immediately, cancels pending save and ignores unrelated keys',async()=>{
+  const note=C.blank('note_001','2026-10-15T08:00:00.000Z');
+  const sharedStorage={value:C.encode(C.upsert(C.empty(),note))};
+  const first=browser({sharedStorage}),second=browser({sharedStorage});
+  second.get('note-text').value='B en mémoire';
+  second.event('note-text','input');
+  first.get('note-text').value='A enregistré';
+  first.event('note-text','input');first.tick();
+  const written=sharedStorage.value;
+  second.signalStorage(written,'unrelated-key');
+  assert.equal(second.get('save-status').textContent,'En attente…');
+  second.signalStorage(written);
+  assert.equal(second.get('save-status').textContent,'Non enregistré');
+  assert.match(second.get('notes-error').textContent,/JSON/);
+  second.tick();
+  assert.equal(sharedStorage.value,written);
+  assert.equal(second.get('note-text').value,'B en mémoire');
+  second.event('export-json','click');
+  assert.equal(C.decode(await second.blobs[0].text()).notes[0].text,'B en mémoire');
+});
+
+test('deleted external key cannot be overwritten; empty stored JSON is corrupt',()=>{
+  const note=C.blank('note_001','2026-10-15T08:00:00.000Z');
+  const sharedStorage={value:C.encode(C.upsert(C.empty(),note))};
+  const tab=browser({sharedStorage});
+  sharedStorage.value=null;
+  tab.get('note-text').value='Texte de secours';
+  tab.event('note-text','input');tab.tick();
+  assert.equal(sharedStorage.value,null);
+  assert.match(tab.get('notes-error').textContent,/autre onglet/);
+  const corrupt=browser({initial:''});
+  assert.equal(corrupt.get('save-status').textContent,'Non enregistré');
+  assert.equal(corrupt.get('notes-error').hidden,false);
+  corrupt.event('save-now','click');
+  assert.equal(corrupt.stored(),'');
 });
