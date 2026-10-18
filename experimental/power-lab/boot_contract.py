@@ -98,8 +98,14 @@ def analyze(contract):
               "invalid_boot_registers")
         uint(handoff["r1"])
         ptr = uint(handoff["r2"], aligned=True)
-        check(regions["boot_data"][0] <= ptr < regions["boot_data"][1],
+        # ARM booting.rst v6.18: DTB must be 64-bit aligned; ATAG is 32-bit.
+        # Enforce minimum structural room for the header/terminator only.
+        minimum = 40 if handoff["kind"] == "DTB" else 16
+        check(regions["boot_data"][0] <= ptr and
+              ptr + minimum <= regions["boot_data"][1],
               "boot_data_pointer_outside_region")
+        if handoff["kind"] == "DTB":
+            check(ptr % 8 == 0, "invalid_dtb_alignment")
 
         params = contract["parameters"]
         fields(params, ("hwcfg_p", "hwcfg_sz", "waveform_p", "waveform_sz"),

@@ -53,6 +53,21 @@ class BootContractTests(unittest.TestCase):
         value["handoff"]["r1"] = 0xFFFFFFFF
         self.assertEqual("consistent_unverified", MOD.analyze(value)["status"])
 
+    def test_dtb_alignment_and_minimum_boot_data_size(self):
+        value = sample()
+        value["handoff"]["kind"] = "DTB"
+        value["handoff"]["r2"] += 4
+        self.assertEqual("invalid_dtb_alignment",
+                         MOD.analyze(value)["errors"][0]["code"])
+        value["handoff"]["r2"] = value["regions"][0]["start"] + 0x1000 - 32
+        self.assertEqual("boot_data_pointer_outside_region",
+                         MOD.analyze(value)["errors"][0]["code"])
+        value["handoff"]["kind"] = "ATAGS"
+        self.assertEqual("consistent_unverified", MOD.analyze(value)["status"])
+        value["handoff"]["r2"] += 20
+        self.assertEqual("boot_data_pointer_outside_region",
+                         MOD.analyze(value)["errors"][0]["code"])
+
     def test_fail_closed_negative_cases(self):
         actions = (
             lambda v: v["ram"].update(size=256 * 1024 * 1024),
