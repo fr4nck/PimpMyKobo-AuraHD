@@ -167,7 +167,6 @@ static PMKBStatus changed(PMKBUI *ui,PMKBStatus rc,const char *utc){
             PMKBNote *n=selected(ui);
             if(n){
                 /* The native host owns time and must supply a real UTC ISO timestamp. */
-                if(!utc || (strlen(utc)!=20&&strlen(utc)!=24))return PMKB_INVALID;
                 memcpy(n->updated,utc,strlen(utc)+1);
             }
         }
@@ -183,6 +182,9 @@ static PMKBStatus press_keyboard(PMKBUI *ui,int row,int col,const char *utc){
     if(key.action==PMKB_KEY_ENTER&&ui->focus==PMKB_FOCUS_TITLE){
         ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);return PMKB_OK;
     }
+    if((key.action==PMKB_KEY_INSERT||key.action==PMKB_KEY_SPACE||
+        key.action==PMKB_KEY_BACKSPACE||key.action==PMKB_KEY_ENTER) &&
+       !pmkb_notes_valid_utc(utc))return PMKB_INVALID;
     bool current=ui->keyboard.visible;
     PMKBStatus rc=pmkb_keyboard_press(&ui->keyboard,text,key,
                                        ui->focus==PMKB_FOCUS_BODY);
@@ -259,6 +261,9 @@ PMKBStatus pmkb_ui_event(PMKBUI *ui,PMKBEvent ev,const char *utc){
     }
     if(ui->view!=PMKB_VIEW_EDITOR)return PMKB_NOT_FOUND;
     PMKBText *text=active(ui);if(!text)return PMKB_NOT_FOUND;
+    if((ev.kind==PMKB_EVENT_TEXT||ev.kind==PMKB_EVENT_BACKSPACE||
+        ev.kind==PMKB_EVENT_ENTER) && !pmkb_notes_valid_utc(utc))
+        return PMKB_INVALID; /* Reject bad metadata BEFORE changing the text. */
     PMKBStatus rc=PMKB_NO_CHANGE;
     switch(ev.kind){
     case PMKB_EVENT_TEXT:

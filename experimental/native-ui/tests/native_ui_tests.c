@@ -164,6 +164,7 @@ static int ui_flow(void){
     CHECK(strcmp(ui.notebook.items[0]->title.data,"a")==0);
     CHECK(strstr(ui.notebook.items[0]->body.data,"\nPMK")!=NULL);
     CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_TEXT,.text="\xc0\xaf"},UTC)==PMKB_INVALID);
+    CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_TEXT,.text="X"},"bad-time")==PMKB_INVALID);
     CHECK(strstr(ui.notebook.items[0]->body.data,"\nPMK")!=NULL);
     CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_TAP,.x=-1,.y=10},UTC)==PMKB_INVALID);
     char *json=NULL;size_t len=0;

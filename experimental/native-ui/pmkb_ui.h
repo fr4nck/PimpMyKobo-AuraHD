@@ -64,6 +64,7 @@ typedef struct {
     size_t count;
     unsigned next_id;
 } PMKBNotebook;
+bool pmkb_notes_valid_utc(const char *utc);
 void pmkb_notebook_init(PMKBNotebook *book);
 void pmkb_notebook_free(PMKBNotebook *book);
 PMKBStatus pmkb_notebook_new(PMKBNotebook *book, const char *utc,

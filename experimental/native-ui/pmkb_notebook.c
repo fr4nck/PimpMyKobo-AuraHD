@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool iso8601(const char *s) {
+bool pmkb_notes_valid_utc(const char *s) {
     if(!s) return false;
     size_t n=strlen(s);
     if(n!=20 && n!=24) return false;
@@ -47,7 +47,7 @@ void pmkb_notebook_free(PMKBNotebook *book){
     memset(book,0,sizeof(*book));
 }
 PMKBStatus pmkb_notebook_new(PMKBNotebook *book,const char *utc,size_t *index){
-    if(!book||!index||!iso8601(utc))return PMKB_INVALID;
+    if(!book||!index||!pmkb_notes_valid_utc(utc))return PMKB_INVALID;
     if(book->count>=PMKB_NOTE_LIMIT)return PMKB_LIMIT;
     if(book->next_id>=999999u)return PMKB_LIMIT;
     PMKBNote *n=(PMKBNote*)calloc(1,sizeof(*n));
