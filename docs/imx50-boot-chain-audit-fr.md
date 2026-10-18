@@ -55,3 +55,7 @@ La source historique montre que `mxc_wdt_disable` est vide ; la déclaration du 
 - [Audit pilotes et boot Netronix](offline-hardware-qualification-fr.md)
 - [Audit prérequis FIRST BOOT et watchdog](offline-boot-gates-fr.md)
 - [PowerLab V0 : noyau et autonomie](kernel-energy-roadmap-fr.md)
+
+## Jalonnement BOOT CONTRACT V1 (18 octobre 2026)
+
+Le contrat documentaire, la table de réservations et le verdict conditionnel sont consignés dans [BOOT CONTRACT V1](boot-contract-v1-fr.md). La [matrice Linux 6.18](kernel-driver-matrix-v1-fr.md) et la [passation d'audit indépendant](claude-boot-contract-v1-handoff-fr.md) complètent ce jalon. Les adresses RAM, r1 et r2 restent des inconnues à démontrer ; un test synthétique ne constitue pas une qualification matérielle.
