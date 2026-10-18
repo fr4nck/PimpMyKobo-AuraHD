@@ -102,7 +102,13 @@ static void draw_keyboard(PMKBUI *ui){
             if(cell.w<=0||cell.h<=0)continue;
             pmkb_surface_rect(s,cell,255);
             border(s,cell,0);
-            pmkb_surface_text(s,left+7,y+11,key.label,0,right-left-10);
+            const char *label=key.action==PMKB_KEY_ENTER?"OK":
+                key.action==PMKB_KEY_BACKSPACE?"DEL":
+                key.action==PMKB_KEY_SPACE?"SPC":
+                key.action==PMKB_KEY_LEFT?"<":
+                key.action==PMKB_KEY_RIGHT?">":
+                key.action==PMKB_KEY_HIDE?"X":key.label;
+            pmkb_surface_text(s,left+7,y+11,label,0,right-left-10);
             seen=col;
         }
         (void)seen;

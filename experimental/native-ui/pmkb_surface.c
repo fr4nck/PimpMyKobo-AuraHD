@@ -35,8 +35,10 @@ void pmkb_surface_free(PMKBSurface *s){
 void pmkb_surface_rect(PMKBSurface *s,PMKBRect r,uint8_t shade){
     if(!s||!s->gray||r.w<=0||r.h<=0)return;
     long long x0=r.x,y0=r.y,x1=(long long)r.x+r.w,y1=(long long)r.y+r.h;
-    if(x0<0)x0=0;if(y0<0)y0=0;
-    if(x1>s->width)x1=s->width;if(y1>s->height)y1=s->height;
+    if(x0<0)x0=0;
+    if(y0<0)y0=0;
+    if(x1>s->width)x1=s->width;
+    if(y1>s->height)y1=s->height;
     if(x1<=x0||y1<=y0)return;
     int left=s->width,top=s->height,right=-1,bottom=-1;
     for(int y=(int)y0;y<(int)y1;y++){
@@ -44,8 +46,10 @@ void pmkb_surface_rect(PMKBSurface *s,PMKBRect r,uint8_t shade){
             size_t pos=(size_t)y*(size_t)s->width+(size_t)x;
             if(s->gray[pos]!=shade){
                 s->gray[pos]=shade;s->changed_pixels++;
-                if(x<left)left=x;if(y<top)top=y;
-                if(x>right)right=x;if(y>bottom)bottom=y;
+                if(x<left)left=x;
+                if(y<top)top=y;
+                if(x>right)right=x;
+                if(y>bottom)bottom=y;
             }
         }
     }

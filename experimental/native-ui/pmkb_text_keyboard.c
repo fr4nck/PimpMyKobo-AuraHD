@@ -188,7 +188,8 @@ PMKBKey pmkb_keyboard_key(const PMKBKeyboard *kb,int row,int col){
             {PMKB_KEY_ENTER,"ENTREE",NULL,1}
         };
         PMKBKey k=actions[col];
-        if(col==1&&kb->page!=PMKB_KB_AZERTY)k.label="ABC";
+        if(col==1&&kb->page==PMKB_KB_NUMERIC)k.label="SYM";
+        if(col==1&&kb->page==PMKB_KB_SYMBOLS)k.label="ABC";
         return k;
     }
     static const PMKBKey navigation[6]={
@@ -205,7 +206,8 @@ PMKBStatus pmkb_keyboard_press(PMKBKeyboard *kb,PMKBText *target,
     switch(key.action){
     case PMKB_KEY_SHIFT:kb->shifted=!kb->shifted;return PMKB_OK;
     case PMKB_KEY_MODE:
-        kb->page=(kb->page==PMKB_KB_AZERTY?PMKB_KB_NUMERIC:PMKB_KB_AZERTY);
+        kb->page=(kb->page==PMKB_KB_AZERTY)?PMKB_KB_NUMERIC:
+                 (kb->page==PMKB_KB_NUMERIC)?PMKB_KB_SYMBOLS:PMKB_KB_AZERTY;
         kb->shifted=false;return PMKB_OK;
     case PMKB_KEY_HIDE:pmkb_keyboard_close(kb);return PMKB_OK;
     case PMKB_KEY_BACKSPACE:return pmkb_text_backspace(target);

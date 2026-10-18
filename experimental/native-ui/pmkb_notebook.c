@@ -13,9 +13,13 @@ static bool iso8601(const char *s) {
     for(size_t i=0;i<n;i++){
         if(i==4||i==7||i==10||i==13||i==16)continue;
         if((n==20&&i==19)||(n==24&&i==23)){
-            if(s[i]!='Z')return false;continue;
+            if(s[i]!='Z')return false;
+            continue;
         }
-        if(n==24&&i==19){if(s[i]!='.')return false;continue;}
+        if(n==24&&i==19){
+            if(s[i]!='.')return false;
+            continue;
+        }
         if(s[i]<'0'||s[i]>'9')return false;
     }
     int year=0,month=0,day=0,hour=0,minute=0,second=0;

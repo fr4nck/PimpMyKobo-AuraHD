@@ -19,7 +19,7 @@ sont pas fusionnées ni modifiées par ce travail.
   avant mutation. Un accent en caractères combinés est traité comme deux
   points de code, sans déchirer les octets.
 - **Clavier réutilisable** : AZERTY (é è à ç), majuscules, page numérique
-  et symboles, espace, retour arrière, entrée, curseur, fermeture.
+  puis symboles, espace, retour arrière, entrée, curseur, fermeture.
   \`PMKBKeyboard\` est indépendant de Notes : cible arbitraire \`PMKBText\`.
   L'état ne survit pas à la fermeture. Les cases tactiles font au moins
   **44 px de hauteur** et 53 px de largeur dans la simulation 320 px.

@@ -66,6 +66,12 @@ static int keyboard_actions(void){
     CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,5,1),true)==PMKB_OK);
     CHECK(kb.page==PMKB_KB_NUMERIC);
     CHECK(strcmp(pmkb_keyboard_key(&kb,0,0).insert,"1")==0);
+    CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,5,1),true)==PMKB_OK);
+    CHECK(kb.page==PMKB_KB_SYMBOLS);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,0,0).insert,"!")==0);
+    CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,5,1),true)==PMKB_OK);
+    CHECK(kb.page==PMKB_KB_AZERTY);
+    CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,5,1),true)==PMKB_OK);
     CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,0,0),true)==PMKB_OK);
     CHECK(strcmp(field.data,"a1Z")==0);
     CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,6,4),true)==PMKB_OK);
@@ -153,7 +159,7 @@ static int ui_flow(void){
     CHECK(strstr(ui.notebook.items[0]->body.data,"\nPMK")!=NULL);
     CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_SHOW_LIST},UTC)==PMKB_OK);
     CHECK(ui.view==PMKB_VIEW_LIST&&!ui.keyboard.visible);
-    CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_TAP,.x=20,.y=BODY_START+15},UTC)==PMKB_OK);
+    CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_TAP,.x=20,.y=96+15},UTC)==PMKB_OK);
     CHECK(ui.view==PMKB_VIEW_EDITOR&&ui.focus==PMKB_FOCUS_BODY);
     CHECK(strcmp(ui.notebook.items[0]->title.data,"a")==0);
     CHECK(strstr(ui.notebook.items[0]->body.data,"\nPMK")!=NULL);
