@@ -32,7 +32,7 @@ test('malicious syntax, excessively large input and invalid modes fail closed',(
     assert.throws(()=>C.evaluate(expression),expression);
   assert.throws(()=>C.evaluate('2+2',{mode:'AUTO'}));
   assert.throws(()=>C.evaluate('2+2',{ans:Infinity}));
-  assert.throws(()=>C.evaluate('('+ '1+'.repeat(60)+'1'+')'.repeat(1)));
+  assert.throws(()=>C.evaluate('('.repeat(50)+'1'+')'.repeat(50)));
 });
 test('formatted output never invents precision and no side effects occur',()=>{
   assert.equal(C.evaluate('2+2').text,'4');

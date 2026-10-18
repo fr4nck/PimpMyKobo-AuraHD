@@ -55,7 +55,9 @@ jobs:
           node --check experimental/notes-v01/notes-core.js
           node --check experimental/notes-v01/notes-app.js
           node --check experimental/shared/virtual_keyboard.js
-          node --test tests/test_notes_core.cjs tests/test_notes_app.cjs tests/test_virtual_keyboard.cjs
+          node --check experimental/calculator-v01/calculator-core.js
+          node --check experimental/calculator-v01/calculator-app.js
+          node --test tests/test_notes_core.cjs tests/test_notes_app.cjs tests/test_virtual_keyboard.cjs tests/test_calculator_core.cjs tests/test_calculator_app.cjs
   qt:
     strategy:
       fail-fast: false
