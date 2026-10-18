@@ -24,7 +24,7 @@ static int utf8_edit(void){
     CHECK(strcmp(text.data,"caf")==0);
     CHECK(pmkb_text_move(&text,-1)==PMKB_OK);
     CHECK(pmkb_text_insert(&text,"\xc3\xa9")==PMKB_OK);
-    CHECK(strcmp(text.data,"ca\xc3\xa9f")==0);
+    CHECK(strcmp(text.data,"ca\xc3\xa9" "f")==0);
     CHECK(pmkb_utf8_measure("\xf0\x9f\x98\x80",4,&units)==PMKB_OK&&units==2);
     PMKBText small={0};
     CHECK(pmkb_text_init(&small,1,"a")==PMKB_OK);
