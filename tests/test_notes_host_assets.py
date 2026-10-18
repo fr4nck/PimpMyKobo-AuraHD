@@ -111,6 +111,13 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertTrue(any(n["attrs"].get("id") == "more-menu"
                             for n in nodes["quit-notes"]["ancestors"]))
         self.assertIn('.save-control:has(#save-status:not([hidden]))', self.html)
+        for action in ("undo-action", "redo-action", "duplicate-note"):
+            self.assertTrue(any(n["attrs"].get("id") == "more-menu"
+                                for n in nodes[action]["ancestors"]))
+        for action in ("undo-action", "redo-action"):
+            self.assertIn("disabled", nodes[action]["attrs"])
+        self.assertIn("HISTORY_LIMIT=24", self.browser)
+        self.assertIn('target===refs.text||target===refs.title', self.browser)
 
     def test_standalone_ui_has_editing_and_optional_sketch(self):
         for marker in (
@@ -126,6 +133,14 @@ class TestNotesHostAssets(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.html)
         self.assertIn("touch-action:none", self.html)
+        self.assertIn('src="../shared/virtual_keyboard.js"', self.html)
+        self.assertIn('id="virtual-keyboard"', self.html)
+        self.assertIn('id="keyboard-rows"', self.html)
+        self.assertIn('id="toggle-keyboard"', self.html)
+        self.assertIn('id="open-calculator"', self.html)
+        self.assertIn('navigateWithSave("../calculator-v01/index.html")', self.browser)
+        self.assertIn('aria-controls="virtual-keyboard"', self.html)
+        self.assertIn('keyboardNode.hidden=true', self.browser)
 
     def test_v02_distraction_free_drawer_and_typography(self):
         for marker in (

@@ -4,8 +4,8 @@
  */
 (function(){
   "use strict";
-  const C=window.PMKBNotesCore;
-  if(!C)throw Error("PMKBNotesCore absent");
+  const C=window.PMKBNotesCore,VK=window.PMKBVirtualKeyboard;
+  if(!C||!VK)throw Error("PMKB Notes : modèle ou clavier manquant");
   const STORAGE="pmkb-notes-host-v1";
   const $=id=>document.getElementById(id);
   const refs={
@@ -19,11 +19,79 @@
   const ctx=refs.canvas.getContext("2d");
   const page=C.PAGE;
   let book=C.empty(),selected=null,pending=null,saving=null;
-  let tab="text",tool="pen",width=5,drawing=null,redo=[];
-  let storageEnabled=false;
+  let tab="text",tool="pen",width=5,drawing=null;
+  // Short, session-only history of reversible operations. Native text undo remains native.
+  const HISTORY_LIMIT=24,historyUndo=[],historyRedo=[];
+  let storageEnabled=false,storageRevision=null;
   let feedbackTimer=null;
   const errors=new Map();
   const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
+  const keyboardNode=$("virtual-keyboard"),keyboardRows=$("keyboard-rows");
+  let keyboardPage="letters",keyboardUpper=false,keyboardTarget=null,lastEditable=refs.text;
+  function keyboardVisible(){return !keyboardNode.hidden;}
+  function hideKeyboard(){
+    keyboardNode.hidden=true;
+    keyboardTarget=null;
+    $("toggle-keyboard").setAttribute("aria-expanded","false");
+    document.body.classList.toggle("keyboard-open",false);
+  }
+  function keyboardLayout(){
+    keyboardRows.replaceChildren();
+    $("keyboard-label").textContent=keyboardPage==="letters"?"Clavier AZERTY":"Chiffres et symboles";
+    for(const row of VK.rows(keyboardPage,keyboardUpper)){
+      const line=document.createElement("div");line.className="keyboard-row";
+      for(const key of row){
+        const button=document.createElement("button");
+        button.type="button";button.textContent=key.label;
+        button.dataset.key=key.key;button.dataset.span=String(key.span);
+        button.setAttribute("aria-label",key.aria);
+        button.addEventListener("pointerdown",event=>event.preventDefault());
+        button.addEventListener("click",()=>keyboardPress(key));
+        line.appendChild(button);
+      }
+      keyboardRows.appendChild(line);
+    }
+  }
+  function openKeyboard(){
+    if(!current()||tab!=="text")return;
+    keyboardTarget=[refs.title,refs.text].includes(document.activeElement)
+      ?document.activeElement:lastEditable;
+    if(![refs.title,refs.text].includes(keyboardTarget))keyboardTarget=refs.text;
+    keyboardPage="letters";keyboardUpper=false;
+    keyboardNode.hidden=false;
+    $("toggle-keyboard").setAttribute("aria-expanded","true");
+    document.body.classList.toggle("keyboard-open",true);
+    keyboardLayout();
+    keyboardTarget.focus();
+  }
+  function keyboardPress(key){
+    if(keyboardNode.hidden||!current())return;
+    if(key.key==="page"){
+      keyboardPage=keyboardPage==="letters"?"symbols":"letters";
+      keyboardLayout();return;
+    }
+    if(key.key==="shift"){
+      keyboardUpper=!keyboardUpper;
+      keyboardLayout();return;
+    }
+    const target=keyboardTarget===refs.title?refs.title:refs.text;
+    const pressed=key.value===null?key.key:key.value;
+    const result=VK.edit(target.value,target.selectionStart,target.selectionEnd,pressed,
+      {maxLength:target===refs.title?C.MAX_TITLE:C.MAX_TEXT,multiline:target===refs.text});
+    if(result.action==="next"){
+      keyboardTarget=refs.text;lastEditable=refs.text;refs.text.focus();return;
+    }
+    if(result.blocked){
+      status("Limite de longueur de la note atteinte.",true,"editing");return;
+    }
+    if(result.changed){
+      target.value=result.value;
+      if(target.setSelectionRange)target.setSelectionRange(result.start,result.end);
+      target.dispatchEvent(new Event("input",{bubbles:true}));
+    }
+    target.focus();
+    if(keyboardUpper&&key.value!==null){keyboardUpper=false;keyboardLayout();}
+  }
   const fontNames={
     mono:'ui-monospace,Consolas,"DejaVu Sans Mono",monospace',
     sans:'"Noto Sans","Liberation Sans",Arial,sans-serif',
@@ -159,12 +227,19 @@
     refs.badge.hidden=!msg;
     if(transient)feedbackTimer=setTimeout(()=>saveStatus(""),2000);
   }
+  const conflictMessage="Ce carnet a changé dans un autre onglet. Rien n'a été écrasé. Depuis Mes notes, exportez votre version en JSON avant de recharger ; l'import remplace le carnet et ne fusionne pas les modifications.";
+  function storageConflict(){
+    saveStatus("Non enregistré");
+    status(conflictMessage,true,"storage");
+  }
   function stored(){
     try {
       const existing=window.localStorage.getItem(STORAGE);
-      storageEnabled=true;
-      if(existing)book=C.decode(existing);
+      // An empty string is corrupt stored JSON, not an empty notebook.
+      if(existing!==null)book=C.decode(existing);
       else book=C.empty();
+      storageRevision=existing;
+      storageEnabled=true;
     }catch(error){
       book=C.empty();
       storageEnabled=false;
@@ -177,7 +252,14 @@
     try{
       const value=C.encode(book);
       if(!storageEnabled)throw Error("Stockage local désactivé");
+      // Optimistic stale-tab guard: do not overwrite an externally changed value.
+      // This is not an atomic transaction and does not merge notebooks.
+      if(window.localStorage.getItem(STORAGE)!==storageRevision){
+        storageConflict();
+        return false;
+      }
       window.localStorage.setItem(STORAGE,value);
+      storageRevision=value; // Only a successful write advances this tab's baseline.
       saveStatus("Enregistré",true);
       status("",false,"storage");
       return true;
@@ -193,13 +275,107 @@
     saving=setTimeout(persist,350);
   }
   function flush(){if(saving!==null)persist();}
-  function quitNotes(){
+  function navigateWithSave(destination){
     if(book.notes.length || saving!==null || errors.has("storage")) {
       if(!persist() && !window.confirm("Enregistrement local impossible. Exportez le carnet en JSON depuis Mes notes avant de partir. Quitter quand même ?"))return;
     }
-    window.location.assign("../launcher-v0/simulator.html");
+    hideKeyboard();
+    window.location.assign(destination);
   }
+  function quitNotes(){navigateWithSave("../launcher-v0/simulator.html");}
   function current(){return book.notes.find(n=>n.id===selected)||null;}
+  function historyControls(){
+    const canUndo=historyUndo.length>0,canRedo=historyRedo.length>0;
+    for(const id of ["undo","undo-action"])$(id).disabled=!canUndo;
+    for(const id of ["redo","redo-action"])$(id).disabled=!canRedo;
+  }
+  function recordAction(action){
+    historyUndo.push(action);
+    if(historyUndo.length>HISTORY_LIMIT)historyUndo.shift();
+    historyRedo.length=0;
+    historyControls();
+  }
+  function discardRedo(){
+    if(!historyRedo.length)return;
+    historyRedo.length=0;
+    historyControls();
+  }
+  function resetHistory(){
+    historyUndo.length=0;
+    historyRedo.length=0;
+    historyControls();
+  }
+  function sameStrokes(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+  function travelHistory(undo){
+    const source=undo?historyUndo:historyRedo;
+    if(!source.length)return;
+    const action=source[source.length-1];
+    const existing=book.notes.find(n=>n.id===action.noteId)||null;
+    let restoreId=null,restoreTab="text";
+    try {
+      if(action.kind==="create"){
+        if(undo){
+          if(!existing)throw Error("Note absente");
+          action.note=C.note(existing); // Redo restores text entered after creation.
+          book=C.remove(book,action.noteId);
+          restoreId=action.previousSelected;
+          restoreTab=action.previousTab;
+        }else{
+          if(existing)throw Error("La note existe déjà");
+          book=C.upsert(book,action.note);
+          restoreId=action.noteId;
+        }
+      }else if(action.kind==="delete"){
+        if(undo){
+          if(existing)throw Error("Identifiant déjà utilisé");
+          book=C.upsert(book,action.note);
+          restoreId=action.noteId;
+          restoreTab=action.previousTab;
+        }else{
+          if(!existing)throw Error("Note absente");
+          book=C.remove(book,action.noteId);
+        }
+      }else if(action.kind==="stroke"){
+        if(!existing)throw Error("Note absente");
+        if(undo){
+          if(!sameStrokes(existing.strokes.at(-1),action.stroke))
+            throw Error("Le dernier trait a changé");
+          book=C.upsert(book,C.dropStroke(existing,now()));
+        }else{
+          book=C.upsert(book,C.addStroke(existing,action.stroke,now()));
+        }
+        restoreId=action.noteId;restoreTab="sketch";
+      }else if(action.kind==="clear-sketch"){
+        if(!existing)throw Error("Note absente");
+        const expected=undo?[]:action.strokes;
+        if(!sameStrokes(existing.strokes,expected))
+          throw Error("Le croquis a changé");
+        book=C.upsert(book,C.note({...existing,
+          strokes:undo?action.strokes:[],updated:now()}));
+        restoreId=action.noteId;restoreTab="sketch";
+      }else{
+        throw Error("Action inconnue");
+      }
+    }catch(error){
+      status("Impossible d'annuler ou de rétablir cette action : "+error.message+
+        ". Les notes sont conservées.",true,"history");
+      return;
+    }
+    source.pop();
+    (undo?historyRedo:historyUndo).push(action);
+    historyControls();
+    drawing=null;
+    queueSave();
+    if(restoreId && book.notes.some(n=>n.id===restoreId)){
+      showEditor(restoreId);
+      setTab(restoreTab);
+    }else{
+      selected=null;
+      refs.editor.hidden=true;refs.empty.hidden=false;
+      renderList();
+    }
+    if(errors.has("history"))status("",false,"history");
+  }
   function replace(note){
     book=C.upsert(book,note);
     selected=note.id;
@@ -215,18 +391,37 @@
     flush();
     if(book.notes.length>=C.MAX_NOTES){status("Limite de 100 notes atteinte",true);return;}
     const item=C.blank(uniqueId(),now());
+    const previousSelected=selected,previousTab=tab;
     replace(item);
-    redo=[];
+    recordAction({kind:"create",noteId:item.id,note:item,previousSelected,previousTab});
     refs.search.value="";
     showEditor(item.id);
     refs.title.focus();
     refs.title.select();
   }
+  function duplicateCurrent(){
+    const original=current();
+    if(!original)return;
+    flush();
+    if(book.notes.length>=C.MAX_NOTES){
+      status("Limite de 100 notes atteinte : duplication impossible.",true);return;
+    }
+    const timestamp=now(),previousSelected=selected,previousTab=tab;
+    const copy=C.note({...original,id:uniqueId(),
+      title:("Copie de "+original.title).slice(0,C.MAX_TITLE),
+      created:timestamp,updated:timestamp});
+    replace(copy);
+    recordAction({kind:"create",noteId:copy.id,note:copy,previousSelected,previousTab});
+    refs.search.value="";
+    showEditor(copy.id);
+    refs.title.focus();
+  }
   function showEditor(id){
+    hideKeyboard();
     flush();
     const item=book.notes.find(n=>n.id===id);
     if(!item)return;
-    selected=id;redo=[];drawing=null;
+    selected=id;drawing=null;
     refs.empty.hidden=true;refs.editor.hidden=false;
     refs.title.value=item.title;
     refs.text.value=item.text;
@@ -242,6 +437,7 @@
     try {
       const next=C.note(Object.assign({},old,patch,{updated:now()}));
       replace(next);
+      discardRedo(); // Fresh text/typography changes invalidate the redo branch.
       renderList();
       if(errors.has("editing"))status("",false,"editing");
     }catch(err){
@@ -254,6 +450,9 @@
     }
   }
   function renderList(){
+    $("toggle-keyboard").disabled=!current()||tab!=="text";
+    $("duplicate-note").disabled=!current()||book.notes.length>=C.MAX_NOTES;
+    $("delete-note").disabled=!current();
     refs.list.replaceChildren();
     const found=C.sorted(book,refs.search.value);
     refs.count.textContent=book.notes.length+" / "+C.MAX_NOTES;
@@ -277,6 +476,7 @@
     }
   }
   function setTab(next){
+    if(next==="sketch")hideKeyboard();
     tab=next;
     const isSketch=tab==="sketch";
     refs.textPane.hidden=isSketch;
@@ -289,6 +489,7 @@
     $("tab-sketch").setAttribute("aria-selected",isSketch?"true":"false");
     $("tab-text").tabIndex=isSketch?-1:0;
     $("tab-sketch").tabIndex=isSketch?0:-1;
+    $("toggle-keyboard").disabled=isSketch||!current();
     if(isSketch) {
       toggleTypography(false);
       renderDrawing();
@@ -328,7 +529,6 @@
       status("Limite de traits atteinte : exporter ou effacer",true);return;
     }
     event.preventDefault();
-    redo=[];
     drawing={tool,width,points:[coordinate(event)]};
     if(refs.canvas.setPointerCapture)refs.canvas.setPointerCapture(event.pointerId);
     renderDrawing();
@@ -346,24 +546,15 @@
     if(!drawing)return;
     event.preventDefault();
     const finished=drawing;drawing=null;
-    try{replace(C.addStroke(current(),finished,now()));}
-    catch(error){status("Croquis : "+error.message,true);}
+    try{
+      const updated=C.addStroke(current(),finished,now());
+      replace(updated);
+      recordAction({kind:"stroke",noteId:updated.id,
+        stroke:C.stroke(finished.tool,finished.width,finished.points)});
+    }catch(error){status("Croquis : "+error.message,true);}
     renderDrawing();
   }
   function cancel(){drawing=null;renderDrawing();}
-  function undoStroke(){
-    const item=current();if(!item||!item.strokes.length)return;
-    redo.push(item.strokes[item.strokes.length-1]);
-    replace(C.dropStroke(item,now()));
-    renderDrawing();
-  }
-  function redoStroke(){
-    if(!current()||!redo.length)return;
-    const s=redo.pop();
-    try{replace(C.addStroke(current(),s,now()));}
-    catch(err){status("Rétablissement impossible",true);}
-    renderDrawing();
-  }
   function download(filename,blob){
     const url=URL.createObjectURL(blob);
     const anchor=document.createElement("a");
@@ -410,7 +601,9 @@
         status("Import non enregistré : carnet précédent conservé",true);
         return;
       }
-      selected=null;redo=[];drawing=null;
+      selected=null;drawing=null;
+      hideKeyboard();
+      resetHistory(); // A notebook replacement invalidates all prior undo targets.
       refs.editor.hidden=true;refs.empty.hidden=false;
       toggleDrawer(false);
       renderList();
@@ -420,7 +613,10 @@
   function deleteCurrent(){
     const item=current();if(!item)return;
     if(!window.confirm("Supprimer définitivement « "+item.title+" » de ce navigateur ?"))return;
-    book=C.remove(book,item.id);selected=null;redo=[];drawing=null;
+    const snapshot=C.note(item),previousTab=tab;
+    book=C.remove(book,item.id);selected=null;drawing=null;
+    hideKeyboard();
+    recordAction({kind:"delete",noteId:item.id,note:snapshot,previousTab});
     refs.editor.hidden=true;refs.empty.hidden=false;
     queueSave();renderList();
   }
@@ -432,6 +628,8 @@
   refs.canvas.addEventListener("pointercancel",cancel);
   refs.canvas.addEventListener("lostpointercapture",()=>{if(drawing)cancel();});
   refs.title.maxLength=C.MAX_TITLE;refs.text.maxLength=C.MAX_TEXT;
+  refs.title.addEventListener("focus",()=>{lastEditable=refs.title;keyboardTarget=refs.title;});
+  refs.text.addEventListener("focus",()=>{lastEditable=refs.text;keyboardTarget=refs.text;});
   refs.title.addEventListener("input",()=>update({title:refs.title.value||"Sans titre"}));
   refs.title.addEventListener("blur",()=>{
     if(!refs.title.value.trim()){
@@ -447,8 +645,25 @@
   $("close-drawer").addEventListener("click",()=>toggleDrawer(false));
   backdrop.addEventListener("click",()=>toggleDrawer(false));
   document.addEventListener("keydown",event=>{
+    const key=typeof event.key==="string"?event.key.toLowerCase():"";
+    if((event.ctrlKey||event.metaKey)&&!event.altKey&&(key==="z"||key==="y")){
+      const target=event.target;
+      // Do not hijack the browser's native undo/redo for typing and form inputs.
+      if(target===refs.text||target===refs.title||target===refs.search||
+         target===fontSize||target===fontFamily||
+         target?.isContentEditable||
+         ["input","textarea","select"].includes(target?.tagName?.toLowerCase()))return;
+      const isRedo=(key==="z"&&event.shiftKey)||(key==="y"&&!event.shiftKey);
+      const isUndo=(key==="z"&&!event.shiftKey);
+      if((isRedo&&historyRedo.length)||(isUndo&&historyUndo.length)){
+        event.preventDefault();
+        travelHistory(isUndo);
+      }
+      return;
+    }
     if(event.key!=="Escape")return;
-    if(!fontPanel.hidden) {
+    if(keyboardVisible()){event.preventDefault();hideKeyboard();}
+    else if(!fontPanel.hidden) {
       event.preventDefault();
       toggleTypography(false);
     } else if(!drawer.hidden) {
@@ -467,6 +682,14 @@
   $("import-font").addEventListener("click",()=>fontFile.click());
   fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
+  $("duplicate-note").addEventListener("click",duplicateCurrent);
+  $("toggle-keyboard").addEventListener("click",()=>{
+    if(keyboardVisible())hideKeyboard();else openKeyboard();
+  });
+  $("open-calculator").addEventListener("click",()=>navigateWithSave("../calculator-v01/index.html"));
+  $("keyboard-close").addEventListener("click",hideKeyboard);
+  $("undo-action").addEventListener("click",()=>travelHistory(true));
+  $("redo-action").addEventListener("click",()=>travelHistory(false));
   $("save-now").addEventListener("click",persist);
   $("quit-notes").addEventListener("click",quitNotes);
   $("tab-text").addEventListener("click",()=>setTab("text"));
@@ -501,13 +724,15 @@
       }
     });
   }
-  $("undo").addEventListener("click",undoStroke);
-  $("redo").addEventListener("click",redoStroke);
+  $("undo").addEventListener("click",()=>travelHistory(true));
+  $("redo").addEventListener("click",()=>travelHistory(false));
   $("clear-sketch").addEventListener("click",()=>{
     const item=current();
     if(item && item.strokes.length && window.confirm("Effacer le croquis de cette note ?")){
+      const strokes=item.strokes.map(s=>C.stroke(s.tool,s.width,s.points));
       replace(C.note({...item,strokes:[],updated:now()}));
-      redo=[];renderDrawing();
+      recordAction({kind:"clear-sketch",noteId:item.id,strokes});
+      renderDrawing();
     }
   });
   $("export-json").addEventListener("click",exportBackup);
@@ -516,7 +741,16 @@
   $("import-button").addEventListener("click",()=>refs.file.click());
   refs.file.addEventListener("change",importBackup);
   window.addEventListener("pagehide",flush);
+  window.addEventListener("storage",event=>{
+    if(event.storageArea!==window.localStorage ||
+       (event.key!==STORAGE && event.key!==null) ||
+       event.newValue===storageRevision)return;
+    // Keep pending edits in memory for export; never flush a stale save.
+    clearTimeout(saving);saving=null;
+    storageConflict();
+  });
   stored();
+  historyControls();
   renderList();
   renderDrawing();
   const mostRecent=C.sorted(book)[0];

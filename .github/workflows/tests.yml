@@ -31,6 +31,7 @@ jobs:
         run: |
           sudo apt-get install -y lua5.1
           lua tests/test_launcher_v0.lua
+          lua tests/test_pmkb_notes_native.lua
           lua tests/test_launcher_statusbar.lua
           lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
       - name: Check illustrated launcher simulator model (one Linux matrix job)
@@ -54,7 +55,10 @@ jobs:
         run: |
           node --check experimental/notes-v01/notes-core.js
           node --check experimental/notes-v01/notes-app.js
-          node --test tests/test_notes_core.cjs tests/test_notes_app.cjs
+          node --check experimental/shared/virtual_keyboard.js
+          node --check experimental/calculator-v01/calculator-core.js
+          node --check experimental/calculator-v01/calculator-app.js
+          node --test tests/test_notes_core.cjs tests/test_notes_app.cjs tests/test_virtual_keyboard.cjs tests/test_calculator_core.cjs tests/test_calculator_app.cjs
   qt:
     strategy:
       fail-fast: false

@@ -38,6 +38,24 @@ Note export is in the header beside the title and Text/Sketch tabs: TXT in Text 
 
 Browser-local storage can be cleared, disabled or isolated between URL origins or browser profiles. **Export JSON backups regularly**; they retain both text and editable strokes. Import deliberately replaces the current notebook after confirmation. The format is strictly checked and versioned (\`pmkb-notes-v1\`); imported text is not executed.
 
+### Multi-tab protection — save safety patch
+
+When two Notes tabs use the same browser origin, each write checks whether localStorage still contains the notebook version loaded by that tab. If another tab has changed it, the older tab **does not overwrite the new data**. It retains its own edits in memory, shows a useful error and allows **My Notes → Export entire notebook (.json)** for rescue before refreshing. JSON import still **replaces** the notebook; it does not merge versions. Browser `storage` events warn early, while the pre-write check applies even if the event is missed.
+
+This is best-effort conflict detection, not an atomic cross-tab transaction or a permanent backup. Closing a conflicted tab without exporting can lose its unsaved edits. No persistent idle banner is added. Synthetic shared-storage tests cover the contract; real-browser multi-tab acceptance is still pending.
+
+### Undo / redo actions
+
+`Ctrl+Z` undoes and `Ctrl+Y` / `Ctrl+Shift+Z` redoes notebook and sketch operations (Cmd on macOS). Touch-accessible buttons live under **More** and in the optional sketch palette, without a new toolbar row. Supported operations are creation, duplication and deletion of a note, adding a stroke and clearing a sketch. **Duplicate note** creates a distinct copy while preserving the original text and strokes.
+
+When a text field is active, the browser retains native typing undo/redo; PMKB does not hijack it. The notebook action history is limited to **24 in-memory entries**, is cleared on JSON import and is not kept after the browser session. Fresh typing invalidates pending redo operations. Undo/redo writes must pass the same optimistic multi-tab conflict check as any save; export a rescue JSON if a conflict arises.
+
+### Optional virtual keyboard and scientific calculator
+
+From **More → ⌨ Clavier**, open the six-column AZERTY panel with French accents, shift, numbers/symbols, backspace and enter. It stays hidden by default, does not add a toolbar row, and closes in Sketch mode. The host browser may also display its own on-screen keyboard. Script-inserted text is not guaranteed to participate in native text Ctrl+Z history; this is a prototype, not a Kobo system IME.
+
+**More → Calculatrice** saves pending Notes changes and then opens the standalone offline scientific calculator. If saving fails, Notes displays the existing JSON recovery warning and asks before navigation. The calculator has DEG/RAD modes, a memory Ans and a session-only history. Its return link reloads Notes; no automatic insertion of calculated results or Kobo integration is implemented.
+
 ## Run on PC — Debian WSL
 
 Terminal: **Debian WSL**; repository \`fr4nck/PimpMyKobo-AuraHD\`:
@@ -45,7 +63,7 @@ Terminal: **Debian WSL**; repository \`fr4nck/PimpMyKobo-AuraHD\`:
 \`\`\`bash
 cd /home/Deniel/pmkb-test || exit 1
 git fetch origin
-git switch --detach origin/feat/pmkb-notes-v02-typography-drawer
+git switch --detach origin/fix/pmkb-notes-multitab-guard
 python3 -m http.server 8766 --bind 127.0.0.1
 \`\`\`
 
