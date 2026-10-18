@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const C = require('../experimental/notes-v01/notes-core.js');
+const VK = require('../experimental/shared/virtual_keyboard.js');
 const app = path.join(__dirname, '../experimental/notes-v01');
 
 function browser({readError=false, initial=null, confirmReply=true, sharedStorage=null}={}) {
@@ -21,7 +22,12 @@ function browser({readError=false, initial=null, confirmReply=true, sharedStorag
       append(...items){this.children.push(...items);},
       appendChild(item){this.children.push(item);},
       replaceChildren(){this.children=[];},
-      focus(){document.activeElement=this;}, select(){}, contains(target){return target===this;},
+      selectionStart:0,selectionEnd:0,
+      setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},
+      focus(){document.activeElement=this;this.listeners.focus?.({target:this});},
+      select(){this.selectionStart=0;this.selectionEnd=this.value.length;},
+      contains(target){return target===this;},
+      dispatchEvent(event){this.listeners[event.type]?.({target:this,type:event.type});return true;},
       click(){if(this.download)downloads.push(this.download); return this.listeners.click?.({target:this});},
       remove(){}, toBlob(callback){callback(new Blob(['synthetic PNG'],{type:'image/png'}));},
       getBoundingClientRect(){return {left:0,top:0,width:900,height:600};},
@@ -36,7 +42,7 @@ function browser({readError=false, initial=null, confirmReply=true, sharedStorag
     getElementById:id=>elements.get(id), createElement:()=>element(),
     querySelectorAll:()=>[],
     addEventListener(type,fn){documentEvents.set(type,fn);}};
-  const window={PMKBNotesCore:C, confirm:()=>confirmReply,
+  const window={PMKBNotesCore:C, PMKBVirtualKeyboard:VK, confirm:()=>confirmReply,
     addEventListener(type, callback){events.set(type,callback);},
     location:{assign(url){destination=url;}},
     localStorage:{getItem(){if(readError)throw Error('blocked');return store.value;},
@@ -44,7 +50,7 @@ function browser({readError=false, initial=null, confirmReply=true, sharedStorag
   vm.runInNewContext(fs.readFileSync(path.join(app,'notes-app.js'),'utf8'),{
     window,document,Blob,URL:{createObjectURL:blob=>{blobs.push(blob);return 'blob:test';},revokeObjectURL(){}},
     setTimeout(callback){timers.set(++serial,callback);return serial;},
-    clearTimeout(id){timers.delete(id);},console
+    clearTimeout(id){timers.delete(id);},Event,console
   });
   return {get:id=>elements.get(id), downloads, blobs, stored:()=>store.value,
     destination:()=>destination, active:()=>document.activeElement,
@@ -56,6 +62,12 @@ function browser({readError=false, initial=null, confirmReply=true, sharedStorag
     },
     signalStorage(newValue,key='pmkb-notes-host-v1'){
       events.get('storage')?.({key,newValue,storageArea:window.localStorage});
+    },
+    virtualKey(key){
+      const rows=elements.get('keyboard-rows').children;
+      const button=rows.flatMap(row=>row.children).find(el=>el.dataset.key===key);
+      assert.ok(button,'Missing virtual key '+key);
+      button.listeners.click({target:button});
     },
     failWrites(value){writeError=value;},
     event(id,name,params={}){const item=elements.get(id);
@@ -375,5 +387,37 @@ test('replaced notebook discards undo history; conflict guard still blocks write
   second.event('undo-action','click');
   second.event('redo-action','click');second.tick();
   assert.equal(C.decode(shared.value).notes.length,0);
+  assert.match(second.get('notes-error').textContent,/autre onglet/);
+});
+
+test('AZERTY keyboard is hidden at rest; edits title, text, accents and saves',()=>{
+  const b=browser();assert.equal(b.get('virtual-keyboard').hidden,true);
+  b.event('toolbar-new','click');b.event('toggle-keyboard','click');
+  assert.equal(b.get('virtual-keyboard').hidden,false);
+  b.virtualKey('a');assert.equal(b.get('note-title').value,'a');
+  b.virtualKey('enter');b.virtualKey('page');b.virtualKey('1');b.virtualKey('page');
+  b.virtualKey('é');b.virtualKey('space');b.virtualKey('shift');b.virtualKey('z');
+  assert.equal(b.get('note-text').value,'1é Z');
+  b.virtualKey('backspace');assert.equal(b.get('note-text').value,'1é ');
+  b.tick();assert.equal(C.decode(b.stored()).notes[0].text,'1é ');
+  b.event('keyboard-close','click');assert.equal(b.get('virtual-keyboard').hidden,true);
+});
+test('Sketch closes the keyboard but retains text',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  b.get('note-text').focus();b.event('toggle-keyboard','click');
+  b.virtualKey('a');b.tick();b.event('tab-sketch','click');
+  assert.equal(b.get('virtual-keyboard').hidden,true);
+  assert.equal(b.get('toggle-keyboard').disabled,true);
+  assert.equal(C.decode(b.stored()).notes[0].text,'a');
+  b.event('tab-text','click');assert.equal(b.get('toggle-keyboard').disabled,false);
+});
+test('virtual keys preserve stale-tab conflict guard',()=>{
+  const note=C.blank('note_001','2026-10-15T08:00:00.000Z');
+  const shared={value:C.encode(C.upsert(C.empty(),note))};
+  const first=browser({sharedStorage:shared}),second=browser({sharedStorage:shared});
+  first.get('note-text').value='A';first.event('note-text','input');first.tick();
+  second.get('note-text').focus();second.event('toggle-keyboard','click');
+  second.virtualKey('b');second.tick();
+  assert.equal(C.decode(shared.value).notes[0].text,'A');
   assert.match(second.get('notes-error').textContent,/autre onglet/);
 });

@@ -133,6 +133,12 @@ class TestNotesHostAssets(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.html)
         self.assertIn("touch-action:none", self.html)
+        self.assertIn('src="../shared/virtual_keyboard.js"', self.html)
+        self.assertIn('id="virtual-keyboard"', self.html)
+        self.assertIn('id="keyboard-rows"', self.html)
+        self.assertIn('id="toggle-keyboard"', self.html)
+        self.assertIn('aria-controls="virtual-keyboard"', self.html)
+        self.assertIn('keyboardNode.hidden=true', self.browser)
 
     def test_v02_distraction_free_drawer_and_typography(self):
         for marker in (

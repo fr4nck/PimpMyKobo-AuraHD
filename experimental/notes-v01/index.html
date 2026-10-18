@@ -91,6 +91,16 @@
     #save-status {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0;pointer-events:none;white-space:nowrap}
     #save-status::after {content:attr(data-symbol);font-size:1.25rem}
     #notes-error {margin:0;font-size:.875rem;font-weight:700;overflow-wrap:anywhere}
+    .pmkb-keyboard {position:fixed;left:0;right:0;bottom:0;margin:0 auto;z-index:30;
+      width:min(100%,720px);max-height:60dvh;overflow-y:auto;border:2px solid #111;
+      background:#fafafa;padding:6px;box-shadow:0 -2px 8px #0003}
+    .keyboard-heading {display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+    .keyboard-heading button {min-width:var(--touch-target);min-height:var(--touch-target)}
+    .keyboard-row {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-bottom:4px}
+    .keyboard-row button {min-width:0;min-height:var(--touch-target);padding:6px 1px;font-size:1.05rem}
+    .keyboard-row button[data-span="2"] {grid-column:span 2;font-size:.85rem}
+    .keyboard-open article {padding-bottom:clamp(240px,58dvh,400px)}
+    .keyboard-open #note-text {min-height:clamp(125px,23dvh,250px)}
     select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible {outline:2px solid #555;outline-offset:2px}
     @media(max-width:750px) {
       main {padding:4px}
@@ -101,6 +111,7 @@
     }
   </style>
   <script src="notes-core.js"></script>
+  <script src="../shared/virtual_keyboard.js"></script>
   <script src="notes-app.js" defer></script>
 </head>
 <body>
@@ -162,6 +173,8 @@
             <button id="undo-action" type="button" title="Annuler une action Notes (Ctrl+Z)" aria-label="Annuler la dernière action Notes" disabled>↶ Annuler</button>
             <button id="redo-action" type="button" title="Rétablir une action Notes (Ctrl+Y)" aria-label="Rétablir la dernière action Notes" disabled>↷ Rétablir</button>
             <button id="duplicate-note" type="button" title="Dupliquer la note sélectionnée">Dupliquer la note</button>
+            <button id="toggle-keyboard" type="button" aria-controls="virtual-keyboard"
+              aria-expanded="false" title="Afficher ou masquer le clavier AZERTY">⌨ Clavier</button>
             <button id="delete-note" class="danger" type="button">Supprimer la note</button>
             <button id="quit-notes" type="button">Quitter Notes</button>
             <p class="hint">Exporter en haut de la note : TXT en mode Texte, PNG en mode Croquis. Le TXT est en UTF-8 ; le PNG est une image. L'export JSON dans Mes notes conserve le carnet et les traits éditables.</p>
@@ -223,5 +236,12 @@
       </section>
     </article>
   </main>
+  <section id="virtual-keyboard" class="pmkb-keyboard" role="region"
+    aria-label="Clavier AZERTY PMKB" hidden>
+    <div class="keyboard-heading"><strong id="keyboard-label">Clavier AZERTY</strong>
+      <button id="keyboard-close" type="button" aria-label="Fermer le clavier">×</button>
+    </div>
+    <div id="keyboard-rows"></div>
+  </section>
 </body>
 </html>

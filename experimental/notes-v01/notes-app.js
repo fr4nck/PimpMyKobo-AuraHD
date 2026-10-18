@@ -4,8 +4,8 @@
  */
 (function(){
   "use strict";
-  const C=window.PMKBNotesCore;
-  if(!C)throw Error("PMKBNotesCore absent");
+  const C=window.PMKBNotesCore,VK=window.PMKBVirtualKeyboard;
+  if(!C||!VK)throw Error("PMKB Notes : modèle ou clavier manquant");
   const STORAGE="pmkb-notes-host-v1";
   const $=id=>document.getElementById(id);
   const refs={
@@ -26,6 +26,72 @@
   let feedbackTimer=null;
   const errors=new Map();
   const loadedFonts=new Map(); // FontFace objects are session-only; font files are never stored.
+  const keyboardNode=$("virtual-keyboard"),keyboardRows=$("keyboard-rows");
+  let keyboardPage="letters",keyboardUpper=false,keyboardTarget=null,lastEditable=refs.text;
+  function keyboardVisible(){return !keyboardNode.hidden;}
+  function hideKeyboard(){
+    keyboardNode.hidden=true;
+    keyboardTarget=null;
+    $("toggle-keyboard").setAttribute("aria-expanded","false");
+    document.body.classList.toggle("keyboard-open",false);
+  }
+  function keyboardLayout(){
+    keyboardRows.replaceChildren();
+    $("keyboard-label").textContent=keyboardPage==="letters"?"Clavier AZERTY":"Chiffres et symboles";
+    for(const row of VK.rows(keyboardPage,keyboardUpper)){
+      const line=document.createElement("div");line.className="keyboard-row";
+      for(const key of row){
+        const button=document.createElement("button");
+        button.type="button";button.textContent=key.label;
+        button.dataset.key=key.key;button.dataset.span=String(key.span);
+        button.setAttribute("aria-label",key.aria);
+        button.addEventListener("pointerdown",event=>event.preventDefault());
+        button.addEventListener("click",()=>keyboardPress(key));
+        line.appendChild(button);
+      }
+      keyboardRows.appendChild(line);
+    }
+  }
+  function openKeyboard(){
+    if(!current()||tab!=="text")return;
+    keyboardTarget=[refs.title,refs.text].includes(document.activeElement)
+      ?document.activeElement:lastEditable;
+    if(![refs.title,refs.text].includes(keyboardTarget))keyboardTarget=refs.text;
+    keyboardPage="letters";keyboardUpper=false;
+    keyboardNode.hidden=false;
+    $("toggle-keyboard").setAttribute("aria-expanded","true");
+    document.body.classList.toggle("keyboard-open",true);
+    keyboardLayout();
+    keyboardTarget.focus();
+  }
+  function keyboardPress(key){
+    if(keyboardNode.hidden||!current())return;
+    if(key.key==="page"){
+      keyboardPage=keyboardPage==="letters"?"symbols":"letters";
+      keyboardLayout();return;
+    }
+    if(key.key==="shift"){
+      keyboardUpper=!keyboardUpper;
+      keyboardLayout();return;
+    }
+    const target=keyboardTarget===refs.title?refs.title:refs.text;
+    const pressed=key.value===null?key.key:key.value;
+    const result=VK.edit(target.value,target.selectionStart,target.selectionEnd,pressed,
+      {maxLength:target===refs.title?C.MAX_TITLE:C.MAX_TEXT,multiline:target===refs.text});
+    if(result.action==="next"){
+      keyboardTarget=refs.text;lastEditable=refs.text;refs.text.focus();return;
+    }
+    if(result.blocked){
+      status("Limite de longueur de la note atteinte.",true,"editing");return;
+    }
+    if(result.changed){
+      target.value=result.value;
+      if(target.setSelectionRange)target.setSelectionRange(result.start,result.end);
+      target.dispatchEvent(new Event("input",{bubbles:true}));
+    }
+    target.focus();
+    if(keyboardUpper&&key.value!==null){keyboardUpper=false;keyboardLayout();}
+  }
   const fontNames={
     mono:'ui-monospace,Consolas,"DejaVu Sans Mono",monospace',
     sans:'"Noto Sans","Liberation Sans",Arial,sans-serif',
@@ -349,6 +415,7 @@
     refs.title.focus();
   }
   function showEditor(id){
+    hideKeyboard();
     flush();
     const item=book.notes.find(n=>n.id===id);
     if(!item)return;
@@ -381,6 +448,7 @@
     }
   }
   function renderList(){
+    $("toggle-keyboard").disabled=!current()||tab!=="text";
     $("duplicate-note").disabled=!current()||book.notes.length>=C.MAX_NOTES;
     $("delete-note").disabled=!current();
     refs.list.replaceChildren();
@@ -406,6 +474,7 @@
     }
   }
   function setTab(next){
+    if(next==="sketch")hideKeyboard();
     tab=next;
     const isSketch=tab==="sketch";
     refs.textPane.hidden=isSketch;
@@ -418,6 +487,7 @@
     $("tab-sketch").setAttribute("aria-selected",isSketch?"true":"false");
     $("tab-text").tabIndex=isSketch?-1:0;
     $("tab-sketch").tabIndex=isSketch?0:-1;
+    $("toggle-keyboard").disabled=isSketch||!current();
     if(isSketch) {
       toggleTypography(false);
       renderDrawing();
@@ -530,6 +600,7 @@
         return;
       }
       selected=null;drawing=null;
+      hideKeyboard();
       resetHistory(); // A notebook replacement invalidates all prior undo targets.
       refs.editor.hidden=true;refs.empty.hidden=false;
       toggleDrawer(false);
@@ -542,6 +613,7 @@
     if(!window.confirm("Supprimer définitivement « "+item.title+" » de ce navigateur ?"))return;
     const snapshot=C.note(item),previousTab=tab;
     book=C.remove(book,item.id);selected=null;drawing=null;
+    hideKeyboard();
     recordAction({kind:"delete",noteId:item.id,note:snapshot,previousTab});
     refs.editor.hidden=true;refs.empty.hidden=false;
     queueSave();renderList();
@@ -554,6 +626,8 @@
   refs.canvas.addEventListener("pointercancel",cancel);
   refs.canvas.addEventListener("lostpointercapture",()=>{if(drawing)cancel();});
   refs.title.maxLength=C.MAX_TITLE;refs.text.maxLength=C.MAX_TEXT;
+  refs.title.addEventListener("focus",()=>{lastEditable=refs.title;keyboardTarget=refs.title;});
+  refs.text.addEventListener("focus",()=>{lastEditable=refs.text;keyboardTarget=refs.text;});
   refs.title.addEventListener("input",()=>update({title:refs.title.value||"Sans titre"}));
   refs.title.addEventListener("blur",()=>{
     if(!refs.title.value.trim()){
@@ -586,7 +660,8 @@
       return;
     }
     if(event.key!=="Escape")return;
-    if(!fontPanel.hidden) {
+    if(keyboardVisible()){event.preventDefault();hideKeyboard();}
+    else if(!fontPanel.hidden) {
       event.preventDefault();
       toggleTypography(false);
     } else if(!drawer.hidden) {
@@ -606,6 +681,10 @@
   fontFile.addEventListener("change",importFont);
   $("delete-note").addEventListener("click",deleteCurrent);
   $("duplicate-note").addEventListener("click",duplicateCurrent);
+  $("toggle-keyboard").addEventListener("click",()=>{
+    if(keyboardVisible())hideKeyboard();else openKeyboard();
+  });
+  $("keyboard-close").addEventListener("click",hideKeyboard);
   $("undo-action").addEventListener("click",()=>travelHistory(true));
   $("redo-action").addEventListener("click",()=>travelHistory(false));
   $("save-now").addEventListener("click",persist);
