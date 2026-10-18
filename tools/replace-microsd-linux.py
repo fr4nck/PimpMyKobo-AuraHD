@@ -17,7 +17,6 @@ import importlib.util
 import json
 import os
 import shutil
-import stat
 import struct
 import subprocess
 import sys
@@ -381,84 +380,6 @@ def capture_donor(manifest_path: Path, device: Path, stage_dir: Path,
             disk.close()
 
 
-def capture_verified_backup(manifest_path: Path, backup_image: Path,
-                            expected_sha256: str, stage_dir: Path) -> dict[str, Any]:
-    """Stage PRE-P1 and P2 from a verified regular-file backup, never /dev.
-
-    The full-image digest comes from an independently retained acquisition
-    report. The complete backup stays read-only and is never copied in full.
-    """
-    manifest = load_manifest(manifest_path)
-    if not _is_sha256(expected_sha256):
-        raise ReplacementError("SHA-256 attendu de la sauvegarde invalide")
-    restore.legacy.regular(backup_image)
-    if backup_image.is_symlink():
-        raise ReplacementError("sauvegarde symbolique refusée")
-    with backup_image.open("rb") as source:
-        original_stat = os.fstat(source.fileno())
-        if not stat.S_ISREG(original_stat.st_mode):
-            raise ReplacementError("sauvegarde: fichier régulier requis")
-        size = original_stat.st_size
-        if size != manifest["disk"]["size"]:
-            raise ReplacementError("sauvegarde: taille différente de la référence")
-        digest = hash_region_with_progress(
-            source, 0, size, "Vérification SHA-256 sauvegarde complète"
-        )
-        if digest != expected_sha256:
-            raise ReplacementError("sauvegarde: SHA-256 complet différent de la preuve fournie")
-        identity = donor_identity(source, size, manifest)
-        current_stat = os.fstat(source.fileno())
-        if (current_stat.st_size != original_stat.st_size
-                or current_stat.st_mtime_ns != original_stat.st_mtime_ns):
-            raise ReplacementError("sauvegarde modifiée durant la vérification")
-        _prepare_stage_dir(stage_dir)
-        required = (manifest["pre_p1"]["size"]
-                    + manifest["partitions"][1]["size"] + 32 * 1024 * 1024)
-        if shutil.disk_usage(stage_dir).free < required:
-            raise ReplacementError("espace Live insuffisant pour PRE-P1 + P2")
-        pre_path = stage_dir / "donor-pre-p1.img"
-        p2_path = stage_dir / "donor-p2-recovery.img"
-        pre_sha = _write_stage_file(
-            source, pre_path, 0, manifest["pre_p1"]["size"], "Capture PRE-P1 sauvegarde"
-        )
-        p2 = manifest["partitions"][1]
-        p2_sha = _write_stage_file(
-            source, p2_path, p2["offset"], p2["size"], "Capture P2 sauvegarde"
-        )
-        if (pre_sha != manifest["pre_p1"]["sha256"] or p2_sha != p2["sha256"]
-                or _sha256_file(pre_path) != pre_sha
-                or _sha256_file(p2_path) != p2_sha):
-            raise ReplacementError("sauvegarde: régions staged incohérentes")
-        last_stat = os.fstat(source.fileno())
-        if (last_stat.st_size != original_stat.st_size
-                or last_stat.st_mtime_ns != original_stat.st_mtime_ns):
-            raise ReplacementError("sauvegarde modifiée durant la capture")
-        result = {
-            "schema_version": 1,
-            "tool": "capture-kobo-donor",
-            "status": "captured",
-            "complete": True,
-            "source_open_mode": "read-only",
-            "source_kind": "verified_backup_file",
-            "source_file": str(backup_image),
-            "source_size": size,
-            "source_sha256": digest,
-            "model": "Kobo Aura HD E606C0",
-            "pre_p1": {"file": pre_path.name, "size": pre_path.stat().st_size,
-                       "sha256": pre_sha},
-            "p2": {"file": p2_path.name, "size": p2_path.stat().st_size,
-                   "sha256": p2_sha},
-            "p3_type": identity["p3_type"],
-            "source_untouched": True,
-            "created_utc": datetime.now(timezone.utc).isoformat(),
-        }
-        with (stage_dir / "donor.json").open("x", encoding="utf-8") as output:
-            output.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-            output.flush()
-            os.fsync(output.fileno())
-        return result
-
-
 def load_stage(stage_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     data = _read_json(stage_dir / "donor.json")
     if (
@@ -470,14 +391,6 @@ def load_stage(stage_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
         or data.get("source_untouched") is not True
     ):
         raise ReplacementError("staging donneuse invalide")
-    kind = data.get("source_kind")
-    if kind not in (None, "verified_backup_file"):
-        raise ReplacementError("staging: provenance de la source inconnue")
-    if kind == "verified_backup_file" and (
-        data.get("source_size") != manifest["disk"]["size"]
-        or not _is_sha256(data.get("source_sha256"))
-    ):
-        raise ReplacementError("staging: identité sauvegarde incomplète")
     pre = data.get("pre_p1")
     p2 = data.get("p2")
     if not isinstance(pre, dict) or not isinstance(p2, dict):
@@ -858,31 +771,17 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--candidate", type=Path)
     parser.add_argument("--stage-dir", type=Path, required=True)
-    parser.add_argument("--device", type=Path)
-    parser.add_argument("--backup-image", type=Path)
-    parser.add_argument("--expected-backup-sha256")
+    parser.add_argument("--device", type=Path, required=True)
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--ack-linux-live", action="store_true")
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--capture-donor", action="store_true")
-    modes.add_argument("--capture-backup", action="store_true")
     modes.add_argument("--prepare-target", action="store_true")
     modes.add_argument("--write-target", action="store_true")
     parser.add_argument("--expected-plan-sha256")
     parser.add_argument("--authorize-plan-sha256")
     args = parser.parse_args()
     try:
-        if args.capture_backup:
-            if args.backup_image is None or args.expected_backup_sha256 is None:
-                raise ReplacementError("--capture-backup exige --backup-image et --expected-backup-sha256")
-            result = capture_verified_backup(
-                args.manifest, args.backup_image,
-                args.expected_backup_sha256, args.stage_dir,
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
-        if args.device is None:
-            raise ReplacementError("--device obligatoire pour les opérations sur microSD")
         if args.capture_donor:
             result = capture_donor(
                 args.manifest, args.device, args.stage_dir,
