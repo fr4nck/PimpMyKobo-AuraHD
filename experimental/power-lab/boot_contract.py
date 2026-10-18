@@ -97,10 +97,13 @@ def analyze(contract):
         check(type(handoff["r0"]) is int and handoff["r0"] == 0,
               "invalid_boot_registers")
         uint(handoff["r1"])
+        # booting.rst v6.18: r1 = ~0 is reserved for DT-only platforms.
+        check(handoff["kind"] == "DTB" or handoff["r1"] != U32_SPACE - 1,
+              "invalid_machine_id")
         ptr = uint(handoff["r2"], aligned=True)
         # ARM booting.rst v6.18: DTB must be 64-bit aligned; ATAG is 32-bit.
-        # Enforce minimum structural room for the header/terminator only.
-        minimum = 40 if handoff["kind"] == "DTB" else 16
+        # Minimum room: FDT header (40) or ATAG_CORE+ATAG_MEM+ATAG_NONE (32).
+        minimum = 40 if handoff["kind"] == "DTB" else 32
         check(regions["boot_data"][0] <= ptr and
               ptr + minimum <= regions["boot_data"][1],
               "boot_data_pointer_outside_region")

@@ -68,6 +68,21 @@ class BootContractTests(unittest.TestCase):
         self.assertEqual("boot_data_pointer_outside_region",
                          MOD.analyze(value)["errors"][0]["code"])
 
+    def test_atag_list_needs_core_mem_none_room(self):
+        value = sample()
+        end = value["regions"][0]["start"] + value["regions"][0]["size"]
+        value["handoff"]["r2"] = end - 32
+        self.assertEqual("consistent_unverified", MOD.analyze(value)["status"])
+        value["handoff"]["r2"] = end - 16
+        self.assertEqual("boot_data_pointer_outside_region",
+                         MOD.analyze(value)["errors"][0]["code"])
+
+    def test_atags_refuse_dt_only_machine_id(self):
+        value = sample()
+        value["handoff"]["r1"] = 0xFFFFFFFF
+        self.assertEqual("invalid_machine_id",
+                         MOD.analyze(value)["errors"][0]["code"])
+
     def test_fail_closed_negative_cases(self):
         actions = (
             lambda v: v["ram"].update(size=256 * 1024 * 1024),
@@ -84,6 +99,7 @@ class BootContractTests(unittest.TestCase):
             lambda v: v["image"].update(format="zImage"),
             lambda v: v["image"].update(size=True),
             lambda v: v["handoff"].update(kind="UNKNOWN"),
+            lambda v: v["handoff"].update(kind=["DTB"]),
             lambda v: v["handoff"].update(r0=1),
             lambda v: v["handoff"].update(r1=None),
             lambda v: v["handoff"].update(r2=v["ram"]["start"]),
@@ -110,6 +126,8 @@ class BootContractTests(unittest.TestCase):
             ('{"data":NaN}', "invalid_json"),
             ('{"data":Infinity}', "invalid_json"),
             ('{"data":', "invalid_json"),
+            ('[]', "invalid_schema"),
+            ('{"format":"x"}', "invalid_schema"),
         ):
             self.assertEqual(error, MOD.analyze_json(raw)["errors"][0]["code"])
         self.assertEqual("invalid_json_text",
