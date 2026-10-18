@@ -31,6 +31,27 @@ bool pmkb_notes_valid_utc(const char *s) {
     if(month==2&&(year%4==0&&(year%100!=0||year%400==0)))last=29;
     return day>=1&&day<=last;
 }
+/* A title can be temporarily empty during editing, but must not be
+ * serialized if the JS Notes importer would reject it. */
+static bool meaningful_title(const char *s){
+    if(!s)return false;
+    const unsigned char *p=(const unsigned char*)s;
+    while(*p){
+        uint32_t cp=*p;
+        int count=1;
+        if(*p>=0xf0){cp=*p&7u;count=4;}
+        else if(*p>=0xe0){cp=*p&15u;count=3;}
+        else if(*p>=0xc0){cp=*p&31u;count=2;}
+        for(int i=1;i<count;i++)cp=(cp<<6)|(p[i]&63u);
+        if(!((cp>=9&&cp<=13)||cp==32||cp==0x85||cp==0xa0||
+             cp==0x1680||(cp>=0x2000&&cp<=0x200a)||
+             cp==0x2028||cp==0x2029||cp==0x202f||
+             cp==0x205f||cp==0x3000||cp==0xfeff))
+            return true;
+        p+=count;
+    }
+    return false;
+}
 void pmkb_notebook_init(PMKBNotebook *book){
     if(book)memset(book,0,sizeof(*book));
 }
@@ -130,7 +151,15 @@ PMKBStatus pmkb_notebook_export_json(const PMKBNotebook *book,
     Json j={0};PMKBStatus rc=literal(&j,"{\"format\":\"pmkb-notes-v1\",\"notes\":[");
     for(size_t i=0;rc==PMKB_OK&&i<book->count;i++){
         const PMKBNote *n=book->items[i];
-        if(!n||!n->title.data||!n->body.data)return free(j.data),PMKB_INVALID;
+        if(!n||!n->title.data||!n->body.data)
+            return free(j.data),PMKB_INVALID;
+        size_t title_units=0,body_units=0;
+        if(pmkb_utf8_measure(n->title.data,n->title.bytes,&title_units)!=PMKB_OK ||
+           pmkb_utf8_measure(n->body.data,n->body.bytes,&body_units)!=PMKB_OK ||
+           !meaningful_title(n->title.data) ||
+           title_units>PMKB_TITLE_LIMIT||body_units>PMKB_BODY_LIMIT ||
+           !pmkb_notes_valid_utc(n->created)||!pmkb_notes_valid_utc(n->updated))
+            return free(j.data),PMKB_INVALID;
         if(i)rc=literal(&j,",");
         if(rc==PMKB_OK)rc=literal(&j,"{\"id\":");
         if(rc==PMKB_OK)rc=quoted(&j,n->id);

@@ -100,6 +100,16 @@ static int notebook_memory(void){
     CHECK(strstr(json,"\"typography\":{\"font\":\"mono\",\"size\":17,\"lineHeight\":1.6}")!=NULL);
     CHECK(strstr(json,"Une ligne\\nEt une \\\"citation\\\"")!=NULL);
     free(json);
+    CHECK(pmkb_text_set(&book.items[0]->title," ")==PMKB_OK);
+    json=NULL;len=0;
+    CHECK(pmkb_notebook_export_json(&book,&json,&len)==PMKB_INVALID);
+    CHECK(json==NULL && strcmp(book.items[0]->title.data," ")==0);
+    CHECK(pmkb_text_set(&book.items[0]->title,"\xc2\xa0")==PMKB_OK);
+    CHECK(pmkb_notebook_export_json(&book,&json,&len)==PMKB_INVALID);
+    CHECK(json==NULL);
+    CHECK(pmkb_text_set(&book.items[0]->title,"Carnet valide")==PMKB_OK);
+    CHECK(pmkb_notebook_export_json(&book,&json,&len)==PMKB_OK);
+    free(json);
     for(size_t i=1;i<PMKB_NOTE_LIMIT;i++)
         CHECK(pmkb_notebook_new(&book,UTC,&idx)==PMKB_OK);
     CHECK(book.count==100);
