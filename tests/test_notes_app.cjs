@@ -421,3 +421,23 @@ test('virtual keys preserve stale-tab conflict guard',()=>{
   assert.equal(C.decode(shared.value).notes[0].text,'A');
   assert.match(second.get('notes-error').textContent,/autre onglet/);
 });
+
+test('opening scientific calculator saves pending Notes edits first',()=>{
+  const b=browser();b.event('toolbar-new','click');
+  b.get('note-text').value='Texte avant calcul';
+  b.event('note-text','input');
+  b.event('open-calculator','click');
+  assert.equal(b.destination(),'../calculator-v01/index.html');
+  assert.equal(C.decode(b.stored()).notes[0].text,'Texte avant calcul');
+});
+test('opening scientific calculator respects failed-save confirmation',()=>{
+  for(const allow of [false,true]){
+    const b=browser({confirmReply:allow});b.event('toolbar-new','click');
+    b.failWrites(true);
+    b.get('note-text').value='À récupérer';b.event('note-text','input');
+    b.event('open-calculator','click');
+    assert.equal(b.destination(),allow?'../calculator-v01/index.html':null);
+    assert.equal(b.get('note-text').value,'À récupérer');
+    assert.equal(b.get('notes-error').hidden,false);
+  }
+});

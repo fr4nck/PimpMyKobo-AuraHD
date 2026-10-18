@@ -50,6 +50,12 @@ Ce contrôle est une précaution contre les pertes accidentelles, **pas** une tr
 
 Lorsque le curseur est dans un champ de texte, les raccourcis restent confiés au navigateur pour l'annulation de la saisie ; l'historique des actions PMKB ne prétend pas remplacer celui de l'éditeur. L'historique des actions est limité à **24 entrées en mémoire**, perdu à la fermeture et effacé après import d'un carnet. Une nouvelle saisie supprime la branche Rétablir, pour éviter de réappliquer une action ancienne sur des données modifiées. Les annulations sont soumises à la même protection multi-onglets que les sauvegardes : aucun contournement des conflits. La sauvegarde JSON reste indispensable.
 
+### Clavier AZERTY tactile et calculatrice scientifique (V0)
+
+Le clavier facultatif de Notes s'ouvre depuis **Plus → ⌨ Clavier**. Il n'ajoute pas de troisième ligne : panneau flottant fermé au repos, touches monochromes de 44 px minimum, grille de six colonnes adaptée au portrait, majuscules, accents français, page chiffres/symboles et retour depuis le titre vers le texte. Il se ferme en mode Croquis. La saisie utilise la validation et la protection multi-onglets du carnet ; ce n'est pas encore un clavier système Kobo. Sur téléphone, le clavier du navigateur peut aussi apparaître, d'où l'ouverture manuelle. Les frappes injectées par script ne sont pas garanties dans l'historique natif Ctrl+Z du champ : ne pas présenter cette saisie comme équivalente à un IME Linux.
+
+**Plus → Calculatrice** ouvre `../calculator-v01/index.html` après sauvegarde des modifications en attente. En cas d'échec du stockage, Notes demande confirmation et rappelle l'export JSON de secours. La calculatrice est un prototype navigateur indépendant, avec degrés/radians et moteur mathématique sans `eval()`. Son lien Retour à Notes recharge le carnet stocké localement ; il ne transfère pas automatiquement de résultat dans la note. Rien n'est installé sur la liseuse.
+
 ## Démarrage sur PC — Debian WSL
 
 Terminal **Debian WSL**, dépôt \`fr4nck/PimpMyKobo-AuraHD\` :

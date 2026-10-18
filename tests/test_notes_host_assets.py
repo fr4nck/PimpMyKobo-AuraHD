@@ -137,6 +137,8 @@ class TestNotesHostAssets(unittest.TestCase):
         self.assertIn('id="virtual-keyboard"', self.html)
         self.assertIn('id="keyboard-rows"', self.html)
         self.assertIn('id="toggle-keyboard"', self.html)
+        self.assertIn('id="open-calculator"', self.html)
+        self.assertIn('navigateWithSave("../calculator-v01/index.html")', self.browser)
         self.assertIn('aria-controls="virtual-keyboard"', self.html)
         self.assertIn('keyboardNode.hidden=true', self.browser)
 

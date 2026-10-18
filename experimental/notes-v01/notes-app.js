@@ -275,12 +275,14 @@
     saving=setTimeout(persist,350);
   }
   function flush(){if(saving!==null)persist();}
-  function quitNotes(){
+  function navigateWithSave(destination){
     if(book.notes.length || saving!==null || errors.has("storage")) {
       if(!persist() && !window.confirm("Enregistrement local impossible. Exportez le carnet en JSON depuis Mes notes avant de partir. Quitter quand même ?"))return;
     }
-    window.location.assign("../launcher-v0/simulator.html");
+    hideKeyboard();
+    window.location.assign(destination);
   }
+  function quitNotes(){navigateWithSave("../launcher-v0/simulator.html");}
   function current(){return book.notes.find(n=>n.id===selected)||null;}
   function historyControls(){
     const canUndo=historyUndo.length>0,canRedo=historyRedo.length>0;
@@ -684,6 +686,7 @@
   $("toggle-keyboard").addEventListener("click",()=>{
     if(keyboardVisible())hideKeyboard();else openKeyboard();
   });
+  $("open-calculator").addEventListener("click",()=>navigateWithSave("../calculator-v01/index.html"));
   $("keyboard-close").addEventListener("click",hideKeyboard);
   $("undo-action").addEventListener("click",()=>travelHistory(true));
   $("redo-action").addEventListener("click",()=>travelHistory(false));
