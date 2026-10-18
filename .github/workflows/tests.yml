@@ -31,6 +31,7 @@ jobs:
         run: |
           sudo apt-get install -y lua5.1
           lua tests/test_launcher_v0.lua
+          lua tests/test_pmkb_notes_native.lua
           lua tests/test_launcher_statusbar.lua
           lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
       - name: Check illustrated launcher simulator model (one Linux matrix job)
