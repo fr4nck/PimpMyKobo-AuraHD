@@ -178,6 +178,34 @@ static int ui_flow(void){
     pmkb_ui_free(&ui);
     groups++;return 0;
 }
+typedef struct { int calls; bool fail; PMKBRect last; } FakeHal;
+static PMKBStatus mock_present(void *context,const uint8_t *pixels,
+                               int width,int height,PMKBRect changed){
+    FakeHal *mock=(FakeHal*)context;
+    if(!pixels||width<=0||height<=0)return PMKB_INVALID;
+    mock->calls++;mock->last=changed;
+    return mock->fail?PMKB_INVALID:PMKB_OK;
+}
+static int backend_retry(void){
+    PMKBSurface s={0};
+    FakeHal mock={0};PMKBRect rect={0};
+    PMKBBackend backend={.context=&mock,.present=mock_present};
+    CHECK(pmkb_surface_init(&s,320,480)==PMKB_OK);
+    CHECK(pmkb_surface_present(&s,NULL)==PMKB_INVALID);
+    mock.fail=true;
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_INVALID);
+    CHECK(s.has_dirty && mock.calls==1);
+    CHECK(mock.last.w==320 && mock.last.h==480);
+    mock.fail=false;
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(mock.calls==2 && !s.has_dirty);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_NO_CHANGE);
+    pmkb_surface_rect(&s,(PMKBRect){12,20,16,10},0);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(mock.calls==3 && mock.last.x==12 && mock.last.y==20);
+    CHECK(!pmkb_surface_take_dirty(&s,&rect));
+    pmkb_surface_free(&s);groups++;return 0;
+}
 static int high_resolution_budget(void){
     PMKBUI ui={0};PMKBRect dirty;
     CHECK(pmkb_ui_init(&ui,1080,1440)==PMKB_OK);
@@ -205,7 +233,8 @@ int main(int argc,char **argv){
     if(argc==2&&strcmp(argv[1],"--json-fixture")==0)return dump_fixture();
     if(argc!=1)return 2;
     if(utf8_edit()||keyboard_actions()||notebook_memory()||
-       dirty_canvas()||ui_flow()||high_resolution_budget())return 1;
+       dirty_canvas()||ui_flow()||high_resolution_budget()||
+       backend_retry())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            checked,groups);
     return 0;

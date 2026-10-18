@@ -88,6 +88,16 @@ void pmkb_surface_rect(PMKBSurface *s, PMKBRect rect, uint8_t shade);
 void pmkb_surface_text(PMKBSurface *s, int x, int y,
                        const char *utf8, uint8_t shade, int max_width);
 bool pmkb_surface_take_dirty(PMKBSurface *s, PMKBRect *out);
+/* PMKB-HAL seam: pass a dirty grayscale rectangle, never directly open devices.
+ * No refresh is acknowledged until the caller's backend reports success. */
+typedef PMKBStatus (*PMKBPresentFn)(void *context, const uint8_t *gray,
+                                    int width, int height, PMKBRect dirty);
+typedef struct {
+    void *context;
+    PMKBPresentFn present;
+} PMKBBackend;
+PMKBStatus pmkb_surface_present(PMKBSurface *surface,
+                                const PMKBBackend *backend);
 
 typedef enum { PMKB_VIEW_LIST, PMKB_VIEW_EDITOR } PMKBView;
 typedef enum { PMKB_FOCUS_TITLE, PMKB_FOCUS_BODY } PMKBFocus;

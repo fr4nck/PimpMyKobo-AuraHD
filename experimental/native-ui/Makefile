@@ -1,6 +1,6 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic
-SOURCES = pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_app.c
+SOURCES = pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c
 TEST = tests/native_ui_tests.c
 TARGET = pmkb-native-tests
 

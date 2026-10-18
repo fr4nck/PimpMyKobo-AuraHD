@@ -55,6 +55,8 @@ vérification de sa licence, RAM réelle et traduction des update markers
 MXCFB. FBInk est une autre piste pour les rafraîchissements.
 Ni l'un ni l'autre n'est installé ou téléchargé ici.
 
+[Limites et contrats HAL](../../docs/native-ui-v0-contract-fr.md)
+
 ## Tests reproductibles
 
 Sur un hôte disposant déjà de GCC, make et Python 3 :
