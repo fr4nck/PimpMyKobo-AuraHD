@@ -14,7 +14,7 @@ CONFIG_ENUMS = {
     "first_boot": ("preserved", "modified", "unknown"),
     "recovery": ("preserved", "modified", "unknown"),
     "rootfs": ("read_only", "read_write", "unknown"),
-    "reader_privilege": ("unprivileged", "root", "unknown"),
+    "reader_privilege": ("unprivileged", "root", "root_transitional", "unknown"),
     "untrusted_autorun": ("disabled", "enabled", "unknown"),
     "updates": ("none", "signed_offline", "signed_online", "unsigned", "unknown"),
     "kernel_branch": KERNELS,
@@ -153,6 +153,13 @@ def analyze(data):
                 fail("SEC-03", "insecure_ssh")
         if c["reader_privilege"] == "root":
             fail("SEC-05", "privileged_reader")
+        elif c["reader_privilege"] == "root_transitional":
+            # A deliberate, *unverified* OFFLINE-only exception: not a PASS.
+            if profile == "CONNECTED":
+                fail("SEC-05", "root_reader_connected")
+            else:
+                unknown("SEC-05", "temporary_root_hardware_necessity_unverified")
+                report["limitations"].append("offline_root_exception_requires_review")
         is_unknown("reader_privilege", "SEC-05")
         if c["rootfs"] == "read_write":
             fail("SEC-06", "writable_rootfs")

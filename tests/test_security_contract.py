@@ -135,6 +135,24 @@ class SecurityContractTests(unittest.TestCase):
             self.assertEqual("blocked", result["status"])
             self.assertEqual("FAIL", gate(result, expected_gate)["status"])
 
+    def test_root_transitional_exception_is_unverified_only_offline(self):
+        data = sample()
+        data["configuration"]["reader_privilege"] = "root_transitional"
+        report = MOD.analyze(data)
+        self.assertEqual("blocked", report["status"])
+        self.assertEqual("UNKNOWN", gate(report, "SEC-05")["status"])
+        self.assertIn("offline_root_exception_requires_review",
+                      report["limitations"])
+        self.assertFalse(report["deployment_allowed"])
+
+    def test_root_transitional_is_not_accepted_for_connected(self):
+        data = sample("CONNECTED")
+        data["configuration"]["reader_privilege"] = "root_transitional"
+        report = MOD.analyze(data)
+        self.assertEqual("blocked", report["status"])
+        self.assertEqual("FAIL", gate(report, "SEC-05")["status"])
+        self.assertFalse(report["connected_ready"])
+
     def test_unknown_critical_requirements_fail_closed(self):
         for profile in ("OFFLINE", "CONNECTED"):
             data = sample(profile)

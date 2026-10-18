@@ -18,7 +18,7 @@
 | Usage | Livres/notes locaux, sans réseau | Wi-Fi, SFTP/SSH, Store/synchronisation éventuels |
 | Réseau | Désactivé par défaut ; aucun socket d'écoute, contrôles continus encore à concevoir | Fermé par défaut ; LAN restreint ; aucun service public automatique ; Telnet interdit |
 | Noyau | Ancien, **non maintenu**, risque explicitement accepté pour usage hors ligne borné | Branche maintenue + correctifs suivis, drivers E606C0 audités |
-| Privilèges | Objectif lecteur non root ; ABI devices/permissions à qualifier | Non root + mécanismes d'isolation vérifiables sur ARMv7, sans supposer disponibilité de Landlock/seccomp |
+| Privilèges | Non-root privilégié **si compatible** ; root historique tolérable temporairement en OFFLINE après examen, sans certification | Non-root visé, dépendances matérielles et isolation à qualifier sans démon résident |
 | Disque | FIRST BOOT/P1/P2 conservés ; systèmes critiques ro lorsque possible ; écriture utilisateur isolée | Idem + mises à jour atomiques/authentifiées et reprise indépendante |
 | Fichiers | EPUB/PDF/plugins non fiables, parser et chaîne LuaJIT à auditer | Idem, avec durcissement actif, politiques plugins et dépendances maintenues |
 | Chiffrement/intégrité | SHA des backups utiles, mais **pas** de Secure Boot démontré, pas de secret protégé contre accès physique | Signature des images/updates à partir d'une clé racine de confiance ; limites d'anti-rollback et de boot vérifié à expliciter |
@@ -75,3 +75,15 @@ Outil Python standard [security_contract.py](../experimental/security-contract/s
 3. Avant essais réels : identité mémoire U-Boot, sauvegardes et restauration indépendante, autorisation nouvelle et conditions d'échec documentées. Aucun changement FIRST BOOT, P1/P2/P3, rcS, image, MCU ni noyau pendant ce lot.
 
 Ce dossier ne doit **jamais** déclencher une activation du Wi-Fi ou une écriture physique. Voir [passation Claude](security-contract-v1-claude-handoff-fr.md).
+
+## Addendum — PMSL-Arch / sécurité frugale (18 octobre 2026)
+
+Une protection ne doit pas monopoliser des ressources de l'Aura HD (512 Mio). Voir [plan frugal de permissions](frugal-device-access-v1-fr.md), [planificateur synthétique](../experimental/offline-audit/device_access_plan.py) et [tests](../tests/test_device_access_plan.py).
+
+- **0 processus résident nouveau, 0 polling, 0 framework ou Python ajouté au rootfs.** Le planificateur n'est exécuté que sur hôte/CI. Aucune empreinte RAM réelle ni économie de batterie n'est prétendue mesurée.
+- **SEC-05 n'est pas une obligation irréaliste de non-root au FIRST BOOT.** Le prototype actuel sans abaissement d'UID reste un écart documenté (FAIL de politique dans le contrat V1). Une exception explicite `root_transitional` est désormais possible **uniquement en scénario OFFLINE**, mais elle produit `SEC-05=UNKNOWN`, un bloqueur et un risque résiduel, jamais PASS ou une autorisation de déploiement. En CONNECTED, root transitional reste FAIL.
+- Les groupes Unix, modes 0640/0660 et séparation éventuelle init/lecteur ne sont que des **candidats** : `/dev/ntx_io` expose potentiellement d'autres ioctls (énergie, Wi-Fi, watchdog), donc autoriser l'ouverture n'isole pas automatiquement les commandes. Aucun `chmod`, `chown`, `mknod` ou `su` n'est ajouté à la Kobo aujourd'hui.
+- **Priorité à la compatibilité** : si le non-root échoue avec l'EPDC, le tactile ou l'éclairage, préserver le mode OFFLINE fonctionnel, puis quantifier le risque et rechercher la solution la moins coûteuse. Aucun daemon/proxy de sécurité introduit seulement pour faire passer une gate.
+- Cette exception de faisabilité n'est pas une raison pour déclarer l'ancien noyau sécurisé, ni pour activer le Wi-Fi, ni pour lancer SSH sous root.
+
+Le reste du contrat demeure inchangé. Les prochaines décisions devront comparer la compatibilité fonctionnelle et **le coût mesuré** en RAM, CPU, énergie et maintenance, sans valeur inventée.
