@@ -186,3 +186,40 @@ L'application Calculatrice peut être déchargée normalement et sa
 mémoire Ans est alors perdue. Tous les accès E-Ink, ZForce, frontlight
 et MXCFB restent **non implémentés** : le seul backend testé accuse
 réception des rectangles sur un mock sans périphérique.
+
+
+## PMKB-HAL V0 — ébauche testable sans périphérique
+
+Le module indépendant \`pmkb_hal.h/c\` introduit deux contrats :
+- **Tactile ZForce legacy** : accepte seulement \`EV_ABS/ABS_X/ABS_Y\`,
+  \`EV_KEY/BTN_TOUCH\` et \`EV_SYN/SYN_REPORT\` (une seule pression).
+  Il attend un press/release complet, normalise des plages ABS fournies
+  explicitement, applique inversion et rotation, puis émet **un tap**
+  uniquement si le doigt n'a pas glissé au-delà du seuil déclaré.
+  \`SYN_DROPPED\`, coordonnées invalides ou geste sans coordonnées
+  annulent la saisie. Pas de numéro \`eventN\` fixé arbitrairement.
+- **E-Ink** : \`PMKBEink\` enveloppe un pilote injecté sous forme de
+  trois callbacks : \`copy\`, \`send(marker)\`, \`wait(marker)\`.
+  Les surfaces PMKB sont signalées comme présentées **après attente
+  réussie**. Sur erreur d'attente, le marqueur reste en vol et un
+  nouvel envoi n'est pas autorisé tant qu'il n'est pas résolu.
+  Si le contenu a changé entre les tentatives, une nouvelle mise à
+  jour est nécessaire avant tout acquittement. Modes partiel/complet
+  choisis explicitement : aucune politique de waveform inventée.
+
+Tout cela reste simulé : aucun vrai \`/dev/input/eventN\`,
+\`/dev/fb0\`, \`mmap\`, \`ioctl\`, I²C ni changement de firmware,
+de configuration ou de partition. Les tests utilisent des traces
+d'événements et un tampon framebuffer fictifs, pas la Kobo.
+
+Pour qualifier sur hôte, \`make test\` inclut désormais
+\`pmkb-hal-tests\` et la CI vérifie aussi cette suite sous
+ASan/UBSan. Une étape de compilation croisée ARM **sans installation**
+est conditionnée à la présence d'un compilateur ARM déjà installé ;
+elle produit seulement des fichiers objets temporaires. Le résultat
+\`SKIP\` est explicite si le compilateur n'existe pas. Même des objets
+ARM valides ne prouveraient ni l'ABI du rootfs KOReader ni le
+rafraîchissement du panneau réel.
+
+Voir \`docs/native-hal-v0-offline-qualification-fr.md\` pour les
+hypothèses matérielles archivées et les portes de vérification.
