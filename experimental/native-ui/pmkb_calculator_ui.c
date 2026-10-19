@@ -11,8 +11,13 @@
 #define INPUT_H 48
 #define RESULT_H 72
 
+static int keyboard_row_height(const PMKBCalcUI *ui){
+    /* Physical Aura HD pixels are much smaller than CSS pixels.
+     * Enlarge the host target geometry for a 1080-pixel-wide panel. */
+    return ui->screen.width>=680?94:KB_ROW_H;
+}
 static int keyboard_top(const PMKBCalcUI *ui){
-    return ui->screen.height-PMKB_KB_ROWS*KB_ROW_H;
+    return ui->screen.height-PMKB_KB_ROWS*keyboard_row_height(ui);
 }
 static void outline(PMKBSurface *s,PMKBRect r){
     pmkb_surface_rect(s,(PMKBRect){r.x,r.y,r.w,2},0);
@@ -30,8 +35,8 @@ static void visible_tail(const char *source,char *output,size_t capacity,
         if(((unsigned char)source[i]&0xc0u)!=0x80u)count++;
     for(size_t i=0;i<bytes && count>max_glyphs;i++){
         if(((unsigned char)source[i]&0xc0u)!=0x80u){
-            start=i;
             count--;
+            if(count==max_glyphs){start=i;break;}
         }
     }
     while(start<bytes && ((unsigned char)source[start]&0xc0u)==0x80u)start++;
@@ -75,11 +80,36 @@ static void draw_result(PMKBCalcUI *ui){
     pmkb_surface_text(s,9,y+35,shown,0,s->width-18);
     pmkb_surface_rect(s,(PMKBRect){0,y+RESULT_H-2,s->width,2},0);
 }
+/* A real history view uses the otherwise blank strip above the keyboard,
+ * only if there is physical room. In 320x480 the entire area is reserved
+ * for expression, result and touch targets; the history stays in RAM. */
+static void draw_history(PMKBCalcUI *ui){
+    PMKBSurface *s=&ui->screen;
+    int top=HEAD_H+INPUT_H+RESULT_H+12;
+    int bottom=keyboard_top(ui)-8;
+    if(bottom-top<56)return;
+    pmkb_surface_rect(s,(PMKBRect){0,top,s->width,bottom-top},255);
+    pmkb_surface_text(s,12,top+3,"HISTORIQUE",0,s->width-24);
+    int step=s->width>=680?59:48;
+    for(size_t i=0;i<ui->history_count;i++){
+        int y=top+46+(int)i*step;
+        if(y+35>bottom)break;
+        char expression[55]={0};
+        visible_tail(ui->history[i].expression,expression,
+                     sizeof(expression),(size_t)((s->width-50)/(s->width>=680?18:12)));
+        pmkb_surface_text_box(s,16,y,expression,0,s->width-130,33);
+        pmkb_surface_text_box(s,s->width-116,y,ui->history[i].result,
+                              0,104,33);
+        pmkb_surface_rect(s,(PMKBRect){12,y+step-9,s->width-24,1},180);
+    }
+}
+
 static void draw_keyboard(PMKBCalcUI *ui){
     PMKBSurface *s=&ui->screen;
     int y0=keyboard_top(ui);
     pmkb_surface_rect(s,(PMKBRect){0,y0,s->width,s->height-y0},232);
     if(!ui->keyboard.visible)return;
+    int row_height=keyboard_row_height(ui);
     for(int row=0;row<PMKB_KB_ROWS;row++){
         for(int col=0;col<PMKB_KB_COLS;col++){
             /* Both halves of a two-column key map to the same action. */
@@ -89,9 +119,9 @@ static void draw_keyboard(PMKBCalcUI *ui){
             if(key.span<=0)continue;
             int x=col*s->width/PMKB_KB_COLS;
             int right=(col+key.span)*s->width/PMKB_KB_COLS;
-            int y=y0+row*KB_ROW_H;
+            int y=y0+row*row_height;
             if(y>=s->height)break;
-            int height=KB_ROW_H<s->height-y?KB_ROW_H:s->height-y;
+            int height=row_height<s->height-y?row_height:s->height-y;
             PMKBRect cell={x+2,y+2,right-x-4,height-4};
             if(cell.w<5||cell.h<5)continue;
             pmkb_surface_rect(s,cell,255);
@@ -109,7 +139,10 @@ static void draw_keyboard(PMKBCalcUI *ui){
 static void redraw(PMKBCalcUI *ui,bool head,bool expr,bool result,bool keys){
     if(head)draw_header(ui);
     if(expr)draw_expression(ui);
-    if(result)draw_result(ui);
+    if(result){
+        draw_result(ui);
+        draw_history(ui);
+    }
     if(keys)draw_keyboard(ui);
     ui->render_calls++;
 }
@@ -219,7 +252,7 @@ PMKBStatus pmkb_calc_ui_event(PMKBCalcUI *ui,PMKBEvent event){
         if(x<0||y<0||x>=ui->screen.width||y>=ui->screen.height)
             return PMKB_INVALID;
         if(ui->keyboard.visible&&y>=keyboard_top(ui)){
-            int row=(y-keyboard_top(ui))/KB_ROW_H;
+            int row=(y-keyboard_top(ui))/keyboard_row_height(ui);
             int col=x*PMKB_KB_COLS/ui->screen.width;
             return pmkb_calc_ui_press(ui,row,col);
         }

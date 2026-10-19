@@ -24,8 +24,11 @@ static void border(PMKBSurface *s,PMKBRect rect,uint8_t shade){
     pmkb_surface_rect(s,(PMKBRect){rect.x,rect.y,2,rect.h},shade);
     pmkb_surface_rect(s,(PMKBRect){rect.x+rect.w-2,rect.y,2,rect.h},shade);
 }
+static int keyboard_row_height(const PMKBUI *ui){
+    return ui->screen.width>=680?94:ROW;
+}
 static int keyboard_top(const PMKBUI *ui){
-    int top=ui->screen.height-PMKB_KB_ROWS*ROW;
+    int top=ui->screen.height-PMKB_KB_ROWS*keyboard_row_height(ui);
     return top<BODY_START?BODY_START:top;
 }
 static void draw_top(PMKBUI *ui){
@@ -84,6 +87,7 @@ static void draw_keyboard(PMKBUI *ui){
     PMKBSurface *s=&ui->screen;
     int y0=keyboard_top(ui);
     pmkb_surface_rect(s,(PMKBRect){0,y0,s->width,s->height-y0},230);
+    int row_height=keyboard_row_height(ui);
     for(int row=0;row<PMKB_KB_ROWS;row++){
         int seen=-1;
         for(int col=0;col<PMKB_KB_COLS;col++){
@@ -96,9 +100,9 @@ static void draw_keyboard(PMKBUI *ui){
             if(col==3&&row==6)continue;
             if(col==5&&row==6)continue;
             if(key.span==2)right=(col+2)*s->width/PMKB_KB_COLS;
-            int y=y0+row*ROW;
+            int y=y0+row*row_height;
             if(y>=s->height)break;
-            int h=ROW<s->height-y?ROW:s->height-y;
+            int h=row_height<s->height-y?row_height:s->height-y;
             PMKBRect cell={left+2,y+2,right-left-4,h-4};
             if(cell.w<=0||cell.h<=0)continue;
             pmkb_surface_rect(s,cell,255);
@@ -214,7 +218,7 @@ static PMKBStatus press_keyboard(PMKBUI *ui,int row,int col,const char *utc){
 static PMKBStatus tap(PMKBUI *ui,int x,int y,const char *utc){
     if(x<0||y<0||x>=ui->screen.width||y>=ui->screen.height)return PMKB_INVALID;
     if(ui->keyboard.visible&&y>=keyboard_top(ui)){
-        int row=(y-keyboard_top(ui))/ROW;
+        int row=(y-keyboard_top(ui))/keyboard_row_height(ui);
         int col=x*PMKB_KB_COLS/ui->screen.width;
         return press_keyboard(ui,row,col,utc);
     }
