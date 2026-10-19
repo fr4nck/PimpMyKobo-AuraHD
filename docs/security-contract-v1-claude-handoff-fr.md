@@ -18,8 +18,8 @@
 4. Noyau 2.6.35.3 : vulnérabilités non corrigées, mitigations absentes, charge des bibliothèques et éventuels patches historiques ; ne pas attribuer un CVE non vérifié à l'exemplaire.
 5. 6.12 vs 6.18 : vérifier sur source versionnée le support DT-only, l'absence de nœud EPDC, les contraintes du portage DRM/MXCFB/waveform, les limites PM i.MX50 et du ntxec, et les horizons LTS actuels chez kernel.org.
 6. SECURITY GATES : des booléens déclarés peuvent-ils être mal pris pour une preuve ? Vérifier qu'aucune entrée ne permet `security_certified=true`, `deployment_allowed=true` ou PASS matériel.
-7. Tester l'API pure sur JSON hostile, duplicates, types inattendus, faux SKIP, fakes de version maintenue, services telnet, SSH mot de passe/root, écoute Internet, réseaux imprévus, root lecteur, rootfs rw, mises à jour non signées, processus/fichiers non fiables.
-8. La gate SEC-10 OFFLINE reflète-t-elle clairement le risque noyau ancien sans mentir sur l'acceptabilité d'un usage strictement hors ligne ?
+7. Tester l'API pure sur JSON hostile, duplicates, types inattendus et opt-ins invalides. Vérifier **les deux voies** : refus sans opt-in pour Telnet/SSH/root/Wi-Fi, puis acceptation **uniquement documentaire** avec opt-in explicite et avertissements en clair, sans jamais certifier ni démarrer un service. Les risques d'Internet public et d'un noyau ancien connecté doivent rester lisibles.
+8. La gate SEC-10 OFFLINE reflète-t-elle clairement le risque noyau ancien sans interdire arbitrairement l'expérimentation ? Vérifier que le choix de sécurité de l'utilisateur n'est pas présenté comme une qualification technique.
 9. Les garde-fous contre une mise à jour partielle, le retour arrière, la corruption et les secrets sont-ils explicites et effectivement vérifiables ?
 
 ## Bornes
@@ -33,3 +33,6 @@
 ## Autoprompt prêt à transmettre
 
 **MISSION CLAUDE CODE — CONTRE-EXPERTISE SECURITY CONTRACT V1 PMKB.** Dépôt `fr4nck/PimpMyKobo-AuraHD`, branche `feat/pmkb-powerlab-kernel-v0`, PR #28 en brouillon. Vérifie HEAD actuel et concurrence avant tout. Lis `docs/security-threat-model-v1-fr.md`, `docs/security-contract-v1-fr.md`, `docs/security-kernel-candidates-v1-fr.md`, `experimental/security-contract/security_contract.py`, `tests/test_security_contract.py`, puis les audits boot/driver et les scripts `rcS`, `pmkb-check-offline` et `pmkb-reader`. Réfute méthodiquement tout statut de sécurité non démontré, examine P1/P2 et l'absence de Secure Boot authentifié, privilèges de KOReader, /dev, PDF/EPUB/plugins, réseau radio, SSH, firmware, mises à jour, énergie et rollback. Compare 6.12/6.18 sur sources officielles maintenues et la réalité du portage i.MX50. Attaque le validateur avec tests adversariaux, et prouve qu'aucune déclaration synthétique ne certifie matériel ou CONNECTED. Rejoue les tests seulement si l'environnement le permet et sans téléchargement ; distingue PASS/FAIL/SKIP/UNKNOWN. Aucun accès physique ni écriture sur FIRST BOOT, images, partitions, U-Boot, rcS, pilotes ou MCU. Aucun nouveau PR/branche/merge. Corrige seulement les défauts vérifiés, sans écraser les travaux concurrents ; publie un verdict contradictoire, sources précises et pistes de correction. Ne présume jamais de l'environnement local 5700X.
+
+
+**Extension audit (18/10)** : contrôler la clé facultative `opt_ins`, `risk_advisories`, le statut `choices_consistent_unverified`, l'absence d'effet réseau réel, et le refus inconditionnel de toute modification FIRST BOOT/recovery. Aucun contrôle ne doit se transformer en mesure résidente sur l'Aura HD.

@@ -30,7 +30,7 @@ Provenances : **[SRC-REPO]** code GitHub de la branche ; **[AUDIT-PRÉC]** préc
 ## Frontières de confiance et principes
 
 1. **Contenus importés ≠ code de confiance.** Distinguer documents, plugins, firmware, configuration et exécutables.
-2. **Le réseau local n'est pas une zone de confiance.** Telnet interdit ; SSH uniquement par clé, non root, pas de mots de passe distants ni d'écoute Internet par défaut.
+2. **Le réseau local n'est pas une zone de confiance.** SSH par clé/non-root reste le choix recommandé. Telnet, SSH mot de passe/root et services de diagnostic peuvent être activés volontairement avec avertissement explicite ; jamais de service lancé par défaut. Telnet transmet le trafic en clair. Une option synthétique n'active rien sur la Kobo.
 3. **La conservation des SHA et partitions ne constitue pas une chaîne de boot authentifiée.**
 4. **La disponibilité est un actif de sécurité :** un pilote économe mais instable, un MCU injoignable ou un EPDC inutilisable fait échouer la cible CONNECTED.
 5. **L'absence de Wi-Fi visible avant lancement n'est pas l'absence de trafic.** La désactivation radio devra avoir une preuve indépendante.

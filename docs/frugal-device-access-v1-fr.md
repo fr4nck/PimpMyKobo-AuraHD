@@ -56,3 +56,7 @@ Les chemins des **boutons** ne sont pas qualifiés par le snapshot : le planific
 5. Ne jamais déduire de ce travail une autorisation d'activer le Wi-Fi ou un statut CONNECTED.
 
 **Verdict** : politique simple et réversible formulée ; faisabilité non-root **INCONNUE** avant qualification réelle. Le chemin historique reste inchangé.
+
+## Option de politique utilisateur (après le lot de planification)
+
+SECURITY CONTRACT V1 accepte désormais un opt-in déclaratif `reader_root` même en scénario CONNECTED : **risque signalé**, aucune certification ou modification runtime. Les deux stratégies du planificateur matériel ci-dessus restent expérimentales ; ce changement n'installe aucune capacité, n'active aucun service et n'ajoute aucun processus résident. Wi-Fi, SSH et Telnet éventuels se décrivent dans [le contrat](security-contract-v1-fr.md), avec réseau OFF au démarrage. Les droits matériels et la préservation de FIRST BOOT/recovery ne sont pas négociés par un tel manifeste.
