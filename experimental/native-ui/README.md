@@ -20,6 +20,14 @@ sont pas fusionnées ni modifiées par ce travail.
   points de code, sans déchirer les octets.
 - **Clavier réutilisable** : AZERTY (é è à ç), majuscules, page numérique
   puis symboles, espace, retour arrière, entrée, curseur, fermeture.
+  **Quatrième mode : SCIENTIFIC**, pour la future Calculatrice native :
+  sin/cos/tan, arcsin/arccos/arctan via INV, ln/log/sqrt, puissances,
+  parenthèses, pourcentages, pi, e, Ans, C, DEG/RAD et =. Ce mode
+  réutilise le même curseur, la sélection et l'insertion UTF-8.
+  La touche = renvoie l'intention `PMKB_EVALUATE`, sans calcul ; le
+  moteur mathématique C et l'affichage du résultat restent à porter.
+  Le mode scientifique est explicitement demandé par une application,
+  sans apparaître dans le cycle de pages du clavier Notes.
   \`PMKBKeyboard\` est indépendant de Notes : cible arbitraire \`PMKBText\`.
   L'état ne survit pas à la fermeture. Les cases tactiles font au moins
   **44 px de hauteur** et 53 px de largeur dans la simulation 320 px.
@@ -66,7 +74,8 @@ cd experimental/native-ui
 make test
 \`\`\`
 
-Test C : UTF-8/UTF-16, accents, sélection, touches virtuelles, garde-fous,
+Test C : UTF-8/UTF-16, accents, sélection, pavé scientifique,
+fonctions inverses, bascule DEG/RAD, intention de calcul, garde-fous,
 export JSON, limites de carnet, calcul des dirty rects, événements souris/
 clavier simulés, Notes (création → édition → liste → réouverture), écran
 1080 × 1440. Le contrôle Python compare le JSON exporté au schéma

@@ -79,6 +79,68 @@ static int keyboard_actions(void){
     CHECK(pmkb_keyboard_press(&kb,&field,pmkb_keyboard_key(&kb,0,0),true)==PMKB_INVALID);
     pmkb_text_free(&field);groups++;return 0;
 }
+
+static int scientific_keyboard(void){
+    PMKBKeyboard kb={0};PMKBText expr={0};
+    CHECK(pmkb_text_init(&expr,192,"")==PMKB_OK);
+    pmkb_keyboard_open(&kb,PMKB_KB_SCIENTIFIC);
+    CHECK(kb.visible&&kb.page==PMKB_KB_SCIENTIFIC&&kb.degrees);
+    for(int r=0;r<PMKB_KB_ROWS;r++)
+        for(int c=0;c<PMKB_KB_COLS;c++){
+            PMKBKey key=pmkb_keyboard_key(&kb,r,c);
+            CHECK(key.span>=1&&key.span<=2);
+            CHECK(key.label&&key.label[0]);
+            CHECK(key.action!=PMKB_KEY_INSERT||key.insert);
+        }
+    CHECK(strcmp(pmkb_keyboard_key(&kb,0,5).insert,"sqrt(")==0);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,2,5).insert,"\xcf\x80")==0);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,4,2).insert,"Ans")==0);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,4,4).insert,"abs(")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,0,0),false)==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,3,2),false)==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,4,0),false)==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,1,5),false)==PMKB_OK);
+    CHECK(strcmp(expr.data,"sin(30)")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,5,5),false)==PMKB_EVALUATE);
+    CHECK(strcmp(expr.data,"sin(30)")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,4,5),false)==PMKB_OK);
+    CHECK(!kb.degrees&&strcmp(pmkb_keyboard_key(&kb,4,5).label,"RAD")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,4,5),false)==PMKB_OK);
+    CHECK(kb.degrees&&strcmp(pmkb_keyboard_key(&kb,4,5).label,"DEG")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,5,2),false)==PMKB_OK);
+    CHECK(expr.bytes==0&&expr.cursor==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,5,0),false)==PMKB_OK);
+    CHECK(kb.shifted);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,0,0).insert,"asin(")==0);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,0,1).insert,"acos(")==0);
+    CHECK(strcmp(pmkb_keyboard_key(&kb,0,2).insert,"atan(")==0);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,0,0),false)==PMKB_OK);
+    CHECK(strcmp(expr.data,"asin(")==0&&!kb.shifted);
+    CHECK(pmkb_text_set(&expr,"\xcf\x80 + Ans")==PMKB_OK);
+    CHECK(pmkb_text_select(&expr,0,2)==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,2,5),false)==PMKB_NO_CHANGE);
+    CHECK(strcmp(expr.data,"\xcf\x80 + Ans")==0);
+    CHECK(pmkb_text_select(&expr,0,2)==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,4,2),false)==PMKB_OK);
+    CHECK(strcmp(expr.data,"Ans + Ans")==0);
+    CHECK(pmkb_text_set(&expr,"\xcf\x80")==PMKB_OK);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,5,4),false)==PMKB_OK);
+    CHECK(expr.bytes==0);
+    CHECK(pmkb_keyboard_key(&kb,-1,0).span==0);
+    CHECK(pmkb_keyboard_key(&kb,0,6).span==0);
+    PMKBKeyboard before=kb;
+    pmkb_keyboard_open(&kb,(PMKBKeyboardPage)99);
+    CHECK(kb.visible==before.visible&&kb.page==before.page);
+    CHECK(pmkb_keyboard_press(&kb,&expr,pmkb_keyboard_key(&kb,5,1),false)==PMKB_OK);
+    CHECK(kb.page==PMKB_KB_AZERTY);
+    CHECK(pmkb_keyboard_press(&kb,&expr,
+        (PMKBKey){PMKB_KEY_EVALUATE,"=",NULL,1},false)==PMKB_INVALID);
+    pmkb_keyboard_close(&kb);
+    CHECK(pmkb_keyboard_press(&kb,&expr,
+        (PMKBKey){PMKB_KEY_EVALUATE,"=",NULL,1},false)==PMKB_INVALID);
+    pmkb_text_free(&expr);groups++;return 0;
+}
+
 static int notebook_memory(void){
     PMKBNotebook book;pmkb_notebook_init(&book);
     size_t idx=99;
@@ -242,7 +304,8 @@ static int dump_fixture(void){
 int main(int argc,char **argv){
     if(argc==2&&strcmp(argv[1],"--json-fixture")==0)return dump_fixture();
     if(argc!=1)return 2;
-    if(utf8_edit()||keyboard_actions()||notebook_memory()||
+    if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
+       notebook_memory()||
        dirty_canvas()||ui_flow()||high_resolution_budget()||
        backend_retry())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",

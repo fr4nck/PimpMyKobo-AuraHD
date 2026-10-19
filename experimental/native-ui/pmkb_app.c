@@ -183,7 +183,8 @@ static PMKBStatus press_keyboard(PMKBUI *ui,int row,int col,const char *utc){
         ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);return PMKB_OK;
     }
     if((key.action==PMKB_KEY_INSERT||key.action==PMKB_KEY_SPACE||
-        key.action==PMKB_KEY_BACKSPACE||key.action==PMKB_KEY_ENTER) &&
+        key.action==PMKB_KEY_BACKSPACE||key.action==PMKB_KEY_ENTER||
+        key.action==PMKB_KEY_CLEAR) &&
        !pmkb_notes_valid_utc(utc))return PMKB_INVALID;
     bool current=ui->keyboard.visible;
     PMKBStatus rc=pmkb_keyboard_press(&ui->keyboard,text,key,
@@ -192,14 +193,16 @@ static PMKBStatus press_keyboard(PMKBUI *ui,int row,int col,const char *utc){
         draw_body(ui);ui->render_calls++;
         return PMKB_OK;
     }
-    if(key.action==PMKB_KEY_SHIFT||key.action==PMKB_KEY_MODE){
+    if(key.action==PMKB_KEY_SHIFT||key.action==PMKB_KEY_MODE||
+       key.action==PMKB_KEY_ANGLE){
         draw_keyboard(ui);ui->render_calls++;
         return rc;
     }
     if(rc==PMKB_OK && (key.action==PMKB_KEY_INSERT||
                        key.action==PMKB_KEY_SPACE||
                        key.action==PMKB_KEY_BACKSPACE||
-                       key.action==PMKB_KEY_ENTER)){
+                       key.action==PMKB_KEY_ENTER||
+                       key.action==PMKB_KEY_CLEAR)){
         rc=changed(ui,rc,utc);
         if(ui->keyboard.shifted==false)draw_keyboard(ui);
         return rc;
