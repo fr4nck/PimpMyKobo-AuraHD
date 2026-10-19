@@ -102,10 +102,12 @@ static void tokenize(Parser *p,const char *expression){
         unsigned char c=(unsigned char)expression[i];
         if(space(c)){i++;continue;}
         if(digit(c)||c=='.'){
+            size_t before=i;
             double value=0;
             if(!scan_number(expression,n,&i,&value,&p->error))break;
             if(!op(p,NUM,value,NULL))break;
-            units++;
+            units+=i-before;
+            if(units>PMKB_CALC_MAX_UNITS)p->error=PMKB_CALC_LIMIT;
             continue;
         }
         if(letter(c)){

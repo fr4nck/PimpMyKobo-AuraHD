@@ -60,3 +60,19 @@ ARM, vérifier les ABI/fonctions mémoire, puis relier les zones sales aux
 \`MXCFB_SEND_UPDATE\` / \`WAIT_FOR_UPDATE_COMPLETE\` avec waveforms
 conservées, d'abord sur banc simulé. Pas de changement P1/P2/U-Boot,
 pas de flash, pas de téléchargements dans ce lot.
+
+
+## Premier client du clavier commun : calculatrice native
+
+Un **moteur d'expressions C11** séparé de PMKB-UI
+(\`pmkb_calculator.c\` et \`pmkb_calculator.h\`) traite les fonctions
+scientifiques, les erreurs mathématiques et la précision 64 bits.
+L'adaptateur \`pmkb_calculator_ui.c\` fournit un écran tactile hôte
+avec la disposition \`PMKB_KB_SCIENTIFIC\`, l'intention \`=\`, la
+mémoire Ans, DEG/RAD et un historique de huit entrées uniquement en RAM.
+Le même moteur de texte, de focus et de rectangles modifiés sert aux
+vues Notes. Aucun calcul n'est effectué dans la bibliothèque clavier.
+
+Ni le moteur ni l'interface n'écrivent sur la microSD. Il reste à
+qualifier la police native française, les rafraîchissements E-Ink et
+le tactile Aura HD ainsi que l'intégration au launcher.

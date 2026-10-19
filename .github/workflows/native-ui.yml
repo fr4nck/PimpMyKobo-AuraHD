@@ -33,3 +33,5 @@ jobs:
           gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I. \
             pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c tests/native_ui_tests.c -o pmkb-native-sanitized
           ./pmkb-native-sanitized
+          gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I.             pmkb_text_keyboard.c pmkb_surface.c pmkb_calculator.c pmkb_calculator_ui.c tests/native_calc_tests.c -lm -o pmkb-calculator-sanitized
+          ./pmkb-calculator-sanitized

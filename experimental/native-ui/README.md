@@ -103,3 +103,33 @@ ni evdev/EPDC réel, ni la consommation et l'autonomie.
 Règle UX : ADR-005 PMSL-Arch (blob \`4017615213eea812b8864a221a3bb4babe9ee2bf\`),
 \`docs/notes-ux-policy.md\` depuis PR #29 ; deux lignes, densité
 productive, pas de dashboard, labels et focus, aucun contrôle tronqué.
+
+## Calculatrice scientifique native C11 (lot de continuation)
+
+Le moteur \`pmkb_calculator.c\` analyse les expressions sans \`eval\`,
+sans réseau et sans locale imposée. Il prend en charge \`+\`, \`-\`,
+\`*\`, \`/\`, parenthèses, \`^\` (associativité droite), pourcentage
+postfixe, \`sin/cos/tan\`, \`asin/acos/atan\`, \`log/ln\`, \`sqrt/√\`,
+\`abs\`, \`π\`, \`e\` et \`Ans\`. L'angle est en DEG ou RAD suivant le
+clavier partagé. Maximum 192 unités de texte, 128 jetons et 48 niveaux
+d'imbrication. Erreurs de syntaxe, domaine, division par zéro,
+dépassement numérique et dépassement de limites distinctes.
+
+\`pmkb_calculator_ui.c\` réutilise **PMKBKeyboard** et **PMKBSurface** :
+expression éditable, pavé tactile à six colonnes, résultat, mémoire Ans,
+C (effacer la saisie sans perdre Ans), AC (effacer également Ans et
+l'historique) et huit calculs conservés **en RAM uniquement**.
+La touche = déclenche réellement l'évaluation C. Les entrées tactiles
+ou les événements génériques clavier physique passent par le même
+éditeur UTF-8 que Notes. Aucune boucle de rendu ni nouveau service.
+
+Le simulateur hôte produit des pixels et des rectangles modifiés ;
+l'affichage ASCII de diagnostic ne représente pas fidèlement les glyphes
+π/√ : les expressions sont cependant conservées et évaluées en UTF-8.
+La double précision \`double\` et le rendu à 12 chiffres significatifs
+ne conviennent pas à des calculs exigeant une précision arbitraire.
+
+Tests indépendants \`pmkb-calculator-tests\` : expressions de référence,
+règles de priorité, DEG/RAD, domaines, limites, attaques syntaxiques,
+saisie tactile simulée, bouton =, erreurs sans altérer Ans, C/AC,
+rendu incrémental et formats 320×480 / 1080×1440. Voir \`make test\`.
