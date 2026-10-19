@@ -44,7 +44,7 @@ static void draw_second(PMKBUI *ui){
         PMKBNote *n=selected(ui);
         if(!n)return;
         pmkb_surface_text(s,7,61,"TITRE",0,64);
-        pmkb_surface_text(s,70,61,n->title.data,0,s->width-172);
+        pmkb_surface_text_box(s,70,61,n->title.data,0,s->width-172,28);
         pmkb_surface_text(s,s->width-84,61,"TEXTE",0,78);
         if(ui->focus==PMKB_FOCUS_TITLE)
             border(s,(PMKBRect){65,50,s->width-150,44},0);
@@ -74,7 +74,8 @@ static void draw_body(PMKBUI *ui){
     PMKBNote *n=selected(ui);
     if(!n)return;
     int width=s->width-24;
-    pmkb_surface_text(s,12,BODY_START+12,n->body.data,0,width);
+    pmkb_surface_text_box(s,12,BODY_START+12,n->body.data,0,
+                          width,bottom-BODY_START-18);
     if(ui->focus==PMKB_FOCUS_BODY && bottom-BODY_START>=10)
         border(s,(PMKBRect){3,BODY_START+2,s->width-6,bottom-BODY_START-4},135);
 }

@@ -93,6 +93,11 @@ void pmkb_surface_free(PMKBSurface *s);
 void pmkb_surface_rect(PMKBSurface *s, PMKBRect rect, uint8_t shade);
 void pmkb_surface_text(PMKBSurface *s, int x, int y,
                        const char *utf8, uint8_t shade, int max_width);
+/* Host glyphs: a deliberately bounded repertoire, not a system font. */
+bool pmkb_surface_glyph_supported(uint32_t scalar);
+void pmkb_surface_text_box(PMKBSurface *s, int x, int y,
+                            const char *utf8, uint8_t shade,
+                            int max_width, int max_height);
 bool pmkb_surface_take_dirty(PMKBSurface *s, PMKBRect *out);
 /* PMKB-HAL seam: pass a dirty grayscale rectangle, never directly open devices.
  * No refresh is acknowledged until the caller's backend reports success. */

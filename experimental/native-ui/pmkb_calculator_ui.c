@@ -20,22 +20,30 @@ static void outline(PMKBSurface *s,PMKBRect r){
     pmkb_surface_rect(s,(PMKBRect){r.x,r.y,2,r.h},0);
     pmkb_surface_rect(s,(PMKBRect){r.x+r.w-2,r.y,2,r.h},0);
 }
-/* Host ASCII renderer has no French glyphs yet. Only the display preview
- * substitutes Unicode codepoints: the UTF-8 expression remains untouched. */
-static void preview(const char *input,char *out,size_t capacity){
-    if(!out||capacity<2)return;
-    size_t length=0;
-    for(const unsigned char *p=(const unsigned char*)input;*p;p++){
-        if((*p&0xc0u)==0x80u)continue;
-        char c=(*p>=32&&*p<127)?(char)*p:'?';
-        if(length>=capacity-1){
-            memmove(out,out+1,capacity-2);
-            length=capacity-2;
+/* Show the last Unicode codepoints that fit in one input row, without
+ * splitting a multi-byte scalar or replacing pi/root with '?' glyphs. */
+static void visible_tail(const char *source,char *output,size_t capacity,
+                         size_t max_glyphs){
+    if(!source||!output||capacity<2)return;
+    size_t bytes=strlen(source),count=0,start=0;
+    for(size_t i=0;i<bytes;i++)
+        if(((unsigned char)source[i]&0xc0u)!=0x80u)count++;
+    for(size_t i=0;i<bytes && count>max_glyphs;i++){
+        if(((unsigned char)source[i]&0xc0u)!=0x80u){
+            start=i;
+            count--;
         }
-        out[length++]=c;
     }
-    out[length]=0;
+    while(start<bytes && ((unsigned char)source[start]&0xc0u)==0x80u)start++;
+    /* Cap the actual output buffer without cutting a Unicode codepoint. */
+    while(bytes-start>=capacity){
+        start++;
+        while(start<bytes&&((unsigned char)source[start]&0xc0u)==0x80u)start++;
+    }
+    memcpy(output,source+start,bytes-start);
+    output[bytes-start]=0;
 }
+
 static void draw_header(PMKBCalcUI *ui){
     PMKBSurface *s=&ui->screen;
     pmkb_surface_rect(s,(PMKBRect){0,0,s->width,HEAD_H},235);
@@ -50,9 +58,11 @@ static void draw_expression(PMKBCalcUI *ui){
     PMKBSurface *s=&ui->screen;
     pmkb_surface_rect(s,(PMKBRect){0,HEAD_H,s->width,INPUT_H},255);
     outline(s,(PMKBRect){0,HEAD_H,s->width,INPUT_H});
-    char text[35]={0};
-    preview(ui->expression.data?ui->expression.data:"",text,sizeof(text));
-    pmkb_surface_text(s,8,HEAD_H+15,text,0,s->width-16);
+    char text[256]={0};
+    size_t max_glyphs=(size_t)((s->width-16)/(s->width>=680?18:12));
+    visible_tail(ui->expression.data?ui->expression.data:"",text,
+                 sizeof(text),max_glyphs);
+    pmkb_surface_text_box(s,8,HEAD_H+12,text,0,s->width-16,INPUT_H-16);
 }
 static void draw_result(PMKBCalcUI *ui){
     PMKBSurface *s=&ui->screen;
