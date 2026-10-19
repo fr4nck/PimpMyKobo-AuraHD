@@ -76,3 +76,22 @@ vues Notes. Aucun calcul n'est effectué dans la bibliothèque clavier.
 Ni le moteur ni l'interface n'écrivent sur la microSD. Il reste à
 qualifier la police native française, les rafraîchissements E-Ink et
 le tactile Aura HD ainsi que l'intégration au launcher.
+
+
+## Aperçu hôte V0 (après rendu UTF-8)
+
+La suite \`native_bridge_tests.c\` couvre le catalogue de lancement,
+le cycle de vie **une application active**, les notes non sauvegardées,
+la présentation HAL qui refuse l'accusé de réception après erreur, et
+les glyphes français/mathématiques des bitmaps de diagnostic.
+\`tools/render_host_previews.py\` produit des images PNG réelles à
+partir des pixels calculés par le C, aux tailles 320×480 et 1080×1440.
+Aucun navigateur ni bibliothèque graphique externe n'est nécessaire.
+
+L'interface de catalogue contient \`notes\`, \`calculator\` et
+\`store\` (ce dernier avec \`runnable=false\`). Le pont est indépendant
+de la PR #25, sans modification du launcher HTML/Lua et sans installer
+le catalogue dans un système de démarrage. Pour la Kobo, il manque
+encore une adaptation evdev/ZForce et MXCFB/EPDC confirmée sur banc.
+La police bitmap volontairement limitée devra être revue avant
+l'ergonomie définitive et les tests d'accessibilité.

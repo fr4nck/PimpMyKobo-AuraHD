@@ -133,3 +133,56 @@ Tests indépendants \`pmkb-calculator-tests\` : expressions de référence,
 règles de priorité, DEG/RAD, domaines, limites, attaques syntaxiques,
 saisie tactile simulée, bouton =, erreurs sans altérer Ans, C/AC,
 rendu incrémental et formats 320×480 / 1080×1440. Voir \`make test\`.
+
+
+## Rendu hôte vérifiable et pont PMKB Launcher / HAL
+
+\`pmkb_surface.c\` dessine maintenant une **petite fonte bitmap 5×10**
+directement sur un tampon gris : accents français courants (é, è, ê, à,
+ç, ù, etc.), lettres majuscules accentuées, π, √, ×, ÷, °,
+flèches et accents combinants les plus courants. La liste est bornée :
+\`pmkb_surface_glyph_supported()\` distingue les glyphes implémentés
+des caractères encore non couverts (emoji, autres écritures). Ce n'est
+pas un remplacement de LVGL ni un système typographique Unicode complet.
+\`pmkb_surface_text_box()\` limite la peinture au rectangle du champ
+et évite de recouvrir le clavier avec du texte trop long.
+
+Le pavé des simulations 1080×1440 utilise des rangées de 94 pixels pour
+ne pas traiter 44 pixels physiques comme 44 pixels CSS ; à 320×480 les
+rangées restent à 44 pixels. Sur grand écran, la calculatrice dessine
+son historique de session dans l'espace laissé libre au-dessus du
+clavier. Les tests conservent l'invariant **deux lignes en haut** et
+l'absence de boucle de rafraîchissement.
+
+Pour **produire six vraies images PNG issues du code C**, sans
+dépendance graphique téléchargée :
+
+~~~sh
+cd experimental/native-ui
+make
+make preview OUT=./host-previews
+~~~
+
+Les images générées sont : Notes, Calculatrice et planche de glyphes,
+chacune en 320×480 et 1080×1440. Le programme natif
+\`pmkb-host-preview\` produit un PGM P5 ; le script Python
+\`tools/render_host_previews.py\` valide dimensions/contraste/données,
+puis le convertit en PNG via la bibliothèque standard.
+En CI, les images sont produites uniquement dans un répertoire
+temporaire, vérifiées puis effacées. Il n'y a aucun accès réseau.
+Ces images **ne sont pas des captures de la liseuse**.
+
+\`pmkb_launcher_bridge.c\` fournit les identifiants stables
+\`notes\` / \`calculator\` / \`store\` pour le futur launcher natif,
+une seule application chargée à la fois, et une fonction commune de
+présentation qui relaie les rectangles modifiés à un callback PMKB-HAL.
+Le Store est **réservé, non implémenté**. Le pont ne modifie pas la
+PR #25 : son Launcher V0.6 reste un prototype hôte séparé.
+
+La fermeture de Notes contenant une note encore seulement en RAM est
+refusée (\`PMKB_UNSAVED\`) sauf décision explicite de perdre la session ;
+aucune fermeture silencieuse et aucune écriture sur P1/P2/P3.
+L'application Calculatrice peut être déchargée normalement et sa
+mémoire Ans est alors perdue. Tous les accès E-Ink, ZForce, frontlight
+et MXCFB restent **non implémentés** : le seul backend testé accuse
+réception des rectangles sur un mock sans périphérique.
