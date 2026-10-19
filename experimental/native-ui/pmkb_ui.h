@@ -15,7 +15,8 @@
 
 typedef enum {
     PMKB_OK=0, PMKB_INVALID=-1, PMKB_LIMIT=-2, PMKB_MEMORY=-3,
-    PMKB_NOT_FOUND=-4, PMKB_NO_CHANGE=-5, PMKB_EVALUATE=1
+    PMKB_NOT_FOUND=-4, PMKB_NO_CHANGE=-5, PMKB_UNSAVED=-6,
+    PMKB_EVALUATE=1
 } PMKBStatus;
 
 /* Cursors/selections are UTF-8 byte offsets at valid codepoint boundaries. */

@@ -44,7 +44,7 @@ static void draw_second(PMKBUI *ui){
         PMKBNote *n=selected(ui);
         if(!n)return;
         pmkb_surface_text(s,7,61,"TITRE",0,64);
-        pmkb_surface_text_box(s,70,61,n->title.data,0,s->width-172,28);
+        pmkb_surface_text_box(s,70,61,n->title.data,0,s->width-172,33);
         pmkb_surface_text(s,s->width-84,61,"TEXTE",0,78);
         if(ui->focus==PMKB_FOCUS_TITLE)
             border(s,(PMKBRect){65,50,s->width-150,44},0);
