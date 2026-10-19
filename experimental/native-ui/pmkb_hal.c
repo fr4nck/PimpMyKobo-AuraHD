@@ -38,7 +38,8 @@ static bool coordinates(const PMKBTouch *t,int *x,int *y){
 }
 static bool wandered(const PMKBTouch *t,int x,int y){
     int dx=x-t->down_x,dy=y-t->down_y;
-    if(dx<0)dx=-dx;if(dy<0)dy=-dy;
+    if(dx<0)dx=-dx;
+    if(dy<0)dy=-dy;
     return dx>t->config.tap_slop||dy>t->config.tap_slop;
 }
 PMKBStatus pmkb_touch_feed(PMKBTouch *t,int type,int code,int value,
