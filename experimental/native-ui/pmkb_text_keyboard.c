@@ -162,16 +162,71 @@ static const char *symbols[5][6]={
     {"<",">","=","+","-","*"},{"~","|","/","\\","^","%"},
     {";",":","'", "\"",",","."}
 };
+/* Compact labels for E-Ink. Insertions follow the parser in the browser
+ * calculator prototype; "=" and DEG/RAD are semantic actions, not text. */
+static const PMKBKey scientific[5][6]={
+    {
+        {PMKB_KEY_INSERT,"sin","sin(",1},
+        {PMKB_KEY_INSERT,"cos","cos(",1},
+        {PMKB_KEY_INSERT,"tan","tan(",1},
+        {PMKB_KEY_INSERT,"ln","ln(",1},
+        {PMKB_KEY_INSERT,"log","log(",1},
+        {PMKB_KEY_INSERT,"sqrt","sqrt(",1}
+    },{
+        {PMKB_KEY_INSERT,"7","7",1},{PMKB_KEY_INSERT,"8","8",1},
+        {PMKB_KEY_INSERT,"9","9",1},{PMKB_KEY_INSERT,"/","/",1},
+        {PMKB_KEY_INSERT,"(","(",1},{PMKB_KEY_INSERT,")",")",1}
+    },{
+        {PMKB_KEY_INSERT,"4","4",1},{PMKB_KEY_INSERT,"5","5",1},
+        {PMKB_KEY_INSERT,"6","6",1},{PMKB_KEY_INSERT,"*","*",1},
+        {PMKB_KEY_INSERT,"^","^",1},{PMKB_KEY_INSERT,"pi","\xcf\x80",1}
+    },{
+        {PMKB_KEY_INSERT,"1","1",1},{PMKB_KEY_INSERT,"2","2",1},
+        {PMKB_KEY_INSERT,"3","3",1},{PMKB_KEY_INSERT,"-","-",1},
+        {PMKB_KEY_INSERT,"%","%",1},{PMKB_KEY_INSERT,"e","e",1}
+    },{
+        {PMKB_KEY_INSERT,"0","0",1},{PMKB_KEY_INSERT,".",".",1},
+        {PMKB_KEY_INSERT,"Ans","Ans",1},{PMKB_KEY_INSERT,"+","+",1},
+        {PMKB_KEY_INSERT,"abs","abs(",1},{PMKB_KEY_ANGLE,"DEG",NULL,1}
+    }
+};
+static const PMKBKey scientific_inverse[3]={
+    {PMKB_KEY_INSERT,"asin","asin(",1},
+    {PMKB_KEY_INSERT,"acos","acos(",1},
+    {PMKB_KEY_INSERT,"atan","atan(",1}
+};
+static const PMKBKey scientific_actions[6]={
+    {PMKB_KEY_SHIFT,"INV",NULL,1},
+    {PMKB_KEY_MODE,"ABC",NULL,1},
+    {PMKB_KEY_CLEAR,"C",NULL,2},
+    {PMKB_KEY_CLEAR,"C",NULL,2},
+    {PMKB_KEY_BACKSPACE,"DEL",NULL,1},
+    {PMKB_KEY_EVALUATE,"=",NULL,1}
+};
+
 void pmkb_keyboard_open(PMKBKeyboard *kb,PMKBKeyboardPage page){
     if(!kb)return;
+    if((unsigned)page>(unsigned)PMKB_KB_SCIENTIFIC)return;
     kb->page=page;kb->shifted=false;kb->visible=true;
+    kb->degrees=true;
 }
 void pmkb_keyboard_close(PMKBKeyboard *kb){
     if(kb)kb->visible=false;
 }
 PMKBKey pmkb_keyboard_key(const PMKBKeyboard *kb,int row,int col){
     PMKBKey none={PMKB_KEY_HIDE,"",NULL,0};
-    if(!kb||row<0||row>=PMKB_KB_ROWS||col<0||col>=PMKB_KB_COLS)return none;
+    if(!kb||row<0||row>=PMKB_KB_ROWS||col<0||col>=PMKB_KB_COLS||
+       (unsigned)kb->page>(unsigned)PMKB_KB_SCIENTIFIC)return none;
+    if(kb->page==PMKB_KB_SCIENTIFIC){
+        if(row<5){
+            if(row==0&&col<3&&kb->shifted)return scientific_inverse[col];
+            PMKBKey key=scientific[row][col];
+            if(row==4&&col==5)key.label=kb->degrees?"DEG":"RAD";
+            return key;
+        }
+        if(row==5)return scientific_actions[col];
+        /* Row six uses the common navigation and close controls. */
+    }
     if(row<5){
         const char *v=kb->page==PMKB_KB_AZERTY?
             (kb->shifted?caps[row][col]:letters[row][col]):
@@ -205,6 +260,14 @@ PMKBStatus pmkb_keyboard_press(PMKBKeyboard *kb,PMKBText *target,
     PMKBStatus rc=PMKB_NO_CHANGE;
     switch(key.action){
     case PMKB_KEY_SHIFT:kb->shifted=!kb->shifted;return PMKB_OK;
+    case PMKB_KEY_ANGLE:
+        if(kb->page!=PMKB_KB_SCIENTIFIC)return PMKB_INVALID;
+        kb->degrees=!kb->degrees;return PMKB_OK;
+    case PMKB_KEY_CLEAR:
+        return kb->page==PMKB_KB_SCIENTIFIC?
+               pmkb_text_set(target,""):PMKB_INVALID;
+    case PMKB_KEY_EVALUATE:
+        return kb->page==PMKB_KB_SCIENTIFIC?PMKB_EVALUATE:PMKB_INVALID;
     case PMKB_KEY_MODE:
         kb->page=(kb->page==PMKB_KB_AZERTY)?PMKB_KB_NUMERIC:
                  (kb->page==PMKB_KB_NUMERIC)?PMKB_KB_SYMBOLS:PMKB_KB_AZERTY;

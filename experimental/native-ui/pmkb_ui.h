@@ -15,7 +15,7 @@
 
 typedef enum {
     PMKB_OK=0, PMKB_INVALID=-1, PMKB_LIMIT=-2, PMKB_MEMORY=-3,
-    PMKB_NOT_FOUND=-4, PMKB_NO_CHANGE=-5
+    PMKB_NOT_FOUND=-4, PMKB_NO_CHANGE=-5, PMKB_EVALUATE=1
 } PMKBStatus;
 
 /* Cursors/selections are UTF-8 byte offsets at valid codepoint boundaries. */
@@ -33,11 +33,14 @@ PMKBStatus pmkb_text_backspace(PMKBText *t);
 PMKBStatus pmkb_text_move(PMKBText *t, int direction);
 size_t pmkb_text_utf16_length(const PMKBText *t);
 
-typedef enum { PMKB_KB_AZERTY, PMKB_KB_NUMERIC, PMKB_KB_SYMBOLS } PMKBKeyboardPage;
+typedef enum {
+    PMKB_KB_AZERTY, PMKB_KB_NUMERIC, PMKB_KB_SYMBOLS, PMKB_KB_SCIENTIFIC
+} PMKBKeyboardPage;
 typedef enum {
     PMKB_KEY_INSERT, PMKB_KEY_SHIFT, PMKB_KEY_MODE, PMKB_KEY_SPACE,
     PMKB_KEY_BACKSPACE, PMKB_KEY_ENTER, PMKB_KEY_LEFT,
-    PMKB_KEY_RIGHT, PMKB_KEY_HIDE
+    PMKB_KEY_RIGHT, PMKB_KEY_HIDE,
+    PMKB_KEY_CLEAR, PMKB_KEY_ANGLE, PMKB_KEY_EVALUATE
 } PMKBKeyAction;
 typedef struct {
     PMKBKeyAction action;
@@ -48,10 +51,13 @@ typedef struct {
 typedef struct {
     PMKBKeyboardPage page;
     bool shifted, visible;
+    bool degrees;           /* DEG/RAD state, meaningful only in scientific page */
 } PMKBKeyboard;
 void pmkb_keyboard_open(PMKBKeyboard *kb, PMKBKeyboardPage page);
 void pmkb_keyboard_close(PMKBKeyboard *kb);
 PMKBKey pmkb_keyboard_key(const PMKBKeyboard *kb, int row, int col);
+/* PMKB_EVALUATE: the host calculator must evaluate the text; this API
+ * only edits an expression and NEVER executes mathematical expressions. */
 PMKBStatus pmkb_keyboard_press(PMKBKeyboard *kb, PMKBText *target,
                                 PMKBKey key, bool multiline);
 
