@@ -55,7 +55,8 @@ def main():
                 pw, ph, pixels = load_pgm(pgm)
                 assert (pw, ph) == (width, height)
                 assert min(pixels) == 0 and max(pixels) == 255
-                assert len(set(pixels)) >= 3
+                # Glyph reference is intentionally 1-bit: black and white only.
+                assert len(set(pixels)) >= (2 if mode == "glyphs" else 3)
                 assert sum(value < 30 for value in pixels) > width * 2
                 if mode != "glyphs":
                     # The bottom panel has black key borders on white background.
