@@ -18,12 +18,25 @@
   ]);
   // Only the six *existing* pictograms in the approved footer, in image order.
   const CONTROLS=Object.freeze(["wifi","battery","frontlight","contrast","refresh","sleep"]);
-  const BAR=Object.freeze({x:58,y:1325,w:965,h:66});
+  // The printed pictograms occupy 66 px; transparent hit targets extend into
+  // the unused margin below them without covering any approved tile artwork.
+  const PRINTED_BAR=Object.freeze({x:58,y:1325,w:965,h:66});
+  const BAR=Object.freeze({x:58,y:1317,w:965,h:113});
+  const AURA_HD_PPI=265;
   const ZONES=Object.freeze([
     {id:"wifi",x:0,w:201}, {id:"battery",x:201,w:149},
     {id:"frontlight",x:350,w:219}, {id:"contrast",x:569,w:205},
     {id:"refresh",x:774,w:101}, {id:"sleep",x:875,w:90}
   ]);
+  function mmFromPixels(px) {return px*25.4/AURA_HD_PPI;}
+  function systemHitRects() {
+    return ZONES.map(z=>({id:z.id,x:BAR.x+z.x,y:BAR.y,w:z.w,h:BAR.h}));
+  }
+  function tileKeyAction(key,origin) {
+    if(origin!=="screen"&&origin!=="tile") return null;
+    if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(key)) return "navigate";
+    return origin==="screen"&&key==="Enter" ? "activate" : null;
+  }
   const CONTROL_NAMES=Object.freeze({
     wifi:"Wi-Fi",battery:"Batterie",frontlight:"Éclairage",contrast:"Contraste",
     refresh:"Rafraîchir",sleep:"Veille"
@@ -196,7 +209,16 @@
       button.setAttribute("aria-label",CONTROL_NAMES[zone.id]+" (simulation)");
       button.style.left=(zone.x/BAR.w*100)+"%";
       button.style.width=(zone.w/BAR.w*100)+"%";
-      button.addEventListener("click",()=>message(quickAction(zone.id)));
+      button.addEventListener("click",()=>{
+        // The outlined target is the LAST SIMULATED request, not a real device state.
+        footer.querySelectorAll(".system-target").forEach(other=>{
+          const requested=other===button;
+          other.classList.toggle("requested",requested);
+          other.setAttribute("aria-label",CONTROL_NAMES[other.dataset.control]+
+            (requested?" (dernière demande simulée)":" (simulation)"));
+        });
+        message(quickAction(zone.id));
+      });
       footer.appendChild(button);
     }
     // Replace ONLY the illustrative value text/meters, not the footer pictograms.
@@ -248,25 +270,34 @@
       state=withSample(state,{frontlight:Number(lightInput.value)});renderTelemetry();
     });
     screen.addEventListener("keydown",event=>{
-      if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)) {
-        event.preventDefault();
-        const idx=TILES.findIndex(t=>t.id===selected);
-        const next=selectionIndex(idx,event.key);
+      const origin=event.target===screen ? "screen" :
+        (event.target.classList.contains("tile-target") ? "tile" : "other");
+      const action=tileKeyAction(event.key,origin);
+      if(!action) return; // Native Tab / Enter / Space on system controls.
+      event.preventDefault();
+      if(action==="navigate") {
+        const next=selectionIndex(TILES.findIndex(t=>t.id===selected),event.key);
         selected=TILES[next].id;
-        renderSelection();message({kind:"selected",id:selected});
-      } else if (event.key==="Enter" && event.target===screen) {
-        event.preventDefault();
+        renderSelection();
+        message({kind:"selected",id:selected});
+        tileButtons[next].focus();
+      } else {
         tapTile(selected||"books");
       }
     });
     document.getElementById("activate").addEventListener("click",()=>tapTile(selected||"books"));
     document.getElementById("reset").addEventListener("click",()=>{
       selected=null;renderSelection();selection.value="unknown";choosePreset();
+      footer.querySelectorAll(".system-target").forEach(button=>{
+        button.classList.remove("requested");
+        button.setAttribute("aria-label",CONTROL_NAMES[button.dataset.control]+" (simulation)");
+      });
     });
     renderSelection();
     choosePreset();
   }
-  const API={WIDTH,HEIGHT,PNG,TILES,CONTROLS,BAR,ZONES,defaults,withSample,labelFor,
+  const API={WIDTH,HEIGHT,PNG,TILES,CONTROLS,BAR,PRINTED_BAR,ZONES,AURA_HD_PPI,
+    mmFromPixels,systemHitRects,tileKeyAction,defaults,withSample,labelFor,
     tileAction,quickAction,tileAt,labelBand,bandNeedsInversion,tapSelection,selectionIndex};
   if(typeof module!=="undefined"&&module.exports)module.exports=API;
   if(root&&root.document)root.addEventListener("DOMContentLoaded",init);

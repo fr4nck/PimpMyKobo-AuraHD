@@ -96,3 +96,50 @@ test("keyboard navigation stays in approved 2x4 portrait grid",()=>{
   assert.equal(m.selectionIndex(5,"ArrowLeft"),4);
   assert.equal(m.selectionIndex(0,"End"),0);
 });
+
+test("footer targets meet the provisional physical touch dimensions",()=>{
+  assert.equal(m.AURA_HD_PPI,265);
+  assert.deepEqual(m.PRINTED_BAR,{x:58,y:1325,w:965,h:66});
+  assert.deepEqual(m.BAR,{x:58,y:1317,w:965,h:113});
+  assert.ok(m.mmFromPixels((66-4)/2)<4,"former two-row dock was under 4 mm high");
+  assert.ok(m.mmFromPixels(m.BAR.h)>=10);
+  assert.ok(m.BAR.y>Math.max(...m.TILES.map(t=>t.y+t.h)),"no artwork obscured");
+  assert.ok(m.BAR.y<=m.PRINTED_BAR.y);
+  assert.ok(m.BAR.y+m.BAR.h>=m.PRINTED_BAR.y+m.PRINTED_BAR.h);
+  assert.ok(m.BAR.y+m.BAR.h<=m.HEIGHT);
+  const rects=m.systemHitRects();
+  assert.deepEqual(rects.map(r=>r.id),m.CONTROLS);
+  rects.forEach((r,i)=>{
+    const z=m.ZONES[i];
+    assert.equal(r.x,m.BAR.x+z.x);
+    assert.equal(r.w,z.w);
+    assert.equal(r.y,m.BAR.y);
+    assert.equal(r.h,m.BAR.h);
+    assert.ok(m.mmFromPixels(r.w)>=8,r.id+" width >= 8 mm");
+    assert.ok(m.mmFromPixels(r.h)>=10,r.id+" height >= 10 mm");
+    if(i>0) assert.equal(rects[i-1].x+rects[i-1].w,r.x);
+  });
+});
+
+test("tile arrows do not steal keyboard input from system controls",()=>{
+  for(const key of ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"]) {
+    assert.equal(m.tileKeyAction(key,"screen"),"navigate");
+    assert.equal(m.tileKeyAction(key,"tile"),"navigate");
+    assert.equal(m.tileKeyAction(key,"other"),null);
+  }
+  assert.equal(m.tileKeyAction("Enter","screen"),"activate");
+  assert.equal(m.tileKeyAction("Enter","tile"),null);
+  assert.equal(m.tileKeyAction("Enter","other"),null);
+  assert.equal(m.tileKeyAction(" ","other"),null);
+  assert.equal(m.tileKeyAction("Tab","tile"),null);
+});
+
+test("visible black/white focus and last-request cues do not invert artwork",()=>{
+  const fs=require("node:fs"),path=require("node:path");
+  const html=fs.readFileSync(path.join(__dirname,"../experimental/launcher-v0/simulator.html"),"utf8");
+  assert.match(html,/\.tile-target:focus-visible \{ outline:4px dashed #111;/);
+  assert.match(html,/\.system-target\.requested \{ outline:4px solid #111;/);
+  assert.match(html,/\.readout \{[^}]*background:white; color:black;/);
+  assert.match(html,/touch-action:manipulation;/);
+  assert.doesNotMatch(html,/\.artwork\s*\{[^}]*filter:/);
+});

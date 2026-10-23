@@ -19,11 +19,14 @@
     /* Only a tightly cropped title ribbon uses inversion. It is hidden when not needed. */
     .label-band { position:absolute; display:none; background-repeat:no-repeat; pointer-events:none; }
     .label-band.inverted { display:block; filter:invert(1); }
+    .tile-target:focus-visible { outline:4px dashed #111; outline-offset:-5px; }
     .tile-target:focus-visible .label-band { outline:2px dashed #777; outline-offset:-2px; }
     /* The approved six pictograms stay exactly as printed in the unmodified source. */
     .status-bar { position:absolute; z-index:2; background:transparent; border:0; }
-    .system-target { position:absolute; top:0; height:100%; margin:0; padding:0; border:0; cursor:pointer; background:transparent; }
-    .system-target:hover, .system-target:focus-visible { outline:2px dotted #777; outline-offset:-3px; }
+    .system-target { position:absolute; top:0; height:100%; margin:0; padding:0; border:0; cursor:pointer; background:transparent; touch-action:manipulation; }
+    .system-target:hover, .system-target:focus-visible { outline:3px dashed #111; outline-offset:-5px; }
+    .system-target.requested { outline:4px solid #111; outline-offset:-6px; }
+    .system-target.requested:focus-visible { outline-style:dashed; }
     /* Only existing printed labels and meter glyphs are covered to show simulated values. */
     #status-readouts { position:absolute; inset:0; z-index:3; pointer-events:none; }
     .readout { position:absolute; display:flex; align-items:center; justify-content:center; background:white; color:black;
@@ -85,7 +88,7 @@
       <button id="reset" type="button">Réinitialiser</button>
     </div>
     <div id="event-log" class="message" role="status" aria-live="polite">Aucune action.</div>
-    <p class="notes">Premier appui n'importe où sur une vignette : son bandeau passe en noir/blanc. Second appui sur la même vignette : intention simulée. Autre vignette : ancien bandeau blanc, nouveau bandeau noir. Flèches pour sélectionner, Entrée pour confirmer. KOReader n'est jamais lancé depuis ce simulateur.</p>
+    <p class="notes">Premier appui sur une vignette : sélection du seul bandeau. Second appui : intention simulée. Les flèches déplacent la sélection entre vignettes et le focus clavier la suit. Tab permet d'atteindre les six commandes système ; Entrée ou Espace les simule sans toucher au matériel. La dernière demande système est encadrée, sans prétendre que son état a changé. Les cibles système transparentes s'étendent dans la marge sous les pictogrammes (simulation 1080 × 1440 à 265 ppp).</p>
   </aside>
 </main>
 <footer>Prototype hôte V0.6. Aucun filtre sur les illustrations, aucune réécriture des PNG approuvés, aucun accès au matériel Kobo ni au FIRST BOOT.</footer>

@@ -157,3 +157,22 @@ explorer.exe "$(wslpath -w experimental/launcher-v0/simulator.html)"
 ```
 
 Validation de l'hôte : `node --test tests/test_launcher_simulator.cjs` et `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`. **Aucune qualification tactile/e-ink réelle n'est revendiquée.**
+
+### V0.6 — ergonomie tactile du bandeau (simulation sur ordinateur)
+
+À **1080 × 1440, 265 ppp**, la bande V0.5 de 66 pixels (6,33 mm) était partagée en deux rangées utiles de 31 et 29 pixels environ (2,97 et 2,78 mm). Étendre les deux rangées sur la marge disponible laisserait des cibles d'environ 5 mm de hauteur. Une unique rangée alternant dock/système atteindrait environ 10 mm mais ajouterait un mode et réintroduirait des raccourcis d'applications redondants : **option non retenue** dans la V0.6.
+
+La V0.6 conserve exactement les six pictogrammes système imprimés, le dock supprimé et toutes les illustrations. Les zones tactiles **transparentes** couvrent désormais la marge libre de `y=1317` à `y=1430` (**113 px = 10,83 mm**). Le bas des huit vignettes est à `y=1311` : aucune scène n'est recouverte. Les largeurs sont inchangées :
+
+| Système | Largeur (px) | Largeur (mm) | Hauteur (mm) |
+| --- | ---: | ---: | ---: |
+| Wi-Fi | 201 | 19,27 | 10,83 |
+| Batterie | 149 | 14,28 | 10,83 |
+| Éclairage | 219 | 20,99 | 10,83 |
+| Contraste | 205 | 19,65 | 10,83 |
+| Rafraîchir | 101 | 9,68 | 10,83 |
+| Veille | 90 | 8,63 | 10,83 |
+
+Le seuil **8 mm × 10 mm** est un critère ergonomique de travail, pas une déclaration de conformité WCAG : les pixels CSS du navigateur ne sont pas des pixels physiques Kobo. Noir sur blanc (et inversement pour les bandeaux sélectionnés) : contrôle CSS seulement, sans mesure du contraste sur e-ink. Le dernier bouton système sollicité est entouré, sans prétendre que sa commande a été exécutée ; focus clavier visible et navigation par flèches limitée aux vignettes, Tab/Entrée/Espace natifs pour les six commandes.
+
+Contrôles automatisés de modèle et de provenance : `node --test tests/test_launcher_simulator.cjs`, `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`. Les SHA-256 des images sont vérifiés par la suite Python. **Toujours non qualifiés :** position tactile ZForce réelle, orientation, lisibilité sur Pearl e-ink, ghosting, rafraîchissements et latence ; aucun backend embarqué, FIRST BOOT ou partition modifié.
