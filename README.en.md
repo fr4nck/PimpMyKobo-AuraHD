@@ -222,17 +222,17 @@ A read-only tool does not make the host operating system unable to write to the 
 - [ ] Integrate KOReader
 - [ ] Test a fully liberated microSD image
 
-## E-ink launcher — V0.2 artwork, V0.4 preview and V0.5 dock
+## E-ink launcher — V0.2 artwork and corrected V0.6 host preview
 
 An isolated host-side Lua prototype implements menu navigation and SVG preview. The approved **V0.2 manga/pixel-art design** and its graphic assets are now committed. **16 grayscale levels (4-bit indexed PNG, 250,757 bytes)** are the preferred starting point for future tests; the original RGB artwork is preserved unchanged.
 
-- [Lua prototype, V0.4/V0.5 and launcher README](experimental/launcher-v0/README.md).
-- [**Open the V0.4/V0.5 local host simulator**](experimental/launcher-v0/simulator.html): unchanged approved 16-gray PNG, eight clickable tiles, keyboard navigation and **simulated** system telemetry.
-- **V0.5:** configurable session-only app shortcut dock, distinct from seven system controls; light/dark focus states composed on-screen without editing approved PNG files.
+- [Lua prototype, V0.4–V0.6 history and launcher README](experimental/launcher-v0/README.md).
+- [**Open the corrected V0.6 local simulator**](experimental/launcher-v0/simulator.html): approved 16-gray PNG, eight full-tile touch targets (photo + title), and **simulated** system telemetry.
+- **V0.6:** removes the redundant app dock and all artwork inversion. **Only the printed title band** changes from white/black to black/white on selection (including Books, white initially). First tap selects, second tap confirms an inert action. Bottom strip uses only the **six existing system pictograms**.
 - [Approved V0.2 assets (original, 16-gray, 4-gray, 1-bit, comparison and manifest)](experimental/launcher-v0/assets/v02/).
 - [Compression measurements and qualification limits (French)](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
 
-**No graphical launcher is qualified on the real Kobo.** All Wi-Fi/battery values are illustrative. KOReader remains an inert `open_reader` intent, not an executable launch. Dock/system buttons cannot change hardware; approved artwork, P1/P2/P3 and FIRST BOOT remain untouched.
+**No graphical launcher is qualified on the real Kobo.** All Wi-Fi/battery values are illustrative. KOReader remains an inert `open_reader` intent, not an executable launch. System controls cannot change hardware; approved artwork, P1/P2/P3 and FIRST BOOT remain untouched.
 
 ## Documentation
 

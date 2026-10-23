@@ -125,7 +125,7 @@ Le fichier local ouvre le navigateur Windows. En cas de restrictions locales sur
 
 Tests : `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v` et `node --test tests/test_launcher_simulator.cjs`; CI Python multi-OS et Node dans un seul job Linux. La vérification tactile réelle de l'Aura HD reste **UNQUALIFIED**.
 
-## V0.5 — dock applicatif et états clair/sombre (simulation)
+## V0.5 — dock applicatif et états clair/sombre (historique : rejeté, remplacé par V0.6)
 
 - Le **dock de lancement rapide** est rétabli en haut du bandeau inférieur, séparé de la **barre système** sur la seconde ligne. Le dock présente des icônes vectorielles monochromes compactes ; les contrôles système affichent toujours les données fictives. Cette implantation provisoire partage la hauteur de 66 pixels de la maquette (1080 × 1440) : **taille réelle des cibles tactiles à requalifier sur la liseuse**.
 - Favoris par défaut : **Livres, Notes, Recettes, Web**. Dans le simulateur, l'utilisateur peut choisir **1 à 5 favoris** parmi les huit rubriques, sans compte, accès disque, ni persistance entre sessions.
@@ -135,3 +135,44 @@ Tests : `python -m unittest discover -s tests -p test_launcher_simulator_assets.
 - Contrôles automatiques : `node --test tests/test_launcher_simulator.cjs` et `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`, plus CI générale. L'ouverture et l'aspect sous navigateur PC restent à contrôler visuellement.
 
 **Aucune modification des illustrations V0.2, des partitions Kobo, de FIRST BOOT, de `rcS` ou de `pmkb-reader`.**
+
+## V0.6 — rubans de texte seuls et grandes surfaces tactiles
+
+**Cette section remplace la présentation V0.5 ci-dessus.** Le dock de favoris a été retiré : il dupliquait les huit entrées principales. Le bandeau inférieur conserve **exactement les six pictogrammes préexistants dans le PNG validé** (Wi-Fi, batterie/charge, frontlight, contraste, rafraîchissement, veille), sans boutons supplémentaires. Les données simulées remplacent uniquement les inscriptions / petites jauges anciennes et jamais les pictogrammes.
+
+- **Toute la vignette est un bouton** : l'illustration et le bandeau textuel partagent la même surface de contact.
+- **Aucune sélection initiale.** Tous les rubans sont blancs avec graphismes/texte noirs au lancement, y compris le ruban Livres (initialement noir dans le PNG).
+- **Premier appui** sur la vignette : son bandeau devient noir et son texte blanc. **Second appui** sur la même vignette : `intent/open_reader` inerte pour Livres, `unavailable` pour les autres. Appuyer sur une autre case restaure le blanc sur l'ancienne sélection.
+- **Illustrations inchangées à l'écran et sur disque** : ni filtre, ni inversion, ni teinte, ni retouche. Le seul filtre CSS `invert(1)` s'applique à une **copie recadrée exclusivement au bandeau de texte** de chaque case, reconstruite depuis le PNG 16 gris approuvé. Les pictogrammes décoratifs appartenant au ruban suivent sa palette ; les photos au-dessus et les icônes système en bas ne changent jamais.
+- La zone tactile et le ruban de chaque case sont décrits séparément dans `simulator.js` (`TILES`, `labelBand`, `tileAt`, `tapSelection`), avec tests Node/Python. Dans cette simulation portrait 1080 × 1440, les emplacements des rubans sont mesurés sur la maquette ; **leur alignement visuel reste à vérifier dans un navigateur PC**.
+- Les six boutons système sont de simples cibles transparentes sur les pictogrammes imprimés : aucune action réelle. Le Wi-Fi, la batterie, l'éclairage et le contraste sont des **scénarios simulés**, pas des mesures.
+- Les graphismes sources V0.2 et leurs variantes indexées restent conservés sans modification et contrôlés par SHA-256 ; aucune opération réseau, de disque Kobo, de FIRST BOOT, de `rcS`, de `pmkb-reader` ni de P1/P2/P3.
+
+Ouvrir depuis **Debian WSL**, à la racine du dépôt, après mise à jour de `main` :
+
+```bash
+cd /home/Deniel/pmkb-test || exit 1
+git switch main && git pull --ff-only origin main
+explorer.exe "$(wslpath -w experimental/launcher-v0/simulator.html)"
+```
+
+Validation de l'hôte : `node --test tests/test_launcher_simulator.cjs` et `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`. **Aucune qualification tactile/e-ink réelle n'est revendiquée.**
+
+### V0.6 — ergonomie tactile du bandeau (simulation sur ordinateur)
+
+À **1080 × 1440, 265 ppp**, la bande V0.5 de 66 pixels (6,33 mm) était partagée en deux rangées utiles de 31 et 29 pixels environ (2,97 et 2,78 mm). Étendre les deux rangées sur la marge disponible laisserait des cibles d'environ 5 mm de hauteur. Une unique rangée alternant dock/système atteindrait environ 10 mm mais ajouterait un mode et réintroduirait des raccourcis d'applications redondants : **option non retenue** dans la V0.6.
+
+La V0.6 conserve exactement les six pictogrammes système imprimés, le dock supprimé et toutes les illustrations. Les zones tactiles **transparentes** couvrent désormais la marge libre de `y=1317` à `y=1430` (**113 px = 10,83 mm**). Le bas des huit vignettes est à `y=1311` : aucune scène n'est recouverte. Les largeurs sont inchangées :
+
+| Système | Largeur (px) | Largeur (mm) | Hauteur (mm) |
+| --- | ---: | ---: | ---: |
+| Wi-Fi | 201 | 19,27 | 10,83 |
+| Batterie | 149 | 14,28 | 10,83 |
+| Éclairage | 219 | 20,99 | 10,83 |
+| Contraste | 205 | 19,65 | 10,83 |
+| Rafraîchir | 101 | 9,68 | 10,83 |
+| Veille | 90 | 8,63 | 10,83 |
+
+Le seuil **8 mm × 10 mm** est un critère ergonomique de travail, pas une déclaration de conformité WCAG : les pixels CSS du navigateur ne sont pas des pixels physiques Kobo. Noir sur blanc (et inversement pour les bandeaux sélectionnés) : contrôle CSS seulement, sans mesure du contraste sur e-ink. Le dernier bouton système sollicité est entouré, sans prétendre que sa commande a été exécutée ; focus clavier visible et navigation par flèches limitée aux vignettes, Tab/Entrée/Espace natifs pour les six commandes.
+
+Contrôles automatisés de modèle et de provenance : `node --test tests/test_launcher_simulator.cjs`, `python -m unittest discover -s tests -p test_launcher_simulator_assets.py -v`. Les SHA-256 des images sont vérifiés par la suite Python. **Toujours non qualifiés :** position tactile ZForce réelle, orientation, lisibilité sur Pearl e-ink, ghosting, rafraîchissements et latence ; aucun backend embarqué, FIRST BOOT ou partition modifié.
