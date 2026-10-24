@@ -6,6 +6,12 @@ Snapshot: 3 October 2026, `feat/rebuild-rootfs-spec`. Implemented code is distin
 
 This roadmap keeps the project focused on one principle: **preserve first, modify only after the original device can be recovered**.
 
+## External research and candidate components — 24 October 2026
+
+The [maintained research and external-source registry (French)](recherche-sources-fr.md) tracks Kobo/Netronix kernel sources, EPDC and ZForce drivers, E606C0 emulation, FBInk, ARM build tools, native Notes/terminal applications, SSH, dictionaries, and Calibre synchronization. New references, including [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), are classified as **INFO / INSPIRATION / CANDIDATE**, with research milestones R0–R7.
+
+FIRST BOOT without Nickel remains the hardware priority. Research can proceed independently but must not change the sealed candidate, PRE-P1, P2, or the SD cards. **A reviewed upstream source is not integrated code or tested hardware support**. Every candidate needs a scoped diff, license review, E606C0 compatibility checks and distinct qualification.
+
 ## 13 October 2026 addendum — experimental launcher (host only)
 
 | Milestone | Verified state | Remaining limit |
