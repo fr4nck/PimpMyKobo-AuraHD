@@ -95,6 +95,41 @@ Le bénéfice perçu après rétrogradation peut tenir au logiciel, au contenu
 de la bibliothèque et aux réglages ; ne pas l'attribuer au noyau sans
 mesures comparables.
 
+## F. Forums techniques et autres pistes historiques
+
+| Priorité | Source | Usages | Intérêt précis et vérifications requises |
+| --- | --- | --- | --- |
+| P1 | [MobileRead — List of Tweaks / Hacks / Mods (fil 217160)](https://www.mobileread.com/forums/showthread.php?t=217160) | INFO / INSPIRATION / INDEX | **Index communautaire Kobo lancé en juillet 2013 ; premier message édité au moins jusqu'au 17 avril 2022.** Recense anciens KoboLauncher (Notepad, calculatrice, jeux, USB network, Dropbear SSH/SFTP), KOReader, outils de compilation, modes d'écran, sauvegardes, dictionnaires, Calibre et retours microSD. **Historique multi-modèles, souvent dépendant de Nickel et de versions firmware anciennes ; aucun statut de compatibilité Aura HD / PMKB actuel.** Explorer les fils originaux plutôt que considérer l'index comme une procédure testée. |
+| P1 | [MobileRead — KoboLauncher et applications natives (fil 201632)](https://www.mobileread.com/forums/showthread.php?t=201632) | INFO / INSPIRATION | Exemple précoce de lanceur configurable de programmes C++/Qt, incluant Notepad, calculatrice et jeux et accès USB-network/SSH/SFTP. Comparer uniquement les contrats UX, processus et les besoins minimaux avec PMKB Launcher/PMKB-UI ; **pas de dépendance Nickel ou ancien Qt à importer**. |
+| P1 | [dbeinder/kobo-nightmode](https://github.com/dbeinder/kobo-nightmode) | INFO / CANDIDAT DE RECHERCHE | Inversion d'écran, gestion du rafraîchissement et **commande par appui long sur le bouton d'éclairage** ; le README cite explicitement l'Aura HD. Implémentation historique par interception `ioctl()` / `mmap()` avec `LD_PRELOAD` sur Nickel et modification de `rcS` : **ne pas intégrer ce mécanisme**. Étudier surtout le comportement EPDC, l'inversion, le ghosting et les seuils d'appui. |
+| P2 | [ah-/koboplugins](https://github.com/ah-/koboplugins) | INFO / INSPIRATION | **Ancienne génération « Kobo Tweaks » (2013), distincte de [redphx/kobo-tweaks](https://github.com/redphx/kobo-tweaks)**. Code de plugins Qt/QtScript et `kobotweaks.ini` ; dépendant de l'ancien environnement Nickel. Piste historique de configuration d'applications, pas d'intégration directe. |
+| P2 | [softapalvelin/kobo-grive-sync](https://github.com/softapalvelin/kobo-grive-sync) | INFO | Ancienne synchronisation Google Drive sur Kobo Touch. **README explicitement incompatible avec firmware 2.6.1 et suivants** : piste obsolète ; ne pas réutiliser les scripts, les anciens liens de téléchargement, ni le modèle d'authentification. |
+
+### Constats techniques à convertir en tests PMKB
+
+- **microSD : petits blocs avant la classe annoncée.** Le fil cite des mesures
+  et essais d'utilisateurs montrant qu'une carte plus rapide en séquentiel
+  peut être beaucoup plus lente sur les accès aléatoires. **Ce sont des
+  anecdotes et mesures sur des cartes/lecteurs différents, non un résultat
+  sur notre E606C0.** Construire un protocole de mesures lecture aléatoire
+  de petits blocs, débit séquentiel, démarrage à froid et ouverture des livres
+  pour la carte PMKB de test. N'effectuer **aucun benchmark destructif ou
+  écriture de charge sur l'originale** ; les tests d'écriture nécessitent une
+  cible sacrificielle choisie et une validation explicite.
+- **EPDC : latence / ghosting / fréquence de nettoyage.** Comparer rafraîchis-
+  sements partiels et complets, inversion clair/sombre, lisibilité après des
+  pages répétées et énergie. Les anciennes instructions `numPartialUpdatePageTurns`
+  visent Nickel : elles ne constituent pas un réglage PMKB ni une preuve de gain.
+- **Boot sans Nickel : bilan des composants requis.** Les essais KOReader
+  historiques signalaient alors des manques de veille et de gestion de lumière.
+  Ils ne décrivent **pas** l'état de KOReader v2026.07.1 ni de notre P1 scellée :
+  mesurer ces fonctions sur le FIRST BOOT, indépendamment de l'ancien forum.
+- **Launcher et services :** comparer un lancement d'application unique,
+  sortie propre, clavier, menus jeux/Notes/calculatrice et SSH/SFTP facultatifs.
+  Ne pas réutiliser les scripts `KoboRoot.tgz`, hooks d'installation Nickel
+  ou commandes de modification de `upgrade-wifi.sh` / firmware citées dans ce
+  fil ; elles ne respectent pas notre contrat de sauvegarde immuable.
+
 ## Feuille de route de recherche — tâches et critères de sortie
 
 | Ordre | Recherche | Travail hors matériel | Sortie attendue / décision |
@@ -107,7 +142,7 @@ mesures comparables.
 | **R5** | **Réseau et sécurité mesurée** | Examiner Dropbear, USB-OTG et sync facultative ; qualifier les CVE applicables au noyau 2.6.35.3, éventuels backports, permissions et services. | SSH à la demande, idéalement par clés ; éviter mot de passe root partagé, Telnet ouvert en permanence et dépendances gourmandes ; profil connecté examiné séparément. |
 | **R6** | **Veille communautaire utile** | À chaque découverte : ajouter URL, cible, provenance, statut, licence à contrôler, hypothèse utile et prochaine action dans **ce registre**. | Aucune piste perdue et aucune adoption automatique ; revue par priorité et mesure du gain réel plutôt que collection de dépôts. |
 | **R7** | **Dictionnaires et bibliothèque sans Nickel** | Examiner formats StarDict pour KOReader, licences/langues, tailles et indexation ; étudier les flux Calibre (`Kobo-UNCaGED` comme référence, pas composant installable). | Catalogues et métadonnées optionnels, import hors P1 système, consommation mesurée ; intégration dépendante de Nickel écartée. |
-| **R8** | **Réactivité, ergonomie et initialisation sans Nickel** | Comparer en lecture seule les chemins de démarrage et les ajustements du lecteur ; concevoir des métriques de changement de page, double-appui tactile, veille et reprise, RAM et temps de boot. Les témoignages Aura HD de 2024/2025 servent d'hypothèses. | Protocole de benchmark reproductible ; aucun gain attribué au noyau sans mesure, aucune rétrogradation du FIRST BOOT. |
+| **R8** | **Réactivité, stockage et initialisation sans Nickel** | Comparer en lecture seule les chemins de démarrage et les ajustements du lecteur ; métriques changement de page, double-appui tactile, veille, RAM et boot. Ajouter tests **lecture aléatoire petits blocs vs débit séquentiel microSD** et compromis rafraîchissements partiels/complets/ghosting inspirés du forum MobileRead ; privilégier des tests hôte et ne pas lancer d'écritures sans autorisation explicite. | Protocole de benchmark reproductible Aura HD, comparaison carte de test et paramètres E-Ink, avec contrôles PASS/FAIL et mesures ; aucune conclusion matérielle à partir d'un témoignage, aucune altération de la carte donneuse ni du FIRST BOOT. |
 | **R9** | **Widgets graphiques frugaux** | Étudier `redphx/kobo-tweaks` : widgets d'heure/batterie/progression, configuration INI bornée, rafraîchissements déclenchés par changement d'état, arrêt du timer si masqué, densité des barres ; comparer avec le launcher et la HAL PMKB-UI. | Spécification de widgets **sans Nickel**, budget rafraîchissement/RAM, tests hôte de transitions et stabilité ; refuser l'intégration directe de NickelHook/Qt5Widgets. |
 
 ### Règles de reprise de code et de qualification
