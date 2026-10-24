@@ -30,6 +30,8 @@ Les scripts sont dans [`../tools/`](../tools/).
 
 [Roadmap et état de qualification](ROADMAP.fr.md).
 
+[Registre permanent de recherche et des sources externes Kobo/PMKB](recherche-sources-fr.md) — projets vérifiés, informations, inspirations, candidats à intégrer, licences et priorités R0–R7.
+
 - `inspect-aura-hd.py` : identification et cartographie d'une microSD complète ;
 - `verify-recovery.py` : validation du recovery, des archives usine et des fichiers E606C0 ;
 - [`backup-aura-hd.py`](backup-aura-hd-fr.md) : sauvegarde vérifiée par SHA-256 d'une Aura HD E606C0 confirmée, vers un dossier explicitement fourni ;
