@@ -130,6 +130,39 @@ mesures comparables.
   ou commandes de modification de `upgrade-wifi.sh` / firmware citées dans ce
   fil ; elles ne respectent pas notre contrat de sauvegarde immuable.
 
+## G. Veille MobileRead — communauté Kobo et systèmes alternatifs (24 octobre 2026)
+
+| Priorité | Source | Usages | Intérêt précis et vérifications requises |
+| --- | --- | --- | --- |
+| P1 | [MobileRead — Kobo Reader (forum 223)](https://www.mobileread.com/forums/forumdisplay.php?f=223) | INFO / VEILLE | **Forum général de la communauté Kobo** : firmwares, incidents et retours d'expérience, microSD, Calibre, dictionnaires, lecteurs alternatifs. Source vivante : chaque observation doit être remontée à son fil, à une date et au modèle exact ; **aucune affirmation communautaire ne qualifie notre matériel**. |
+| **P0** | [MobileRead — Kobo Developer's Corner (forum 247)](https://www.mobileread.com/forums/forumdisplay.php?f=247) | INFO / VEILLE / SOURCES | **Sous-forum spécialisé en développement et modifications matérielles/logicielles Kobo**. Index vivant des fils noyau/USB, microSD, init, émulation, lecteurs alternatifs. À consulter avant de redévelopper une fonction ; filtrer les sujets **Aura HD / dragon / E606C0 / i.MX507**. |
+| **P0** | [MobileRead — kos, un système minimal pour KOReader (fil 375221)](https://www.mobileread.com/forums/showthread.php?t=375221) | INFO / INSPIRATION / CANDIDAT D'ÉTUDE | Présenté en **septembre 2026** : système autonome remplaçant l'OS Kobo et lançant directement KOReader. **Support revendiqué : Clara Colour uniquement** ; aucun support Aura HD ni compatibilité i.MX507 démontrés. Étudier sa séparation kernel/rootfs, sa fabrication, ses contrôles d'intégrité et récupération. **Ne jamais appliquer son installateur : les instructions modifient des partitions critiques**, et sa chaîne de boot est différente. |
+| P1 | [koreader-os — rootfs, builder, installer](https://github.com/koreader-os) | INFO / CANDIDAT D'ÉTUDE | Organisation source de `kos`, dépôts [rootfs](https://github.com/koreader-os/rootfs), [builder](https://github.com/koreader-os/builder) et [installer](https://github.com/koreader-os/installer) accessibles ; le README d'`installer` renvoie au fil MobileRead. Comparer les scripts/outils de fabrication d'un OS compact, sans exécuter de script tiers ni télécharger de firmware. **Pas d'intégration directe sur E606C0**. |
+| P1 | [MobileRead — InkBox / Quill OS (fil 337972)](https://www.mobileread.com/forums/showthread.php?t=337972) — [Quill-OS](https://github.com/Quill-OS) | INFO / INSPIRATION | Remplacement de l'environnement Kobo par une pile libre fondée sur **Alpine / Buildroot et Qt5**, avec diagnostic/recovery, applications, Wi-Fi, veille et mises à jour. Les modèles listés dans le fil **n'incluent pas l'Aura HD**. **Plus lourd qu'une solution minimaliste PMKB** ; comparer les contrats d'initialisation, diagnostic et rollback, pas copier ses images ou imposer Qt. |
+| P1 | [Quill-OS/inkbox-os-init](https://github.com/Quill-OS/inkbox-os-init) — [Quill-OS/imgtool](https://github.com/Quill-OS/imgtool) | INFO / CANDIDAT D'ÉTUDE | Init C compilé statiquement selon le README ; outil de génération d'image reproductible, nécessitant notamment Docker, `nbd` et des droits élevés. Sources d'inspiration pour l'init frugal, la signature/contrôle d'image et la reproductibilité, **sans reprendre les commandes privilégiées ni les partitions de ces autres Kobo**. |
+| P1 | [MobileRead — Adding alternative readers (fil 226456)](https://www.mobileread.com/forums/showthread.php?t=226456) | INFO / INSPIRATION | Historique KOReader, Kobo Start Menu, fmon et autres lecteurs ; les instructions classiques passent par les images traitées par Nickel et `KoboRoot.tgz`. Identifier les fonctions que notre launcher doit gérer **sans ces dépendances**. |
+| P1 | [MobileRead — Terminal emulator for Kobo (fil 371768)](https://www.mobileread.com/forums/showthread.php?t=371768) — [OGKevin/cadmus](https://github.com/OGKevin/cadmus) | INFO / INSPIRATION | Discussions de janvier 2026 sur terminal **local avec clavier à l'écran**, InkVT et Cadmus (fork de Plato). Des démos de terminal y sont mentionnées, **sans preuve d'une livraison sur Aura HD**. À relier au clavier commun PMKB et à un terminal natif hors réseau. |
+| P1 | [MobileRead — Index of Custom Dictionaries (fil 232883)](https://www.mobileread.com/forums/showthread.php?t=232883) — [pettarin/penelope](https://github.com/pettarin/penelope) | INFO / INSPIRATION | Index multilingue et convertisseur de dictionnaires au **format Kobo**. Vérifier **formats attendus de KOReader (dont StarDict)**, langue, licences par dictionnaire et absence de paquet volumineux dans P1 ; ne pas présumer de la compatibilité directe avec notre lecteur. |
+| P2 | [MobileRead — Recovery après mise à jour ratée (fil 369653)](https://www.mobileread.com/forums/showthread.php?t=369653) | INFO / CONTRE-EXEMPLE | Procédure d'août 2025 écrite pour **Aura Edition 2 N236**, avec réinitialisation usine ; **N236 ≠ Aura HD N204**, et un reset peut réécrire nos partitions. Documenter comme anti-pattern pour notre chemin « donneuse immuable → nouvelle microSD », **jamais comme recette à appliquer**. |
+| P2 | [MobileRead — Kobalt, lecteur alternatif (fil 375691)](https://www.mobileread.com/forums/showthread.php?t=375691) | VEILLE / À VÉRIFIER | Sujet ouvert en octobre 2026 ; sa description détaillée **n'a pas pu être vérifiée** dans cette revue. Ne tirer aucune conclusion sur sa compatibilité, sa licence ou sa consommation tant que le fil et la source ne sont pas relus. |
+
+### Point d'attention : projets très proches, matériel différent
+
+`kos` constitue une **preuve de concept intéressante** de l'architecture
+« Linux minimal → KOReader » sur **Clara Colour**, et Quill OS documente
+un OS alternatif complet sur d'autres Kobo. Cela **ne démontre pas**
+un FIRST BOOT PMKB sur E606C0 ni la disponibilité de pilotes EPDC/ZForce
+équivalents. Les méthodes de récupération et mises à jour peuvent être très
+dépendantes du bootloader : **aucune commande d'installateur tiers ou de reset
+usine n'est autorisée sur la carte originale ou notre P1 scellée**.
+
+Réutiliser, si utile, des **idées et des contrats techniques** : init minimal,
+fabrication de rootfs, mesures RAM/binaire, vérification d'intégrité, diagnostic,
+choix d'un système alternatif, reprise d'une application après veille,
+rollback et bibliothèque de lecteurs. Pour chaque reprise effective de code :
+diff ciblé, attribution, licence, compatibilité armv7/libc/noyau,
+tests hôte, puis essais physiques séparément autorisés.
+
 ## Feuille de route de recherche — tâches et critères de sortie
 
 | Ordre | Recherche | Travail hors matériel | Sortie attendue / décision |
@@ -144,6 +177,7 @@ mesures comparables.
 | **R7** | **Dictionnaires et bibliothèque sans Nickel** | Examiner formats StarDict pour KOReader, licences/langues, tailles et indexation ; étudier les flux Calibre (`Kobo-UNCaGED` comme référence, pas composant installable). | Catalogues et métadonnées optionnels, import hors P1 système, consommation mesurée ; intégration dépendante de Nickel écartée. |
 | **R8** | **Réactivité, stockage et initialisation sans Nickel** | Comparer en lecture seule les chemins de démarrage et les ajustements du lecteur ; métriques changement de page, double-appui tactile, veille, RAM et boot. Ajouter tests **lecture aléatoire petits blocs vs débit séquentiel microSD** et compromis rafraîchissements partiels/complets/ghosting inspirés du forum MobileRead ; privilégier des tests hôte et ne pas lancer d'écritures sans autorisation explicite. | Protocole de benchmark reproductible Aura HD, comparaison carte de test et paramètres E-Ink, avec contrôles PASS/FAIL et mesures ; aucune conclusion matérielle à partir d'un témoignage, aucune altération de la carte donneuse ni du FIRST BOOT. |
 | **R9** | **Widgets graphiques frugaux** | Étudier `redphx/kobo-tweaks` : widgets d'heure/batterie/progression, configuration INI bornée, rafraîchissements déclenchés par changement d'état, arrêt du timer si masqué, densité des barres ; comparer avec le launcher et la HAL PMKB-UI. | Spécification de widgets **sans Nickel**, budget rafraîchissement/RAM, tests hôte de transitions et stabilité ; refuser l'intégration directe de NickelHook/Qt5Widgets. |
+| **R10** | **Comparatif OS minimal sans Nickel et récupération** | Étudier `kos` (Clara Colour uniquement) et `Quill OS` (autres modèles) : composition du rootfs, taille binaire, budget RAM, init, modules noyau, intégrité/signature, mise à jour et rollback. Comparer au candidat scellé PMKB sans installer ni modifier quoi que ce soit. Croiser la documentation de `Kobo Developer's Corner` et les essais QEMU E606C0. | Tableau **PMKB / kos / Quill OS** : faisabilité et coût d'adaptation E606C0, licence et chaîne de confiance, méthode non destructive ; décision **retenir / adapter / écarter** étayée. FIRST BOOT physique reste prioritaire et `UNQUALIFIED`. |
 
 ### Règles de reprise de code et de qualification
 
