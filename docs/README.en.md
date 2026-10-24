@@ -30,7 +30,7 @@ Scripts live in [`../tools/`](../tools/).
 
 [Roadmap and qualification status](ROADMAP.md).
 
-[Permanent Kobo/PMKB research and external-source registry (French)](recherche-sources-fr.md) — verified projects, references, inspiration, candidates for adaptation, licensing and milestones R0–R7.
+[Permanent Kobo/PMKB research and external-source registry (French)](recherche-sources-fr.md) — verified projects, references, inspiration, candidates for adaptation, licensing and milestones R0–R9.
 
 - `inspect-aura-hd.py`: identify and map a complete Aura HD microSD or disk image;
 - `verify-recovery.py`: validate the recovery tree, factory archives and E606C0 files;
