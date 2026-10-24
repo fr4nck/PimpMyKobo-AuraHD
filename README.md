@@ -240,6 +240,7 @@ Un prototype Lua isolé sur PC fournit la navigation et un aperçu SVG ; la comp
 - [Version texte / Lynx du guide de démontage](docs/disassembly-lynx-fr.txt)
 - [Index de la documentation](docs/README.md)
 - [Roadmap et prochaines étapes](docs/ROADMAP.fr.md)
+- [Registre de recherche : sources externes, inspirations et candidats d'intégration](docs/recherche-sources-fr.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
 - [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
 - [Inspecteur Aura HD](docs/inspect-aura-hd-fr.md)
