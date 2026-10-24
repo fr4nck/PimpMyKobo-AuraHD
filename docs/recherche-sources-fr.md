@@ -31,6 +31,37 @@
 | P2 | [postmarketOS / pmaports](https://gitlab.com/postmarketOS/pmaports) — [portage Clara HD](https://gitlab.com/postmarketOS/pmaports/-/merge_requests/2334) | INFO / INSPIRATION | Techniques de portage E-Ink, extraction de waveform et intégration userspace ; **Clara HD i.MX6SLL ≠ Aura HD i.MX507**. Pas de transposition de pilotes sans preuve. |
 | P2 | [twhitehead/notes-kobohacking](https://github.com/twhitehead/notes-kobohacking) | INFO | Notes sur U-Boot, extraction du `uImage`, console série, recovery et USB, sur Kobo Aura/Glo. Les commandes d'écriture et manipulations MSP430 sont **des exemples historiques, jamais à exécuter directement**. |
 
+### Exploitation R1/R3 — 24 octobre 2026
+
+La première livraison de développement issue de ce corpus est documentée dans
+[l'audit noyau/ZForce et sa matrice de décisions](kernel-community-audit-2026-10-24-fr.md).
+Les révisions complètes et les blobs des **36 fichiers comparés** y sont conservés.
+Ce complément ne remplace ni R0–R10, ni les qualifications historiques.
+
+| Source / priorité | Composants effectivement comparés | Licence vérifiée / compatibilité | Utilisation et qualification |
+| --- | --- | --- | --- |
+| [pazos/linux-2.6.35.3-kobo](https://github.com/pazos/linux-2.6.35.3-kobo/tree/1f43a4a01a727a9b440f2e8830b67734b6373a10) — P0 | ZForce, EPDC/fake S1D/header, NTX/frontlight, MSP430, PM, MMC, USB | COPYING GPLv2 ; ZForce GPLv2, sources Freescale GPLv2+, header MXCFB LGPLv2.1+ ; support source HD identifié, binaire réel non identifié à cet arbre | RETENIR comme comparateur ; pas de nouveau noyau. Défauts de validation des trames à traiter séparément. |
+| [lgeek/linux-okreader](https://github.com/lgeek/linux-okreader/tree/2a4689f1c0d2608e555bd0b12c8da89ca4a98724) — P0 | Les mêmes neuf fichiers | Même cadre de licences ; ZForce fonctionnellement identique à pazos ; comportement HD non qualifié | Aucun gain tactile de ce fichier ; EPDC/MMC/NTX à tester par patch isolé. |
+| [giorgio130/multitouch](https://github.com/giorgio130/linux-2.6.35-kobo-multitouch/tree/b46a506b300e1eebc9bd1bf9c5369ae92fb7e200) — P0 | Les mêmes neuf fichiers, ZForce intégral | GPLv2 pour ZForce ; branche HD présente, aucun essai matériel PMKB | ÉCARTER l'import direct : ID négatif possible, compteur incrémenté sur MOVE, tailles/reset/timeout incohérents. RETENIR l'idée du multi-contact borné ; aucun code repris. |
+| [brunotl/kernel-kobo-mx50-ntx](https://github.com/brunotl/kernel-kobo-mx50-ntx/tree/884fec254ce71a11f7e71d2e88e751772ccd1bc3) — P1 | Les mêmes neuf fichiers | COPYING GPLv2 et notices individuelles ; branche résolution HD absente du ZForce examiné | ÉCARTER comme remplacement ZForce HD ; changements PMIC/alarme et suppression de gardes non repris. |
+| [FBInk](https://github.com/NiLuJe/FBInk/tree/886f25f13368859ad8a899b88d04c26e19cda32e) — P0 | fbink.c : refresh Kobo legacy, attente, mode FULL/PARTIAL, marqueurs, no_refresh et régions minces ; LICENSE | SPDX GPL-3.0-or-later ; chemin NTX ancien étudié, écran réel UNQUALIFIED | RETENIR les contrats déjà proches de la HAL PMKB ; pas de bibliothèque copiée/liée, pas de changement graphique spéculatif. |
+| [Kobo officiel Aura HD](https://github.com/kobolabs/Kobo-Reader/tree/7a762964e7fa71ad8e8df50dd1b6eee721a43217/hw/imx507-aurahd) — P0 | Métadonnées de l'archive et audit historique existant | Archive noyau 132 718 922 octets non téléchargée ; licences internes à vérifier avant reprise | Pas de nouvelle extraction revendiquée ; reprendre les preuves historiques sans les transformer en compilation/boot. |
+| [Contrat input Linux v6.18](https://github.com/torvalds/linux/blob/v6.18/Documentation/input/event-codes.rst) — P0 | SYN_DROPPED, état evdev et BTN_TOOL_DOUBLETAP | Documentation primaire, aucune copie de code ; contrat userspace, pas qualification du BSP | Correction originale de la HAL pure ; snapshot EVIOCG* réel encore absent. |
+
+**Livré :** [correctif natif 9514eff](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/9514effd3a1a00febb49882049fcc433428ecd6e)
+sur la branche existante de la **PR #30, toujours draft**. Annule les gestes
+signalés à deux doigts et rejette les trames après SYN_DROPPED ; attend un
+relâchement propre avant le nouvel appui. **939 assertions / 28 groupes PASS,
+0 FAIL**, JSON 1/1 et images 6/6 ; coûts hôte et limite LeakSanitizer consignés
+dans le dossier. Aucun malloc, service ou dépendance ajouté.
+Le pilote pazos/lgeek actuel ne rapporte pas le deuxième doigt : ce filtre
+n'active pas le multitouch et ne peut détecter ce que le noyau ne signale pas.
+
+**Suite R1/R3 :** valider tailles/IDs/lectures courtes sur la base officielle
+exacte, puis seulement étudier un backport multitouch ; ensuite R2/QEMU.
+Compilation ARM/noyau non exécutée, tactile/E-Ink/RAM/énergie Kobo UNQUALIFIED.
+FIRST BOOT scellé et tous les artefacts protégés inchangés.
+
 ## B. Rendu E-Ink, interface native, clavier et applications
 
 | Priorité | Source | Usages | Intérêt précis et vérifications requises |
