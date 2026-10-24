@@ -240,6 +240,7 @@ An isolated host-side Lua prototype implements menu navigation and SVG preview. 
 - [Text / Lynx disassembly guide](docs/disassembly-lynx-en.txt)
 - [Documentation index](docs/README.en.md)
 - [Roadmap and next steps](docs/ROADMAP.md)
+- [External research sources, inspiration and integration candidates (French)](docs/recherche-sources-fr.md)
 - [Aura HD rescue](docs/rescue-en.md)
 - [Recover the recovery files](docs/recover-files-en.md)
 - [Aura HD inspector](docs/inspect-aura-hd-en.md)
