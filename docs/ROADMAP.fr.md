@@ -6,7 +6,9 @@
 
 ## Recherche externe et composants candidats — 24 octobre 2026
 
-Le [registre permanent des sources et de la recherche](recherche-sources-fr.md) centralise les dépôts Kobo/Netronix, noyaux, pilotes EPDC et ZForce, émulation E606C0, FBInk, outils ARM, Notes, terminal, SSH, dictionnaires et synchronisation Calibre. Toute nouvelle ressource pertinente, notamment [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), doit y être classée **INFO / INSPIRATION / CANDIDAT** et rattachée à un jalon R0–R9.
+Le [registre permanent des sources et de la recherche](recherche-sources-fr.md) centralise les dépôts Kobo/Netronix, noyaux, pilotes EPDC et ZForce, émulation E606C0, FBInk, outils ARM, Notes, terminal, SSH, dictionnaires et synchronisation Calibre. Toute nouvelle ressource pertinente, notamment [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), doit y être classée **INFO / INSPIRATION / CANDIDAT** et rattachée à un jalon R0–R10.
+
+Le registre suit aussi désormais [Kobo Reader](https://www.mobileread.com/forums/forumdisplay.php?f=223) et son [Kobo Developer's Corner](https://www.mobileread.com/forums/forumdisplay.php?f=247), notamment les projets **kos (KOReader OS)**, **Quill OS / InkBox**, **Kobalt** et les fils de récupération : voir **R10**. Les OS tiers couvrent d'autres modèles ; la compatibilité Aura HD E606C0 n'est pas démontrée.
 
 Priorité : FIRST BOOT sans Nickel reste bloquant pour le matériel. Recherche, documentation et prototypes hors matériel peuvent avancer en parallèle, sans modifier le candidat scellé, PRE-P1, P2 ou les cartes. **Une source consultée ne vaut ni intégration ni qualification matérielle** ; chaque reprise de code exige diff, licence, compatibilité E606C0, tests et décision distincte.
 
