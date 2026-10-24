@@ -36,6 +36,7 @@
 | Priorité | Source | Usages | Intérêt précis et vérifications requises |
 | --- | --- | --- | --- |
 | P0 | [NiLuJe/FBInk](https://github.com/NiLuJe/FBInk) | INFO / INSPIRATION / CANDIDAT | Couche C framebuffer/EPDC, texte, images, rotations et rafraîchissement. Le code distingue explicitement **Aura HD / dragon**. Candidat de comparaison pour PMKB-UI et sa HAL ; vérifier ABI et licence **GPLv3+** avant toute incorporation. |
+| P1 | [redphx/kobo-tweaks](https://github.com/redphx/kobo-tweaks) | INFO / INSPIRATION / CANDIDAT PARTIEL | Widgets configurables du lecteur (heure, batterie, livre, chapitre, progression), marges et hauteurs des barres, styles clair/sombre et signets personnalisables via `settings.ini`. **Code vérifié** : `src/widgets/battery_widget.h` saute les mises à jour d'affichage quand l'état ne change pas ; `src/widgets/clock_widget.h` utilise une cadence espacée et suspend son timer quand le widget est caché ; `src/settings/settings.cc` valide les bornes. **Dépend de NickelHook + Qt5Widgets : incompatible directement avec PMKB sans Nickel.** Licence principale **MIT**, licences des dépendances et des ressources à vérifier. Inspirez-en la barre système et les applets PMKB-UI, sans installer `KoboRoot.tgz` ni copier les hooks Nickel. |
 | P1 | [pazos/kobo-clock](https://github.com/pazos/kobo-clock) | INSPIRATION / CANDIDAT | Application native C/SDL 1.2 pour Aura HD ; boucle d'événements, affichage, fontes et coûts mémoire. Inspirer nos applets horloge/calculatrice, pas ajouter SDL par défaut. |
 | P1 | [koreader/koxtoolchain](https://github.com/koreader/koxtoolchain) | INFO / CANDIDAT | Chaînes de compilation croisée adaptées aux Kobo anciennes ; vérifier libc/ARM hard-float, taille binaire et reproductibilité avant de standardiser les builds de PMKB-UI. |
 | P1 | [olup/kobowriter](https://github.com/olup/kobowriter) | INSPIRATION / CANDIDAT | Éditeur de texte léger en Go et FBInk, saisie AZERTY via clavier USB et USB-OTG. Test déclaré sur **Glo HD seulement** : idées pour Mes Notes et raccourcis ; dépendance OTG/alimentation à valider sur E606C0. |
@@ -81,6 +82,19 @@ Même principe pour Calibre : **connexion sans fil en option**, après qualifica
 du Wi-Fi et du modèle de permissions PMKB, sans NickelDBus, sans activation réseau
 au démarrage et sans incorporation implicite de code AGPL.
 
+## E. Retours d'expérience Aura HD et performances historiques
+
+| Priorité | Source | Usages | Intérêt précis et vérifications requises |
+| --- | --- | --- | --- |
+| P1 | [pled.fr — Downgrade de ma liseuse Kobo Aura HD (13 juin 2025)](https://pled.fr/post/2025/06/downgrade-de-ma-liseuse-kobo-aura-hd/) | INFO / INSPIRATION | Retour utilisateur sur **notre modèle Aura HD** : firmware 4.38 perçu lent au changement de page, 3.17 instable avec certains livres, puis 4.17.13651 perçu fluide. **Témoignage, pas benchmark, pas preuve d'un problème noyau** ; ne pas reproduire la rétrogradation sur FIRST BOOT scellé. Définit des axes de mesure (latence/page, stabilité, compatibilité bibliothèque). |
+| P2 | [pled.fr — Kobo Aura HD : installation de Plato (14 novembre 2024)](https://pled.fr/post/2024/11/kobo-aura-hd-installation-de-plato/) | INFO / INSPIRATION | Parcours lecteur alternatif, gestes et zones tactiles personnalisables, veille et ergonomie ; Plato lancé à côté du système Kobo dans ce témoignage. Inspiration pour zones du launcher et PMKB-UI ; **ne démontre pas** un lancement autonome sans Nickel. |
+
+**Lecture critique :** ces récits n'autorisent ni téléchargement de firmware
+historique, ni mise à jour de PRE-P1, ni manipulation de la carte de test.
+Le bénéfice perçu après rétrogradation peut tenir au logiciel, au contenu
+de la bibliothèque et aux réglages ; ne pas l'attribuer au noyau sans
+mesures comparables.
+
 ## Feuille de route de recherche — tâches et critères de sortie
 
 | Ordre | Recherche | Travail hors matériel | Sortie attendue / décision |
@@ -92,8 +106,9 @@ au démarrage et sans incorporation implicite de code AGPL.
 | **R4** | **Applications PMKB natives** | Étudier C/SDL de `kobo-clock`, éditeur `KoboWriter`, terminal `InkVT`, SDK `kobo-core`. Réutiliser les idées compatibles avec **Notes, clavier commun, calculatrice, terminal, split 2 panneaux**. | Composants légers indépendants de Nickel, chargement à la demande, pas de gros runtime systématique ; aucune application externe présumée compatible. |
 | **R5** | **Réseau et sécurité mesurée** | Examiner Dropbear, USB-OTG et sync facultative ; qualifier les CVE applicables au noyau 2.6.35.3, éventuels backports, permissions et services. | SSH à la demande, idéalement par clés ; éviter mot de passe root partagé, Telnet ouvert en permanence et dépendances gourmandes ; profil connecté examiné séparément. |
 | **R6** | **Veille communautaire utile** | À chaque découverte : ajouter URL, cible, provenance, statut, licence à contrôler, hypothèse utile et prochaine action dans **ce registre**. | Aucune piste perdue et aucune adoption automatique ; revue par priorité et mesure du gain réel plutôt que collection de dépôts. |
-
 | **R7** | **Dictionnaires et bibliothèque sans Nickel** | Examiner formats StarDict pour KOReader, licences/langues, tailles et indexation ; étudier les flux Calibre (`Kobo-UNCaGED` comme référence, pas composant installable). | Catalogues et métadonnées optionnels, import hors P1 système, consommation mesurée ; intégration dépendante de Nickel écartée. |
+| **R8** | **Réactivité, ergonomie et initialisation sans Nickel** | Comparer en lecture seule les chemins de démarrage et les ajustements du lecteur ; concevoir des métriques de changement de page, double-appui tactile, veille et reprise, RAM et temps de boot. Les témoignages Aura HD de 2024/2025 servent d'hypothèses. | Protocole de benchmark reproductible ; aucun gain attribué au noyau sans mesure, aucune rétrogradation du FIRST BOOT. |
+| **R9** | **Widgets graphiques frugaux** | Étudier `redphx/kobo-tweaks` : widgets d'heure/batterie/progression, configuration INI bornée, rafraîchissements déclenchés par changement d'état, arrêt du timer si masqué, densité des barres ; comparer avec le launcher et la HAL PMKB-UI. | Spécification de widgets **sans Nickel**, budget rafraîchissement/RAM, tests hôte de transitions et stabilité ; refuser l'intégration directe de NickelHook/Qt5Widgets. |
 
 ### Règles de reprise de code et de qualification
 
