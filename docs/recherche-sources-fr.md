@@ -65,6 +65,7 @@
 | P1 | [reader-dict/monolingual](https://github.com/reader-dict/monolingual) / [reader.dict](https://www.reader-dict.com/) | INFO / CANDIDAT | Dictionnaires issus de ressources libres ; distinguer **format Kobo natif destiné à Nickel** et **format StarDict utilisable par KOReader**. Mesurer taille, mémoire, temps d'indexation et vérifier les licences des données avant toute distribution PMKB. Ne pas embarquer de gros dictionnaires dans P1 par défaut. |
 | P2 | [shermp/Kobo-UNCaGED](https://github.com/shermp/Kobo-UNCaGED) | INFO / INSPIRATION | Client **Calibre sans fil**, fonctions envoi/réception, séries, couvertures et métadonnées ; protocole et interface intéressants pour PMKB. L'application actuelle exige **Nickel, NickelMenu, NickelDBus**, et annonce **AGPL-3.0** : pas de réutilisation directe dans notre système sans Nickel. |
 | P2 | [NotSimone/Kobo-Metadata](https://github.com/NotSimone/Kobo-Metadata) | INFO / INSPIRATION | Plugin **Calibre sur PC** récupérant titres, auteurs, résumés, séries et couvertures ; une piste de flux de métadonnées, **pas une application Kobo native**. Accès à des services tiers et leurs conditions à vérifier. |
+| P2 | [Z-Library — accès FR communiqué](https://fr.z-library.sk/) | INFO / RÉFÉRENCE À VÉRIFIER | Lien externe transmis par l'utilisateur (24 octobre 2026), **non validé comme domaine officiel ni comme source autorisée**. La plateforme Z-Library a fait l'objet de décisions de blocage pour atteintes au droit d'auteur en France (tribunal judiciaire de Paris, 12 septembre 2024) ; le domaine communiqué fait également l'objet de signalements de sécurité tiers. **Aucun téléchargement automatisé, aucune indexation du catalogue dans le Store PMKB, aucune redistribution de contenus sans droits vérifiés.** À conserver comme référence documentaire uniquement, avec statut juridique et technique non qualifié. |
 
 ### Compatibilité des dictionnaires et des livres
 
@@ -73,6 +74,8 @@ des fichiers **StarDict** destinés à **KOReader/Plato**. Notre lecteur cible
 KOReader : ne pas demander la création de `.kobo/custom-dict` comme prérequis
 du FIRST BOOT. Les dictionnaires volumineux doivent rester des ressources
 facultatives de bibliothèque ou de P3, jamais un prérequis à la lecture.
+
+Les plateformes documentées mais non vérifiées sur le plan du droit d'auteur ou de la sécurité restent **hors du flux d'acquisition et de distribution PMKB** ; ce registre ne constitue pas une recommandation de téléchargement.
 
 Même principe pour Calibre : **connexion sans fil en option**, après qualification
 du Wi-Fi et du modèle de permissions PMKB, sans NickelDBus, sans activation réseau
