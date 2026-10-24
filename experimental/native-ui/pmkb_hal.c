@@ -42,9 +42,25 @@ static bool wandered(const PMKBTouch *t,int x,int y){
     if(dy<0)dy=-dy;
     return dx>t->config.tap_slop||dy>t->config.tap_slop;
 }
+static void cancel_touch(PMKBTouch *t){
+    t->down=false;t->candidate=false;t->pending_button=false;
+    t->have_x=false;t->have_y=false;
+}
 PMKBStatus pmkb_touch_feed(PMKBTouch *t,int type,int code,int value,
                            PMKBEvent *event){
     if(!t||!event)return PMKB_INVALID;
+    if(type==PMKB_EV_SYN&&code==PMKB_SYN_DROPPED){
+        cancel_touch(t);
+        t->discard_frame=true;t->await_release=true;
+        t->multiple_contacts=false;t->drops++;
+        return PMKB_NO_CHANGE;
+    }
+    if(t->discard_frame){
+        /* evdev overflow: discard up to AND including SYN_REPORT.
+         * State recovery belongs to the future EVIOCG* adapter. */
+        if(type==PMKB_EV_SYN&&code==PMKB_SYN_REPORT)t->discard_frame=false;
+        return PMKB_NO_CHANGE;
+    }
     if(type==PMKB_EV_ABS){
         if(code==PMKB_ABS_X){
             t->raw_x=value;t->have_x=true;
@@ -56,17 +72,21 @@ PMKBStatus pmkb_touch_feed(PMKBTouch *t,int type,int code,int value,
     if(type==PMKB_EV_KEY){
         if(code==PMKB_BTN_TOUCH&&(value==0||value==1)){
             t->pending_button=true;t->button_value=value;
+        }else if(code==PMKB_BTN_TOOL_DOUBLETAP&&(value==0||value==1)){
+            t->multiple_contacts=value!=0;
+            if(value==1){t->await_release=true;t->candidate=false;}
         }
         return PMKB_NO_CHANGE;
     }
     if(type!=PMKB_EV_SYN)return PMKB_NO_CHANGE;
-    if(code==PMKB_SYN_DROPPED){
-        /* Missing events invalidate gesture, not a request to invent one. */
-        t->down=false;t->candidate=false;t->pending_button=false;
-        t->have_x=false;t->have_y=false;t->drops++;
+    if(code!=PMKB_SYN_REPORT)return PMKB_NO_CHANGE;
+    if(t->await_release){
+        /* Never turn a two-to-one transition or unknown state into TAP. */
+        if(t->pending_button&&t->button_value==0&&!t->multiple_contacts)
+            t->await_release=false;
+        cancel_touch(t);
         return PMKB_NO_CHANGE;
     }
-    if(code!=PMKB_SYN_REPORT)return PMKB_NO_CHANGE;
     int x=0,y=0;
     bool valid=coordinates(t,&x,&y);
     if(t->pending_button&&t->button_value==1&&!t->down){

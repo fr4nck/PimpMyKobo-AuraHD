@@ -109,3 +109,72 @@ Un objet ARM n'établit pas à lui seul l'ABI libc du rootfs historique.
    tant que la persistance hors P1/P2 n'est pas qualifiée.
 
 Aucune donnée matérielle n'est inventée par ces tests.
+
+# Complément du 24 octobre 2026 — trames perdues et deux doigts
+
+L'audit communautaire est capitalisé dans
+[le dossier noyau/ZForce](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/main/docs/kernel-community-audit-2026-10-24-fr.md)
+et le registre canonique de `main`. Il ne change ni les résultats historiques
+ci-dessous, ni le noyau ou FIRST BOOT.
+
+## Défauts reproduits et correctif natif
+
+Au HEAD initial `e6d5e75e602a55bffb2b445f558aa927ae077f62`, deux
+séquences synthétiques émettent un faux TAP : une pression suivie de
+`BTN_TOOL_DOUBLETAP=1` puis du relâchement ; et un `SYN_DROPPED` suivi
+d'une pression dans la trame à jeter puis d'un relâchement propre.
+Les deux faux TAP disparaissent avec le correctif.
+
+`pmkb_touch_feed()` ignore désormais tous les événements jusqu'au
+`SYN_REPORT` inclus après une perte, puis attend un `BTN_TOUCH=0` explicite
+dans une trame propre. Le signal deux doigts annule le geste entier,
+y compris si l'on revient à un doigt avant de tout relâcher. Les coordonnées
+de la trame rejetée sont oubliées ; seul un nouvel appui complet peut produire
+un TAP. Notes et Calculatrice utilisent cette primitive commune.
+
+Ce filtrage **n'implémente pas le multitouch**. Le pilote pazos/lgeek étudié
+n'émet pas `BTN_TOOL_DOUBLETAP` ; ce chemin prépare la compatibilité avec un
+futur pilote corrigé. Un pilote qui ne signale pas le second contact ne peut
+pas être rendu capable de le détecter par ce filtrage. Aucun pilote tiers copié.
+
+La [documentation Linux v6.18](https://github.com/torvalds/linux/blob/v6.18/Documentation/input/event-codes.rst)
+demande aussi de relire l'état par `EVIOCG*` après `SYN_DROPPED`.
+Cette API pure n'ouvre aucun périphérique : **la resynchronisation complète
+reste à réaliser dans l'adaptateur evdev réel**. En son absence, elle peut
+perdre un appui supplémentaire si le relâchement est survenu dans la trame
+jetée. Ce choix conservateur empêche un faux clic ; il ne qualifie pas la
+reprise après veille et ne remplace pas le protocole de réinitialisation.
+
+## Qualification exécutée sur hôte Linux x86_64
+
+- GCC 13.3.0, Python 3.12.14 ; C11 `-O2 -Wall -Wextra -Werror -Wpedantic`.
+- Avant : **877 assertions / 26 groupes / 0 FAIL**.
+- Après : **939 assertions / 28 groupes / 0 FAIL** : UI 421, Calculatrice
+  248, Launcher/rendu 60, HAL 210 (62 assertions ajoutées).
+- Non-régression : ordre des signaux dans la trame, deuxième doigt tardif,
+  retour de deux doigts à un, pertes répétées, relâchement dans la trame
+  perdue, axes rejetés, puis nouvel appui normal. Intégration Notes : un
+  faux appui sur « + » ne crée aucune note ; les trois vrais appuis suivants
+  créent la note, ouvrent le clavier puis saisissent « a ».
+- JSON Notes **1/1 PASS** et images hôte **6/6 PASS** ; les six empreintes
+  de pixels correspondent à la version antérieure. Pas de changement UX
+  ou d'exception à l'ADR-005 PMSL-Arch (blob `4017615213eea812b8864a221a3bb4babe9ee2bf` relu).
+- ASan/UBSan : mêmes tests et images **PASS** avec
+  `ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1`.
+  La première tentative avec LeakSanitizer échoue car l'environnement
+  ne peut lire `/proc/.../task` ; **détection de fuites locale SKIP**,
+  pas une réussite implicite. La CI native existante conserve ses contrôles.
+- GCC `-fanalyzer` sur `pmkb_hal.c` : **PASS**, aucun diagnostic.
+- Mesure comparative, même GCC `-O2`, objet x86_64 `pmkb_hal.o` : section
+  texte **2 237 → 2 509 octets (+272)**, data/bss 0 ;
+  `sizeof(PMKBTouch)` **72 → 72 octets** (trois booléens utilisent du padding
+  sur cet ABI). **Aucune allocation, dépendance, thread ou service ajouté**.
+  Ce ne sont ni le binaire ARM lié, ni la RAM au repos sur Kobo.
+- Compilation ARM **SKIP** : aucun compilateur croisé préinstallé.
+  Compilation noyau, firmware et QEMU **non exécutés**.
+- Tactile/E-Ink réels, RAM totale, latence et énergie Aura HD :
+  **UNQUALIFIED**. Aucune image privée ou carte n'est disponible/utilisée ici.
+
+Rejeu hôte : `make -C experimental/native-ui test`. Pour le contrôle mémoire,
+recompiler avec les flags ASan/UBSan du workflow natif ; ne désactiver
+LeakSanitizer que si l'environnement impose cette limite et la consigner.

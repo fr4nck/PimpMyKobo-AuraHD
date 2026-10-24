@@ -15,6 +15,7 @@ _Static_assert(PMKB_SYN_DROPPED==SYN_DROPPED,"Linux SYN_DROPPED mismatch");
 _Static_assert(PMKB_ABS_X==ABS_X,"Linux ABS_X mismatch");
 _Static_assert(PMKB_ABS_Y==ABS_Y,"Linux ABS_Y mismatch");
 _Static_assert(PMKB_BTN_TOUCH==BTN_TOUCH,"Linux BTN_TOUCH mismatch");
+_Static_assert(PMKB_BTN_TOOL_DOUBLETAP==BTN_TOOL_DOUBLETAP,"Linux doubletap mismatch");
 #endif
 
 static unsigned assertions=0,groups=0;
@@ -141,6 +142,85 @@ static int missing_and_invalid_events(void){
     CHECK(pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,2,&event)==PMKB_NO_CHANGE);
     CHECK(pmkb_touch_feed(NULL,0,0,0,&event)==PMKB_INVALID);
     CHECK(pmkb_touch_feed(&t,0,0,0,NULL)==PMKB_INVALID);
+    groups++;return 0;
+}
+static int lost_frame_quarantine(void){
+    PMKBTouch t={0};
+    PMKBEvent ev={.kind=PMKB_EVENT_TEXT,.x=777,.y=888,.text="stable"};
+    CHECK(pmkb_touch_init(&t,config(PMKB_ROT_0))==PMKB_OK);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(pmkb_touch_feed(&t,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&ev)==PMKB_NO_CHANGE);
+    /* Everything through this SYN_REPORT is lost, even a plausible press. */
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(t.taps==0&&t.drops==1);
+    CHECK(ev.kind==PMKB_EVENT_TEXT&&ev.x==777&&ev.y==888);
+    CHECK(strcmp(ev.text,"stable")==0);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_OK);
+    CHECK(t.taps==1);
+    /* An up in the discarded frame is not evidence of a clean release. */
+    CHECK(pmkb_touch_feed(&t,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&ev)==PMKB_NO_CHANGE);
+    CHECK(pmkb_touch_feed(&t,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(t.taps==1&&t.drops==3);
+    /* Quarantine must also discard the axes; button-only input cannot tap. */
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev);
+    CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,0,&ev);
+    CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+    CHECK(t.taps==1);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_OK);
+    CHECK(t.taps==2);
+    groups++;return 0;
+}
+static int two_fingers_are_not_taps(void){
+    for(int order=0;order<2;order++){
+        PMKBTouch t={0};PMKBEvent ev={.kind=PMKB_EVENT_TEXT,.text="stable"};
+        CHECK(pmkb_touch_init(&t,config(PMKB_ROT_0))==PMKB_OK);
+        raw_coord(&t,100,100,&ev);
+        if(order==0)(void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev);
+        (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,1,&ev);
+        if(order==1)(void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev);
+        CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+        /* Two becomes one: BTN_TOUCH remains down, no new gesture. */
+        (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,0,&ev);
+        CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+        CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+        CHECK(t.taps==0&&ev.kind==PMKB_EVENT_TEXT);
+        CHECK(strcmp(ev.text,"stable")==0);
+        CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+        CHECK(tap_release(&t,100,100,&ev)==PMKB_OK);
+        CHECK(t.taps==1);
+    }
+    PMKBTouch t={0};PMKBEvent ev={0};
+    CHECK(pmkb_touch_init(&t,config(PMKB_ROT_0))==PMKB_OK);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    /* A second finger arriving later cancels the original candidate. */
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,1,&ev);
+    CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+    /* A release is insufficient while the two-finger key remains set. */
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(t.taps==0);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,0,&ev);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,0,&ev);
+    CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+    /* Even an on/off two-finger key within one frame cancels that gesture. */
+    raw_coord(&t,100,100,&ev);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,1,&ev);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,0,&ev);
+    CHECK(sync_frame(&t,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(t.taps==0);
+    CHECK(tap_press(&t,100,100,&ev)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,100,100,&ev)==PMKB_OK);
+    CHECK(t.taps==1);
     groups++;return 0;
 }
 typedef struct {
@@ -317,8 +397,21 @@ static int end_to_end_legacy_touch(void){
     };
     PMKBTouch t={0};
     CHECK(pmkb_touch_init(&t,c)==PMKB_OK);
-    CHECK(simulated_tap(&t,&host,14,14)==PMKB_OK); /* + */
     PMKBUI *notes=(PMKBUI*)host.instance;
+    PMKBEvent rejected={0};
+    /* Corrupted and two-finger taps on '+' must not create any note. */
+    raw_coord(&t,14,14,&rejected);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&rejected);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,1,&rejected);
+    CHECK(sync_frame(&t,&rejected)==PMKB_NO_CHANGE);
+    (void)pmkb_touch_feed(&t,PMKB_EV_KEY,PMKB_BTN_TOOL_DOUBLETAP,0,&rejected);
+    CHECK(tap_release(&t,14,14,&rejected)==PMKB_NO_CHANGE);
+    CHECK(notes->notebook.count==0&&t.taps==0);
+    CHECK(pmkb_touch_feed(&t,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&rejected)==PMKB_NO_CHANGE);
+    CHECK(tap_press(&t,14,14,&rejected)==PMKB_NO_CHANGE);
+    CHECK(tap_release(&t,14,14,&rejected)==PMKB_NO_CHANGE);
+    CHECK(notes->notebook.count==0&&t.taps==0);
+    CHECK(simulated_tap(&t,&host,14,14)==PMKB_OK); /* + */
     CHECK(notes->view==PMKB_VIEW_EDITOR&&notes->notebook.count==1);
     CHECK(simulated_tap(&t,&host,110,14)==PMKB_OK); /* keyboard toggle */
     CHECK(notes->keyboard.visible);
@@ -331,6 +424,7 @@ static int end_to_end_legacy_touch(void){
 }
 int main(void){
     if(decode_taps()||rotate_mirror()||missing_and_invalid_events()||
+       lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
        end_to_end_legacy_touch())return 1;

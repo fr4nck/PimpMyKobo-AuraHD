@@ -20,22 +20,28 @@ typedef struct {
     int down_x, down_y;
     bool have_x, have_y, down, candidate;
     bool pending_button;
+    bool discard_frame, await_release, multiple_contacts;
     int button_value;
     unsigned taps, drops;
 } PMKBTouch;
 
 /* Legacy Linux evdev numeric type/code values. EventN is NOT hardwired.
- * Only the safe, explicitly-supported single-touch subset is handled. */
+ * Only single-touch taps are decoded; two-finger gestures are cancelled. */
 enum {
     PMKB_EV_SYN=0, PMKB_EV_KEY=1, PMKB_EV_ABS=3,
     PMKB_SYN_REPORT=0, PMKB_SYN_DROPPED=3,
     PMKB_ABS_X=0, PMKB_ABS_Y=1,
-    PMKB_BTN_TOUCH=330
+    PMKB_BTN_TOUCH=330, PMKB_BTN_TOOL_DOUBLETAP=333
 };
 
 PMKBStatus pmkb_touch_init(PMKBTouch *touch, PMKBTouchConfig config);
 /* PMKB_OK only when a completed, small press-release gesture emitted TAP.
- * PMKB_NO_CHANGE otherwise; never emits motion or a duplicate tap. */
+ * PMKB_NO_CHANGE otherwise; never emits motion or a duplicate tap.
+ * SYN_DROPPED discards through the next SYN_REPORT, then waits for an
+ * explicit clean BTN_TOUCH=0 frame. Two-finger gestures likewise require
+ * all contacts released before another tap. No MT gesture is decoded.
+ * A future evdev adapter must query EVIOCG* state after loss; this pure
+ * decoder cannot do so and may conservatively discard an extra gesture. */
 PMKBStatus pmkb_touch_feed(PMKBTouch *touch,int type,int code,int value,
                            PMKBEvent *event);
 
