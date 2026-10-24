@@ -57,6 +57,27 @@
 | P2 | [NiLuJe/kfmon](https://github.com/NiLuJe/kfmon), [pgaskin/NickelMenu](https://github.com/pgaskin/NickelMenu), [baskerville/fmon](https://github.com/baskerville/fmon) | INSPIRATION | Lancement d'applications, anti-double-instance, gestion d'événements. **Ne pas intégrer les hooks, les bases de données ou les déclencheurs Nickel** ; PMKB possède son launcher indépendant. |
 | P2 | [XCSoar/XCSoar](https://github.com/XCSoar/XCSoar) | INFO | Piste historique USB-OTG et connectique de clavier/GPS sur Kobo ; déterminer la variante matérielle réellement couverte avant d'évoquer un clavier externe Aura HD. |
 
+## D. Dictionnaires, bibliothèque et ressources éditoriales
+
+| Priorité | Source | Usages | Intérêt précis et vérifications requises |
+| --- | --- | --- | --- |
+| P1 | [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/) | INFO / INSPIRATION | Panorama francophone daté du **8 octobre 2022**, mis à jour le **27 août 2025** : dictionnaires, polices, KOReader/Plato, configuration, Calibre, synchronisation et pratiques communautaires. **Majoritairement Nickel** : retenir les références documentaires, pas ses instructions d'installation dans PMKB sans Nickel. |
+| P1 | [reader-dict/monolingual](https://github.com/reader-dict/monolingual) / [reader.dict](https://www.reader-dict.com/) | INFO / CANDIDAT | Dictionnaires issus de ressources libres ; distinguer **format Kobo natif destiné à Nickel** et **format StarDict utilisable par KOReader**. Mesurer taille, mémoire, temps d'indexation et vérifier les licences des données avant toute distribution PMKB. Ne pas embarquer de gros dictionnaires dans P1 par défaut. |
+| P2 | [shermp/Kobo-UNCaGED](https://github.com/shermp/Kobo-UNCaGED) | INFO / INSPIRATION | Client **Calibre sans fil**, fonctions envoi/réception, séries, couvertures et métadonnées ; protocole et interface intéressants pour PMKB. L'application actuelle exige **Nickel, NickelMenu, NickelDBus**, et annonce **AGPL-3.0** : pas de réutilisation directe dans notre système sans Nickel. |
+| P2 | [NotSimone/Kobo-Metadata](https://github.com/NotSimone/Kobo-Metadata) | INFO / INSPIRATION | Plugin **Calibre sur PC** récupérant titres, auteurs, résumés, séries et couvertures ; une piste de flux de métadonnées, **pas une application Kobo native**. Accès à des services tiers et leurs conditions à vérifier. |
+
+### Compatibilité des dictionnaires et des livres
+
+Le guide Oniricorpe distingue les fichiers de dictionnaires destinés à **Nickel**
+des fichiers **StarDict** destinés à **KOReader/Plato**. Notre lecteur cible
+KOReader : ne pas demander la création de `.kobo/custom-dict` comme prérequis
+du FIRST BOOT. Les dictionnaires volumineux doivent rester des ressources
+facultatives de bibliothèque ou de P3, jamais un prérequis à la lecture.
+
+Même principe pour Calibre : **connexion sans fil en option**, après qualification
+du Wi-Fi et du modèle de permissions PMKB, sans NickelDBus, sans activation réseau
+au démarrage et sans incorporation implicite de code AGPL.
+
 ## Feuille de route de recherche — tâches et critères de sortie
 
 | Ordre | Recherche | Travail hors matériel | Sortie attendue / décision |
@@ -68,6 +89,8 @@
 | **R4** | **Applications PMKB natives** | Étudier C/SDL de `kobo-clock`, éditeur `KoboWriter`, terminal `InkVT`, SDK `kobo-core`. Réutiliser les idées compatibles avec **Notes, clavier commun, calculatrice, terminal, split 2 panneaux**. | Composants légers indépendants de Nickel, chargement à la demande, pas de gros runtime systématique ; aucune application externe présumée compatible. |
 | **R5** | **Réseau et sécurité mesurée** | Examiner Dropbear, USB-OTG et sync facultative ; qualifier les CVE applicables au noyau 2.6.35.3, éventuels backports, permissions et services. | SSH à la demande, idéalement par clés ; éviter mot de passe root partagé, Telnet ouvert en permanence et dépendances gourmandes ; profil connecté examiné séparément. |
 | **R6** | **Veille communautaire utile** | À chaque découverte : ajouter URL, cible, provenance, statut, licence à contrôler, hypothèse utile et prochaine action dans **ce registre**. | Aucune piste perdue et aucune adoption automatique ; revue par priorité et mesure du gain réel plutôt que collection de dépôts. |
+
+| **R7** | **Dictionnaires et bibliothèque sans Nickel** | Examiner formats StarDict pour KOReader, licences/langues, tailles et indexation ; étudier les flux Calibre (`Kobo-UNCaGED` comme référence, pas composant installable). | Catalogues et métadonnées optionnels, import hors P1 système, consommation mesurée ; intégration dépendante de Nickel écartée. |
 
 ### Règles de reprise de code et de qualification
 
@@ -83,6 +106,6 @@
 - [Roadmap principale](ROADMAP.fr.md)
 - [Jalon FIRST BOOT #1](pmkb-first-boot-1-fr.md) (selon la branche d'intégration)
 - [Architecture utilisateur sans Nickel](offline-liberation-fr.md)
-- [Documentation générale](README.fr.md) (lorsque présente dans la branche)
+- [Documentation générale](README.md)
 
 Ce document est l'**index canonique des références externes** pour les travaux futurs PMKB : préférer enrichir la même entrée et préciser le statut plutôt que disperser des liens dans les commentaires et conversations.
