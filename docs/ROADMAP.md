@@ -8,7 +8,9 @@ This roadmap keeps the project focused on one principle: **preserve first, modif
 
 ## External research and candidate components — 24 October 2026
 
-The [maintained research and external-source registry (French)](recherche-sources-fr.md) tracks Kobo/Netronix kernel sources, EPDC and ZForce drivers, E606C0 emulation, FBInk, ARM build tools, native Notes/terminal applications, SSH, dictionaries, and Calibre synchronization. New references, including [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), are classified as **INFO / INSPIRATION / CANDIDATE**, with research milestones R0–R9.
+The [maintained research and external-source registry (French)](recherche-sources-fr.md) tracks Kobo/Netronix kernel sources, EPDC and ZForce drivers, E606C0 emulation, FBInk, ARM build tools, native Notes/terminal applications, SSH, dictionaries, and Calibre synchronization. New references, including [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), are classified as **INFO / INSPIRATION / CANDIDATE**, with research milestones R0–R10.
+
+The registry now also tracks the [Kobo Reader](https://www.mobileread.com/forums/forumdisplay.php?f=223) and [Kobo Developer's Corner](https://www.mobileread.com/forums/forumdisplay.php?f=247) forums, especially **kos (KOReader OS)**, **Quill OS / InkBox**, **Kobalt** and recovery discussions: see **R10**. These other operating systems target different models; Aura HD E606C0 compatibility is unproven.
 
 FIRST BOOT without Nickel remains the hardware priority. Research can proceed independently but must not change the sealed candidate, PRE-P1, P2, or the SD cards. **A reviewed upstream source is not integrated code or tested hardware support**. Every candidate needs a scoped diff, license review, E606C0 compatibility checks and distinct qualification.
 
