@@ -278,6 +278,53 @@ static int backend_retry(void){
     CHECK(!pmkb_surface_take_dirty(&s,&rect));
     pmkb_surface_free(&s);groups++;return 0;
 }
+
+/* Edits performed inside a presentation callback must survive its ACK,
+ * including edits inside the very same dirty rectangle. */
+typedef struct {
+    PMKBSurface *surface;
+    unsigned calls;
+    PMKBRect last;
+    bool same_rect;
+} InflightEdit;
+static PMKBStatus mutate_while_presenting(void *context,const uint8_t *pixels,
+                                          int width,int height,PMKBRect dirty){
+    InflightEdit *edit=(InflightEdit*)context;
+    if(!pixels||width!=320||height!=480)return PMKB_INVALID;
+    edit->calls++;
+    edit->last=dirty;
+    if(edit->calls==1){
+        PMKBRect r=edit->same_rect?(PMKBRect){12,20,1,1}:
+                                   (PMKBRect){100,120,1,1};
+        pmkb_surface_rect(edit->surface,r,200);
+    }
+    return PMKB_OK;
+}
+static int backend_edits_during_present(void){
+    for(int same=0;same<2;same++){
+        PMKBSurface s={0};PMKBRect old_dirty={0};
+        CHECK(pmkb_surface_init(&s,320,480)==PMKB_OK);
+        CHECK(pmkb_surface_take_dirty(&s,&old_dirty));
+        pmkb_surface_rect(&s,(PMKBRect){12,20,2,2},0);
+        CHECK(s.changed_pixels==4u);
+        InflightEdit edit={.surface=&s,.same_rect=same!=0};
+        PMKBBackend backend={.context=&edit,.present=mutate_while_presenting};
+        CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+        CHECK(edit.calls==1&&s.has_dirty&&s.changed_pixels==5u);
+        CHECK(edit.last.x==12&&edit.last.y==20&&
+              edit.last.w==2&&edit.last.h==2);
+        CHECK(s.dirty.x==12&&s.dirty.y==20);
+        CHECK(s.dirty.w==(same?2:89)&&s.dirty.h==(same?2:101));
+        CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+        CHECK(edit.calls==2&&!s.has_dirty&&s.changed_pixels==0);
+        CHECK(edit.last.x==12&&edit.last.y==20&&
+              edit.last.w==(same?2:89)&&edit.last.h==(same?2:101));
+        CHECK(pmkb_surface_present(&s,&backend)==PMKB_NO_CHANGE);
+        pmkb_surface_free(&s);
+    }
+    groups++;return 0;
+}
+
 static int high_resolution_budget(void){
     PMKBUI ui={0};PMKBRect dirty;
     CHECK(pmkb_ui_init(&ui,1080,1440)==PMKB_OK);
@@ -307,7 +354,7 @@ int main(int argc,char **argv){
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
        notebook_memory()||
        dirty_canvas()||ui_flow()||high_resolution_budget()||
-       backend_retry())return 1;
+       backend_retry()||backend_edits_during_present())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            checked,groups);
     return 0;
