@@ -61,6 +61,21 @@ class OfflineGuardTests(unittest.TestCase):
             self.assertEqual(0, run(mounts))
             mounts.write_text("/dev/mmcblk0p3 /mnt/onboard-backup vfat ro 0 0\n", encoding="utf-8")
             self.assertNotEqual(0, run(mounts))  # similarly named mountpoint must not match
+            # A mountpoint alone is not evidence that it is read-only P3.
+            # These files are synthetic /proc/mounts snapshots; no mounting occurs.
+            for entry in (
+                "/dev/mmcblk0p1 /mnt/onboard vfat ro 0 0\n",
+                "/dev/mmcblk0p30 /mnt/onboard vfat ro 0 0\n",
+                "/dev/mmcblk0p3 /mnt/onboard ext4 ro 0 0\n",
+                "/dev/mmcblk0p3 /mnt/onboard vfat rw,noatime 0 0\n",
+                "/dev/mmcblk0p3 /mnt/onboard vfat ro 0 0\n"
+                "tmpfs /mnt/onboard tmpfs rw 0 0\n",
+                "tmpfs /mnt/onboard tmpfs rw 0 0\n"
+                "/dev/mmcblk0p3 /mnt/onboard vfat ro 0 0\n",
+            ):
+                with self.subTest(mounts=entry):
+                    mounts.write_text(entry, encoding="utf-8")
+                    self.assertNotEqual(0, run(mounts))
 
 
 class RootfsSourceContractTests(unittest.TestCase):

@@ -1,8 +1,18 @@
 #!/bin/sh
-# This guard is read-only. It only confirms /mnt/onboard is still mounted; it
-# never mounts, repairs or reads P3 content, and an unreadable mounts table
-# is a refusal, not an assumption that the mount is still there.
+# Read-only gate: accept exactly one /mnt/onboard entry, backed by P3 as
+# read-only VFAT. A different or stacked mount must not impersonate P3.
 set -eu
 mounts=${1:-/proc/mounts}
 [ -f "$mounts" ] || exit 1
-grep -q ' /mnt/onboard ' "$mounts"
+found=0
+while read -r device target fstype options rest; do
+    [ "$target" = /mnt/onboard ] || continue
+    [ "$found" -eq 0 ] || exit 1
+    found=1
+    [ "$device" = /dev/mmcblk0p3 ] && [ "$fstype" = vfat ] || exit 1
+    case ",$options," in
+        *,ro,*) ;;
+        *) exit 1 ;;
+    esac
+done < "$mounts"
+[ "$found" -eq 1 ]
