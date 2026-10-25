@@ -122,6 +122,10 @@ FIRST BOOT scellé et tous les artefacts protégés inchangés.
 | P2 | [NiLuJe/kfmon](https://github.com/NiLuJe/kfmon), [pgaskin/NickelMenu](https://github.com/pgaskin/NickelMenu), [baskerville/fmon](https://github.com/baskerville/fmon) | INSPIRATION | Lancement d'applications, anti-double-instance, gestion d'événements. **Ne pas intégrer les hooks, les bases de données ou les déclencheurs Nickel** ; PMKB possède son launcher indépendant. |
 | P2 | [XCSoar/XCSoar](https://github.com/XCSoar/XCSoar) | INFO | Piste historique USB-OTG et connectique de clavier/GPS sur Kobo ; déterminer la variante matérielle réellement couverte avant d'évoquer un clavier externe Aura HD. |
 
+### Homonymes « Kobo » sans rapport avec la liseuse
+
+- **ÉCARTÉ — [ElliottMess/koboAPI](https://github.com/ElliottMess/koboAPI)** (consultation du 25 octobre 2026, `main` : `ec6b6ef90c8ed1343d42e5e0be655668c617dd14`). Malgré son nom, c'est un paquet **R** `koboAPI` v1.0.1, licence **GPL-3**, consacré aux API de **KoBoToolbox** (questionnaires humanitaires), et non aux liseuses Kobo. `DESCRIPTION`, `R/kobo_api.R`, `R/get_form.R`, `R/get_data.R` et `NAMESPACE` relus : authentification HTTP, extraction de formulaires XLSForm et de réponses ; aucune couche EPDC, Linux Kobo, KOReader, Nickel ou PMKB. **Aucune intégration au Store ou au système** ; simple faux ami archivé pour éviter une nouvelle analyse. Dernier commit observé : 9 mai 2022. Aucun code téléchargé ni exécuté.
+
 ## D. Dictionnaires, bibliothèque et ressources éditoriales
 
 | Priorité | Source | Usages | Intérêt précis et vérifications requises |
