@@ -57,7 +57,7 @@ La correspondance HWCONFIG bPCB=28 → E606C0 et le remappage logique Netronix 2
 - **Linux 6.18 : candidat de comparaison documentaire**, pas version choisie pour installation. Socle i.MX50 présent, mais contrat DRAM, EPDC, MCU, réveil et Device Tree E606C0 non validés.
 - **Obstacle prouvé** : on ne peut pas utiliser tel quel le DTS N514 pour E606C0 ; identification des cartes différente [SRC-M, BIN-DOC].
 - **Aucun obstacle de boot matériel démontré** ; plusieurs gates non franchies ne sont pas des incompatibilités avérées.
-- Ne pas changer FIRST BOOT, U-Boot, P1/P2/P3, recovery, microSD ou image. Prochaine pièce manquante : relevé privé et déterministe des champs uImage + machine ID + RAM en lecture seule, hors publication des blobs.
+- Ne pas changer FIRST BOOT, U-Boot, P1/P2/P3, recovery, microSD ou image. Prochaine pièce manquante : relevé privé et déterministe des champs uImage + machine ID + RAM en lecture seule, hors publication des blobs. Outil hors matériel prêt pour les champs uImage (IH_LOAD/IH_EP, CRC), l'étendue/l'adresse d'U-Boot et la géométrie PRE-P1 : [boot_region.py](../experimental/boot-region/README.md) ; machine ID et r2 restent UNQUALIFIED sans code U-Boot ou journal de boot.
 
 ## Validateur hors matériel (sémantique bornée)
 
