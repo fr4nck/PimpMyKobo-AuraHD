@@ -66,7 +66,7 @@ Le module est pur (analyse de `bytes`) ; seule la CLI ouvre des fichiers, en lec
 | Suite complète du dépôt | **334 exécutés, OK** | 0 | 15 (fakeroot, Qt, LuaJIT ou KOReader absents) | — |
 | Boot émulé de FIRST BOOT #1 | — | — | **SKIP** : QEMU non construit, fichiers privés absents | Boot, KOReader, affichage |
 | Fichiers privés (PRE-P1, P1, P2) | — | — | **SKIP** : absents de la session | Valeurs IH_LOAD/IH_EP réelles |
-| Composition de carte et FAT32 | — | — | **SKIP** : non implémentées, `mkfs.fat` absent | — |
+| Composition de carte et FAT32 | Livrée le 25/10 : voir *Complément : assembleur* | — | — | — |
 
 **Coût mesuré sur hôte :** analyse d'une région de 9,5 Mio en 4 ms ; pic d'allocation Python supplémentaire de 3,15 Mo (copie de la charge uImage), en plus de la région lue. Outil de poste, **jamais embarqué sur la Kobo** : 0 octet de RAM ou de rootfs côté appareil.
 
@@ -77,5 +77,24 @@ EQ : SPDX `GPL-2.0-or-later` (`imx50-kobo-aura-hd.c:9`). EE : **aucun fichier de
 ## Prochain travail exact
 
 1. **Sur le poste privé, sans écriture**, quand l'utilisateur le décidera : lancer `boot_region.py` sur la PRE-P1, la P1 scellée et la P2 sauvegardées. Ajouter les valeurs IH_LOAD/IH_EP et l'adresse U-Boot au BOOT CONTRACT. Ne publier que les champs, jamais les blobs.
-2. **Composer la carte virtuelle 1 Gio :** copie PRE-P1 avec taille P3 corrigée (réutiliser `patch_pre_p1` de `replace-microsd-linux.py` plutôt que réécrire), P1/P2 à l'identique avec revérification SHA, FAT32 neuf via `mkfs.fat --offset` ou formateur Python testé. Fichier image uniquement.
+2. ~~Composer la carte virtuelle 1 Gio~~ : **fait**, voir le complément ci-dessous. Correction : `patch_pre_p1` n'existe que sur la branche de la PR #7 ; il n'est donc pas réutilisé, et le profil physique reste indépendant.
 3. **Construire EQ** (téléchargement de QEMU et dépendances : autorisation explicite requise), démarrer en mode snapshot, journaliser la console série. Relever machine ID/ATAG si U-Boot les affiche, puis l'arrivée jusqu'à KOReader. Un succès émulé reste UNQUALIFIED pour l'E-Ink, la batterie et la veille réelles.
+
+## Complément : assembleur de carte virtuelle (25 octobre 2026)
+
+`experimental/boot-region/virtual_card.py`, profil **`virtual-qemu`**. Il est **séparé** du profil physique `replace-microsd-linux.py` de la PR #7, qui garde ses contrôles (P3 ≥ 1 Gio, `mkfs.fat`) et n'est ni importé ni modifié. Le contrat est détaillé dans le [README](../experimental/boot-region/README.md#assemblage-de-la-carte-virtuelle--virtual_cardpy).
+
+| Contrôle | Résultat |
+| --- | --- |
+| Tests `test_virtual_card` (géométrie miniature : P1/P2 de 64 secteurs, P3 de 64 Mio) | **PASS 11/11** : succès octet pour octet, reproductibilité, non-écrasement, collision de publication, SHA avant copie, entrées invalides, bornes du profil, injection de fautes après copie (PRE-P1, P1, P2, réanalyse), vérificateur FAT32, CLI exigeant la P1 scellée |
+| Mutation du code | **16/16** mutants détectés, après ajout de tests d'injection de fautes (6 survivants initiaux corrigés) |
+| Essai à **taille réelle**, données synthétiques (P1 et P2 de 268 435 968 octets) | **PASS** : carte de 1 073 741 824 octets en 14 s, 7/7 contrôles, octets PRE-P1 modifiés = 490-493 uniquement ; rejoué sur le code final avec le même UUID FAT `EA02-9990` (reproductible) |
+| Lecture indépendante de cette carte par `blkid` / `file` (util-linux, libmagic) | **PASS** : table `dos` P1 19 456+524 289, P2 543 745+524 289, P3 FAT32 1 068 034+1 029 118 ; P3 `TYPE=vfat VERSION=FAT32 LABEL=KOBOeReader FSSIZE=526908416`, label lu dans le secteur de boot et la racine |
+| Montage par le pilote vfat du noyau | **SKIP** : module vfat absent du conteneur |
+| Suite complète du dépôt | **344 exécutés, OK** (15 SKIP inchangés) |
+| Carte avec les vrais PRE-P1, P1 scellée et P2 | **SKIP** : fichiers privés absents |
+| Démarrage QEMU | **SKIP** : QEMU non construit |
+
+**Coûts :** outil de poste, 0 octet sur la Kobo. Il réserve 1 Gio de disque par carte, dont environ 534 Mo réellement écrits pour l'essai synthétique. Mémoire : un bloc de copie de 4 Mio, la PRE-P1 de 9,5 Mio et les deux FAT relues (environ 1 Mo).
+
+**Toujours UNQUALIFIED :** démarrage, E-Ink, tactile et veille. P3 est vide : un livre de test devra y être copié par une étape distincte, sur le fichier image uniquement.
