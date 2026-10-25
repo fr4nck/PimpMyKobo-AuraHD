@@ -10,6 +10,8 @@ Le [registre permanent des sources et de la recherche](recherche-sources-fr.md) 
 
 Le registre suit aussi désormais [Kobo Reader](https://www.mobileread.com/forums/forumdisplay.php?f=223) et son [Kobo Developer's Corner](https://www.mobileread.com/forums/forumdisplay.php?f=247), notamment les projets **kos (KOReader OS)**, **Quill OS / InkBox**, **Kobalt** et les fils de récupération : voir **R10**. Les OS tiers couvrent d'autres modèles ; la compatibilité Aura HD E606C0 n'est pas démontrée.
 
+Décision R2 (25 octobre 2026) : l'émulateur QEMU E606C0 de katadelos est retenu comme banc de boot, mais **son constructeur d'image est écarté pour FIRST BOOT**, car il réécrit `rcS` et `passwd` et exige Nickel. Une carte virtuelle PMKB copie P1/P2 à l'identique, voir [Exploitation R2](recherche-sources-fr.md#exploitation-r2--25-octobre-2026).
+
 Priorité : FIRST BOOT sans Nickel reste bloquant pour le matériel. Recherche, documentation et prototypes hors matériel peuvent avancer en parallèle, sans modifier le candidat scellé, PRE-P1, P2 ou les cartes. **Une source consultée ne vaut ni intégration ni qualification matérielle** ; chaque reprise de code exige diff, licence, compatibilité E606C0, tests et décision distincte.
 
 ## Ajout du 13 octobre 2026 — launcher expérimental (hôte uniquement)
