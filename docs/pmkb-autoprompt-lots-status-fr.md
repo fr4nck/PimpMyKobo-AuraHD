@@ -72,12 +72,24 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Publication** : uniquement mise à jour de ce journal sur `main` avec `[skip ci]` ; PR #7 et #28, image scellée, PRE-P1 et P2 **inchangées**. Aucun GO matériel.
 - **Reprise exacte : L01-D** — audit ciblé du garde de présence `eventN` dans `rcS` : identification de `zForce-ir-touch` via sysfs plutôt que deux numéros arbitraires, contrôle de `ntx_io` si nécessaire et fixtures de périphériques synthétiques. Changement limité au bootstrap + tests sur la PR #7 si justifié ; ne pas commencer L02 ni réécrire le pilote tactile.
 
+## LOT 01 — FIRST BOOT, sous-lot L01-D
+
+**Sous-lot L01-D : DONE (correctif et tests synthétiques). LOT 01 : IN_PROGRESS** (CI et qualification matérielle non closes).
+
+- **Départ vérifié le 25/10/2026** : `main@7a285d470fe5d97416cb19f4361a97c7473fea59`, PR [#7](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/7) sur `integration/pmkb-first-boot-1@39a3ca76884776dace2665e6cf9183b9b3672b09` (ouverte, non fusionnée).
+- **Défaut corrigé** : `rcS` supposait `/dev/input/event0` et `event1` sans vérifier leur parent tactile, et ignorait `ntx_io`. La correction identifie **un seul** événement evdev `zForce-ir-touch` via `/sys/class/input/eventN/device/name`, accepte `eventN` variable et refuse le mauvais nom, le doublon ou un nœud non caractère. Elle vérifie `/dev/fb0`, `/dev/ntx_io` et la présence sysfs de `ntx_io` avant montage P3. Aucun `udev`, daemon, import de pilote, réseau ou dépendance supplémentaire.
+- **Fichiers effectivement modifiés sur PR #7** : `experimental/offline-rootfs/etc/init.d/rcS` (+24/-1 lignes) et nouveau `tests/test_frontend_device_guard.py` (+102 lignes). Commit [`4b23f8c4d1d3171fc9ec6e7d78c7a5d14badd029`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/4b23f8c4d1d3171fc9ec6e7d78c7a5d14badd029) publié par fast-forward sans forçage. Diff exact et parent `39a3ca7` vérifiés. `rcS` d'origine reconstruit à partir du remplacement ciblé, empreinte Git blob SHA-1 `887fc3c946bde5a03afe4ed27c89dcca1da5910e` conforme à la PR avant modification.
+- **Tests réellement exécutés localement, hors dépôt cloné** : Python `unittest discover` sur copie synthétique du `rcS` et du nouveau module de test, **6 PASS / 0 FAIL** en 0,029 s ; vérification `sh -n` PASS. Scénarios : évènement tactile renuméroté (`event7`) avec `event0` non tactile, toucher absent/mal nommé, nœud non caractère, doublon ZForce, périphériques framebuffer/frontlight absents, suffixe evdev non numérique et ordre des gardes avant montage. Le banc extrait uniquement la fonction de garde du script, il n'exécute **ni rcS complet ni commande de montage**, utilise des fichiers temporaires et des liens de test.
+- **NON EXÉCUTÉS** : suite complète du dépôt, CI GitHub sur `4b23f8c` (à vérifier au prochain sous-lot), build sur ARM, lectures sur Kobo réelle, contrôles EPDC/ZForce/frontlight réels, FIRST BOOT, P3 physique et USB/Calibre. Les tests de présence sysfs **ne prouvent pas** l'état fonctionnel du matériel ; aucun `PASS matériel`.
+- **Préservation** : images FIRST BOOT scellées, PRE-P1, P2/recoveryfs, HWCONFIG, waveform et matériel inchangés. Aucun téléchargement et aucune PR fusionnée.
+- **Reprise exacte L01-E** : consulter l'état CI GitHub du HEAD `4b23f8c` et vérifier l'intégration du nouvel `rcS` dans les tests existants du builder, en lecture ciblée. Si absence de FAIL logiciel pertinent, conclure le périmètre logiciel du LOT 01 par une matrice finale `PASS / NON EXÉCUTÉ`, sans feindre une qualification du démarrage physique et sans fusion.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
 | --- | --- | --- | --- | --- | --- |
 | L00 — État des lieux | **DONE** | `main@6ff6cabb` | Inventaire + journal, documentation seule | API/lecture statique PASS ; CI et physique NON EXÉCUTÉS | L01-A |
-| L01 — FIRST BOOT | **IN_PROGRESS** (L01-A/B/C DONE) | `main@c3a91c9`, PR #7 `39a3ca7`, PR #28 `f74fbc0` | [Matrice 15 gates L01-A](first-boot-gates-l01a-2026-10-25-fr.md), garde P3 et qualification ciblée L01-C | **5/5 tests ciblés PASS, 0 FAIL**, 6 blobs vérifiés ; CI/boot NON EXÉCUTÉS | **L01-D** |
+| L01 — FIRST BOOT | **IN_PROGRESS** (L01-A/B/C/D DONE) | `main@7a285d4`, PR #7 `4b23f8c`, PR #28 `f74fbc0` | Matrice des gates, garde P3, garde ZForce/NTX et fixtures ciblées | **L01-D : 6 PASS / 0 FAIL** hôte synthétique ; CI/boot/matériel NON EXÉCUTÉS | **L01-E** |
 | L02 — HWCONFIG / ZForce / rotation | TODO | À déterminer ; consulter PR #30 | Fixtures des orientations et événements, comparer la HAL existante | NON EXÉCUTÉ | L02-A |
 | L03 — Moteur e-ink | TODO | À déterminer ; consulter PR #30 | Banc d'invalidation / gris / refresh, sans moteur concurrent | NON EXÉCUTÉ | L03-A |
 | L04 — Énergie / Wi-Fi / reprise | TODO | À déterminer ; consulter PR #28 | Contrats de veille, SDIO et RTC ; réseau à la demande | NON EXÉCUTÉ | L04-A |
