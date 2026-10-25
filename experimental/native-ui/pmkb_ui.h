@@ -72,6 +72,8 @@ typedef struct {
     unsigned next_id;
 } PMKBNotebook;
 bool pmkb_notes_valid_utc(const char *utc);
+/* Same Unicode whitespace test for blur and pmkb-notes-v1 export. */
+bool pmkb_notes_meaningful_title(const char *utf8);
 void pmkb_notebook_init(PMKBNotebook *book);
 void pmkb_notebook_free(PMKBNotebook *book);
 PMKBStatus pmkb_notebook_new(PMKBNotebook *book, const char *utc,
@@ -139,7 +141,7 @@ PMKBStatus pmkb_ui_init(PMKBUI *ui, int width, int height);
 void pmkb_ui_free(PMKBUI *ui);
 PMKBStatus pmkb_ui_new_note(PMKBUI *ui, const char *utc);
 PMKBStatus pmkb_ui_open_note(PMKBUI *ui, size_t index);
-void pmkb_ui_show_list(PMKBUI *ui);
+PMKBStatus pmkb_ui_show_list(PMKBUI *ui);
 PMKBStatus pmkb_ui_event(PMKBUI *ui, PMKBEvent event, const char *utc);
 void pmkb_ui_draw(PMKBUI *ui);
 

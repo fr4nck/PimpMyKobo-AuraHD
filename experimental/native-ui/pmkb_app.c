@@ -138,10 +138,22 @@ void pmkb_ui_free(PMKBUI *ui){
     pmkb_notebook_free(&ui->notebook);
     pmkb_surface_free(&ui->screen);memset(ui,0,sizeof(*ui));
 }
+/* ADR-005: a blank title is legal during editing, but never on exit.
+ * Reuse the JSON exporter's exact Unicode whitespace predicate. */
+static PMKBStatus normalize_title_on_leave(PMKBUI *ui){
+    if(ui->view!=PMKB_VIEW_EDITOR||ui->focus!=PMKB_FOCUS_TITLE)
+        return PMKB_OK;
+    PMKBNote *n=selected(ui);
+    if(!n)return PMKB_NOT_FOUND;
+    if(pmkb_notes_meaningful_title(n->title.data))return PMKB_OK;
+    return pmkb_text_set(&n->title,"Sans titre");
+}
 PMKBStatus pmkb_ui_new_note(PMKBUI *ui,const char *utc){
-    if(!ui||!ui->screen.gray)return PMKB_INVALID;
+    if(!ui||!ui->screen.gray||!pmkb_notes_valid_utc(utc))return PMKB_INVALID;
+    PMKBStatus rc=normalize_title_on_leave(ui);
+    if(rc!=PMKB_OK)return rc;
     size_t index=0;
-    PMKBStatus rc=pmkb_notebook_new(&ui->notebook,utc,&index);
+    rc=pmkb_notebook_new(&ui->notebook,utc,&index);
     if(rc!=PMKB_OK)return rc;
     ui->selected=index;ui->view=PMKB_VIEW_EDITOR;ui->focus=PMKB_FOCUS_TITLE;
     PMKBText *title=&ui->notebook.items[index]->title;
@@ -151,17 +163,22 @@ PMKBStatus pmkb_ui_new_note(PMKBUI *ui,const char *utc){
     return PMKB_OK;
 }
 PMKBStatus pmkb_ui_open_note(PMKBUI *ui,size_t index){
-    if(!ui||index>=ui->notebook.count)return PMKB_NOT_FOUND;
+    if(!ui||!ui->screen.gray||index>=ui->notebook.count)return PMKB_NOT_FOUND;
+    PMKBStatus rc=normalize_title_on_leave(ui);
+    if(rc!=PMKB_OK)return rc;
     ui->selected=index;ui->view=PMKB_VIEW_EDITOR;ui->focus=PMKB_FOCUS_BODY;
     pmkb_keyboard_close(&ui->keyboard);
     draw_top(ui);draw_second(ui);draw_body(ui);ui->render_calls++;
     return PMKB_OK;
 }
-void pmkb_ui_show_list(PMKBUI *ui){
-    if(!ui||!ui->screen.gray)return;
+PMKBStatus pmkb_ui_show_list(PMKBUI *ui){
+    if(!ui||!ui->screen.gray)return PMKB_INVALID;
+    PMKBStatus rc=normalize_title_on_leave(ui);
+    if(rc!=PMKB_OK)return rc;
     ui->view=PMKB_VIEW_LIST;
     pmkb_keyboard_close(&ui->keyboard);
     draw_top(ui);draw_second(ui);draw_body(ui);ui->render_calls++;
+    return PMKB_OK;
 }
 static void redraw_focus(PMKBUI *ui){
     draw_second(ui);draw_body(ui);ui->render_calls++;
@@ -171,10 +188,8 @@ static void redraw_focus(PMKBUI *ui){
 static PMKBStatus focus_body(PMKBUI *ui){
     PMKBNote *note=selected(ui);
     if(!note)return PMKB_NOT_FOUND;
-    if(ui->focus==PMKB_FOCUS_TITLE&&note->title.bytes==0){
-        PMKBStatus rc=pmkb_text_set(&note->title,"Sans titre");
-        if(rc!=PMKB_OK)return rc;
-    }
+    PMKBStatus rc=normalize_title_on_leave(ui);
+    if(rc!=PMKB_OK)return rc;
     ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);
     return PMKB_OK;
 }
@@ -235,7 +250,7 @@ static PMKBStatus tap(PMKBUI *ui,int x,int y,const char *utc){
     }
     if(y<TOP){
         if(x<48)return pmkb_ui_new_note(ui,utc);
-        if(x<96){pmkb_ui_show_list(ui);return PMKB_OK;}
+        if(x<96)return pmkb_ui_show_list(ui);
         if(x<144&&ui->view==PMKB_VIEW_EDITOR){
             if(ui->keyboard.visible){
                 pmkb_keyboard_close(&ui->keyboard);
@@ -267,7 +282,7 @@ static PMKBStatus tap(PMKBUI *ui,int x,int y,const char *utc){
 PMKBStatus pmkb_ui_event(PMKBUI *ui,PMKBEvent ev,const char *utc){
     if(!ui||!ui->screen.gray)return PMKB_INVALID;
     if(ev.kind==PMKB_EVENT_TAP)return tap(ui,ev.x,ev.y,utc);
-    if(ev.kind==PMKB_EVENT_SHOW_LIST){pmkb_ui_show_list(ui);return PMKB_OK;}
+    if(ev.kind==PMKB_EVENT_SHOW_LIST)return pmkb_ui_show_list(ui);
     if(ev.kind==PMKB_EVENT_TOGGLE_KEYBOARD){
         if(ui->view!=PMKB_VIEW_EDITOR)return PMKB_NOT_FOUND;
         if(ui->keyboard.visible){

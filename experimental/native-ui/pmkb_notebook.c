@@ -33,7 +33,7 @@ bool pmkb_notes_valid_utc(const char *s) {
 }
 /* A title can be temporarily empty during editing, but must not be
  * serialized if the JS Notes importer would reject it. */
-static bool meaningful_title(const char *s){
+bool pmkb_notes_meaningful_title(const char *s){
     if(!s)return false;
     const unsigned char *p=(const unsigned char*)s;
     while(*p){
@@ -156,7 +156,7 @@ PMKBStatus pmkb_notebook_export_json(const PMKBNotebook *book,
         size_t title_units=0,body_units=0;
         if(pmkb_utf8_measure(n->title.data,n->title.bytes,&title_units)!=PMKB_OK ||
            pmkb_utf8_measure(n->body.data,n->body.bytes,&body_units)!=PMKB_OK ||
-           !meaningful_title(n->title.data) ||
+           !pmkb_notes_meaningful_title(n->title.data) ||
            title_units>PMKB_TITLE_LIMIT||body_units>PMKB_BODY_LIMIT ||
            !pmkb_notes_valid_utc(n->created)||!pmkb_notes_valid_utc(n->updated))
             return free(j.data),PMKB_INVALID;

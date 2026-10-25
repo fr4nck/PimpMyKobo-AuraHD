@@ -176,6 +176,56 @@ static int empty_title_blur(void){
     pmkb_ui_free(&ui);groups++;return 0;
 }
 
+/* ADR-005 L05-B: restore whitespace-only titles on ALL editor exits,
+ * never during editing. Reuses the notebook export predicate. */
+static int title_blur_navigation(void){
+    static const char *blanks[]={" ","\xc2\xa0","\xe3\x80\x80",""};
+    for(int method=0;method<5;method++){
+        PMKBUI ui={0};char *json=NULL;size_t length=0;
+        CHECK(pmkb_ui_init(&ui,320,480)==PMKB_OK);
+        CHECK(pmkb_ui_new_note(&ui,UTC)==PMKB_OK);
+        if(method==4)CHECK(pmkb_ui_new_note(&ui,UTC)==PMKB_OK);
+        PMKBNote *old=ui.notebook.items[ui.selected];
+        const char *blank=blanks[method%4];
+        CHECK(pmkb_text_set(&old->title,blank)==PMKB_OK);
+        CHECK(old->title.bytes==strlen(blank)&&ui.focus==PMKB_FOCUS_TITLE);
+        CHECK(!pmkb_notes_meaningful_title(old->title.data));
+        CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_INVALID);
+        CHECK(json==NULL); /* never normalize during editing */
+        PMKBStatus status=PMKB_INVALID;
+        if(method==0)status=pmkb_ui_event(&ui,
+            (PMKBEvent){.kind=PMKB_EVENT_SHOW_LIST},UTC);
+        else if(method==1)status=pmkb_ui_event(&ui,
+            (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=72,.y=10},UTC);
+        else if(method==2)status=pmkb_ui_event(&ui,
+            (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=12,.y=10},UTC);
+        else if(method==3)status=pmkb_ui_new_note(&ui,UTC);
+        else status=pmkb_ui_open_note(&ui,0);
+        CHECK(status==PMKB_OK);
+        CHECK(strcmp(old->title.data,"Sans titre")==0);
+        if(method<=1)CHECK(ui.view==PMKB_VIEW_LIST);
+        else CHECK(ui.view==PMKB_VIEW_EDITOR);
+        CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_OK);
+        CHECK(json!=NULL&&strstr(json,"\"title\":\"Sans titre\"")!=NULL);
+        free(json);
+        pmkb_ui_free(&ui);
+    }
+    PMKBUI ui={0};
+    CHECK(pmkb_ui_init(&ui,320,480)==PMKB_OK);
+    CHECK(pmkb_ui_new_note(&ui,UTC)==PMKB_OK);
+    PMKBNote *n=ui.notebook.items[0];
+    CHECK(pmkb_text_set(&n->title," \xc2\xa0 ")==PMKB_OK);
+    CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_OK);
+    CHECK(strcmp(n->title.data,"Sans titre")==0);
+    CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+        .kind=PMKB_EVENT_TAP,.x=15,.y=75},UTC)==PMKB_OK);
+    CHECK(pmkb_text_set(&n->title,"  Projet  ")==PMKB_OK);
+    CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_OK);
+    CHECK(strcmp(n->title.data,"  Projet  ")==0);
+    pmkb_ui_free(&ui);
+    groups++;return 0;
+}
+
 static int notebook_memory(void){
     PMKBNotebook book;pmkb_notebook_init(&book);
     size_t idx=99;
@@ -512,7 +562,7 @@ int main(int argc,char **argv){
     if(argc==2&&strcmp(argv[1],"--json-fixture")==0)return dump_fixture();
     if(argc!=1)return 2;
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
-       empty_title_blur()||notebook_memory()||
+       empty_title_blur()||title_blur_navigation()||notebook_memory()||
        dirty_canvas()||gray16_invalidation_budget()||
        ui_flow()||high_resolution_budget()||
        backend_retry()||backend_edits_during_present()||
