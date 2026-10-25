@@ -85,9 +85,11 @@ typedef struct { int x,y,w,h; } PMKBRect;
 typedef struct {
     int width,height;
     uint8_t *gray;                /* one 8-bit grayscale buffer, host-only */
-    PMKBRect dirty;               /* union of changed pixels */
+    PMKBRect dirty;               /* public union (take_dirty contract) */
     bool has_dirty;
     size_t changed_pixels;
+    PMKBRect dirty_islands[2];    /* at most two host presentation regions */
+    unsigned dirty_island_count;  /* fixed storage: +36 bytes on common ABIs */
 } PMKBSurface;
 PMKBStatus pmkb_surface_init(PMKBSurface *s, int width, int height);
 void pmkb_surface_free(PMKBSurface *s);

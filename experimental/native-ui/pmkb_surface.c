@@ -3,16 +3,46 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Small, fixed invalidation budget: keep the public dirty union unchanged.
+ * Two candidate rectangles are tracked without an additional framebuffer. */
+static PMKBRect rect_union(PMKBRect a,PMKBRect b){
+    int left=a.x<b.x?a.x:b.x,top=a.y<b.y?a.y:b.y;
+    int right=a.x+a.w>b.x+b.w?a.x+a.w:b.x+b.w;
+    int bottom=a.y+a.h>b.y+b.h?a.y+a.h:b.y+b.h;
+    return (PMKBRect){left,top,right-left,bottom-top};
+}
+static size_t rect_area(PMKBRect r){
+    return (size_t)r.w*(size_t)r.h;
+}
 static void mark(PMKBSurface *s,int x,int y,int w,int h){
     if(w<=0||h<=0)return;
-    if(!s->has_dirty){s->dirty=(PMKBRect){x,y,w,h};s->has_dirty=true;return;}
-    int left=s->dirty.x<x?s->dirty.x:x;
-    int top=s->dirty.y<y?s->dirty.y:y;
-    int right=(s->dirty.x+s->dirty.w)>(x+w)?
-              (s->dirty.x+s->dirty.w):(x+w);
-    int bottom=(s->dirty.y+s->dirty.h)>(y+h)?
-               (s->dirty.y+s->dirty.h):(y+h);
-    s->dirty=(PMKBRect){left,top,right-left,bottom-top};
+    PMKBRect added={x,y,w,h};
+    if(!s->has_dirty){
+        s->dirty=added;s->has_dirty=true;
+        s->dirty_islands[0]=added;s->dirty_island_count=1;
+        return;
+    }
+    s->dirty=rect_union(s->dirty,added);
+    if(s->dirty_island_count==0){
+        s->dirty_islands[0]=s->dirty;s->dirty_island_count=1;
+    }else if(s->dirty_island_count==1){
+        s->dirty_islands[1]=added;s->dirty_island_count=2;
+    }else{
+        PMKBRect a=s->dirty_islands[0],b=s->dirty_islands[1];
+        PMKBRect ab=rect_union(a,b),ac=rect_union(a,added);
+        PMKBRect bc=rect_union(b,added);
+        /* Merge the least expensive pair; count never exceeds two. */
+        size_t cost_ab=rect_area(ab)+rect_area(added);
+        size_t cost_ac=rect_area(ac)+rect_area(b);
+        size_t cost_bc=rect_area(a)+rect_area(bc);
+        if(cost_ab<=cost_ac&&cost_ab<=cost_bc){
+            s->dirty_islands[0]=ab;s->dirty_islands[1]=added;
+        }else if(cost_ac<=cost_bc){
+            s->dirty_islands[0]=ac;
+        }else{
+            s->dirty_islands[1]=bc;
+        }
+    }
 }
 PMKBStatus pmkb_surface_init(PMKBSurface *s,int width,int height){
     if(!s||width<240||height<320||width>2000||height>2500)
@@ -58,7 +88,7 @@ void pmkb_surface_rect(PMKBSurface *s,PMKBRect r,uint8_t shade){
 bool pmkb_surface_take_dirty(PMKBSurface *s,PMKBRect *out){
     if(!s||!out||!s->has_dirty)return false;
     *out=s->dirty;s->has_dirty=false;s->dirty=(PMKBRect){0,0,0,0};
-    s->changed_pixels=0;return true;
+    s->changed_pixels=0;s->dirty_island_count=0;return true;
 }
 /* Portable 5 x 10 pixel glyphs for the host-only black-and-white preview.
  * The repertoire is intentionally small but covers French Notes, pi/root,

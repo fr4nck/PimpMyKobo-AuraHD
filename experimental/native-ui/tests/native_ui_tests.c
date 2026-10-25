@@ -383,6 +383,73 @@ static int backend_edits_during_present(void){
     groups++;return 0;
 }
 
+
+/* L03-C: fixed two-island invalidation; callback counts are synthetic.
+ * No EPDC latency or waveform behavior is claimed by this host test. */
+typedef struct {
+    unsigned calls,fail_on;
+    PMKBRect sent[8];
+    size_t pixels;
+} DirtyProbe;
+static PMKBStatus count_rectangles(void *context,const uint8_t *gray,
+                                   int w,int h,PMKBRect dirty){
+    DirtyProbe *probe=(DirtyProbe*)context;
+    if(!gray||w<1||h<1)return PMKB_INVALID;
+    if(probe->calls>=8)return PMKB_LIMIT;
+    probe->sent[probe->calls++]=dirty;
+    if(probe->fail_on==probe->calls)return PMKB_INVALID;
+    probe->pixels+=(size_t)dirty.w*(size_t)dirty.h;
+    return PMKB_OK;
+}
+static int bounded_dirty_presentation(void){
+    PMKBSurface s={0};PMKBRect union_rect={0};
+    CHECK(pmkb_surface_init(&s,1080,1440)==PMKB_OK);
+    CHECK(pmkb_surface_take_dirty(&s,&union_rect));
+    CHECK(s.dirty_island_count==0);
+    DirtyProbe probe={0};
+    PMKBBackend backend={.context=&probe,.present=count_rectangles};
+    pmkb_surface_rect(&s,(PMKBRect){0,0,1,1},0);
+    pmkb_surface_rect(&s,(PMKBRect){1079,1439,1,1},0);
+    CHECK(s.changed_pixels==2u&&s.dirty_island_count==2u);
+    CHECK(s.dirty.w==1080&&s.dirty.h==1440);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(probe.calls==2&&probe.pixels==2u&&!s.has_dirty);
+    CHECK(probe.sent[0].w==1&&probe.sent[0].h==1&&
+          probe.sent[1].w==1&&probe.sent[1].h==1);
+    CHECK(s.dirty_island_count==0u);
+    printf("PMKB EINK SPLIT: 2 pixels sent in 2 callbacks "
+           "instead of 1555200 pixels in 1 callback\n");
+
+    /* Clustered swatches remain one callback: 60 changed, 228 sent. */
+    probe=(DirtyProbe){0};
+    for(int i=0;i<15;i++)
+        pmkb_surface_rect(&s,(PMKBRect){12+i*8,24,2,2},(uint8_t)(17*i));
+    CHECK(s.changed_pixels==60u);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(probe.calls==1&&!s.has_dirty&&probe.pixels==228u);
+
+    /* The third island merges with an existing one, never gets lost. */
+    probe=(DirtyProbe){0};
+    pmkb_surface_rect(&s,(PMKBRect){0,0,1,1},200);
+    pmkb_surface_rect(&s,(PMKBRect){1079,0,1,1},200);
+    pmkb_surface_rect(&s,(PMKBRect){1079,1439,1,1},200);
+    CHECK(s.dirty_island_count==2u);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(probe.calls==2&&!s.has_dirty&&probe.pixels<1555200u);
+
+    /* A failed second callback keeps both islands until a full retry. */
+    probe=(DirtyProbe){.fail_on=2};
+    pmkb_surface_rect(&s,(PMKBRect){0,0,1,1},80);
+    pmkb_surface_rect(&s,(PMKBRect){1079,1439,1,1},80);
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_INVALID);
+    CHECK(probe.calls==2&&s.has_dirty&&s.dirty_island_count==2u);
+    probe=(DirtyProbe){0};
+    CHECK(pmkb_surface_present(&s,&backend)==PMKB_OK);
+    CHECK(probe.calls==2&&!s.has_dirty);
+    pmkb_surface_free(&s);
+    groups++;return 0;
+}
+
 static int high_resolution_budget(void){
     PMKBUI ui={0};PMKBRect dirty;
     CHECK(pmkb_ui_init(&ui,1080,1440)==PMKB_OK);
@@ -413,7 +480,8 @@ int main(int argc,char **argv){
        notebook_memory()||
        dirty_canvas()||gray16_invalidation_budget()||
        ui_flow()||high_resolution_budget()||
-       backend_retry()||backend_edits_during_present())return 1;
+       backend_retry()||backend_edits_during_present()||
+       bounded_dirty_presentation())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            checked,groups);
     return 0;
