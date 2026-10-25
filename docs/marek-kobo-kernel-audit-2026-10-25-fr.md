@@ -4,6 +4,8 @@
 
 **Classement : P1 / INFO + CANDIDAT DE RECHERCHE CIBLÉ R1 (EPDC)**. **Ne pas remplacer le noyau FIRST BOOT.** L'auteur part des sources Kobo i.MX507 fournies par KoboLabs, mais précise avoir testé ses changements **sur Kobo Touch N905C seulement**, pas sur **Aura HD N204 / Netronix E606C0 / `dragon` / 1440×1080 / 512 Mio**.
 
+**Complément forks :** [M02bis — 16 copies publiques analysées, dont Mizuho32 et ses correctifs SDIO/veille de septembre 2026](marek-kernel-forks-audit-2026-10-25-fr.md). Le résultat de veille/réveil physique est **rapporté par l'auteur sur son appareil**, et ne constitue **pas une qualification E606C0**. Aucun remplacement EPDC ou ZForce proposé à partir de ces forks.
+
 ## Apports réellement observés
 
 | Sujet | Preuve / fonctionnement historique | Intérêt concret et limites pour PMKB |
