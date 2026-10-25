@@ -200,6 +200,64 @@ static int dirty_canvas(void){
     pmkb_surface_free(&s);
     groups++;return 0;
 }
+
+/* L03-B host-only reference: mathematically nearest of 16 linear grays.
+ * Not a calibrated E606C0 waveform, framebuffer format or packed driver. */
+static uint8_t gray16_reference(uint8_t gray){
+    return (uint8_t)(((unsigned)gray*15u+127u)/255u);
+}
+static int gray16_invalidation_budget(void){
+    unsigned seen=0;
+    for(unsigned v=0;v<256u;v++){
+        unsigned level=gray16_reference((uint8_t)v);
+        CHECK(level<=15u);
+        int error=(int)level*17-(int)v;
+        CHECK(error>=-8&&error<=8);
+        if(v>0u)CHECK(level>=gray16_reference((uint8_t)(v-1u)));
+        seen|=1u<<level;
+    }
+    CHECK(seen==0xffffu); /* all 16 levels reachable, monotone */
+
+    PMKBSurface s={0};PMKBRect r={0};
+    CHECK(pmkb_surface_init(&s,1080,1440)==PMKB_OK);
+    CHECK(pmkb_surface_take_dirty(&s,&r));
+    CHECK(r.x==0&&r.y==0&&r.w==1080&&r.h==1440);
+    /* 16 reference gray swatches. White-on-white should not invalidate. */
+    for(unsigned i=0;i<16u;i++){
+        int x=12+(int)i*8;
+        uint8_t shade=(uint8_t)(i*17u);
+        CHECK(gray16_reference(shade)==i);
+        pmkb_surface_rect(&s,(PMKBRect){x,24,2,2},shade);
+        CHECK(s.gray[(size_t)24u*1080u+(size_t)x]==shade);
+    }
+    CHECK(s.has_dirty&&s.changed_pixels==60u); /* 15 swatches x 4 px */
+    CHECK(pmkb_surface_take_dirty(&s,&r));
+    CHECK(r.x==12&&r.y==24&&r.w==114&&r.h==2);
+    size_t clustered_area=(size_t)r.w*(size_t)r.h;
+    CHECK(clustered_area==228u);
+    for(unsigned i=0;i<16u;i++){
+        int x=12+(int)i*8;
+        pmkb_surface_rect(&s,(PMKBRect){x,24,2,2},
+                          (uint8_t)(i*17u));
+    }
+    CHECK(!s.has_dirty&&s.changed_pixels==0u); /* no-op repaints */
+    pmkb_surface_rect(&s,(PMKBRect){0,0,1,1},0);
+    pmkb_surface_rect(&s,(PMKBRect){1079,1439,1,1},0);
+    CHECK(s.has_dirty&&s.changed_pixels==2u);
+    CHECK(pmkb_surface_take_dirty(&s,&r));
+    CHECK(r.x==0&&r.y==0&&r.w==1080&&r.h==1440);
+    size_t distant_area=(size_t)r.w*(size_t)r.h;
+    CHECK(distant_area==1555200u);
+    CHECK(distant_area/2u==777600u);
+    CHECK(!pmkb_surface_take_dirty(&s,&r));
+    pmkb_surface_free(&s);
+    printf("PMKB EINK HOST: 16 grays, max gray error 8, "
+           "clustered_dirty=%zu for 60 pixel writes, "
+           "distant_dirty=%zu for 2 pixel writes\n",
+           clustered_area,distant_area);
+    groups++;return 0;
+}
+
 static int ui_flow(void){
     PMKBUI ui={0};PMKBRect dirty;
     CHECK(pmkb_ui_init(&ui,320,480)==PMKB_OK);
@@ -353,7 +411,8 @@ int main(int argc,char **argv){
     if(argc!=1)return 2;
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
        notebook_memory()||
-       dirty_canvas()||ui_flow()||high_resolution_budget()||
+       dirty_canvas()||gray16_invalidation_budget()||
+       ui_flow()||high_resolution_budget()||
        backend_retry()||backend_edits_during_present())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            checked,groups);
