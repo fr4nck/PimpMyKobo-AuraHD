@@ -535,6 +535,64 @@ static int bounded_dirty_presentation(void){
     groups++;return 0;
 }
 
+
+/* L05-C: logical hitboxes of the shared keyboard on three host layouts.
+ * The two Notes header rows stay 48 px; no panel mm/calibration assumed. */
+static int keyboard_touch_geometry(void){
+    static const int sizes[3][2]={{320,480},{1080,1440},{1440,1080}};
+    for(size_t i=0;i<3;i++){
+        PMKBUI ui={0};
+        int w=sizes[i][0],h=sizes[i][1];
+        CHECK(pmkb_ui_init(&ui,w,h)==PMKB_OK);
+        CHECK(pmkb_ui_new_note(&ui,UTC)==PMKB_OK);
+        PMKBNote *n=ui.notebook.items[ui.selected];
+        /* Exactly two upper bars, with body starting on logical row 96. */
+        int cx=w/2;
+        CHECK(ui.screen.gray[(size_t)47*w+cx]==0);
+        CHECK(ui.screen.gray[(size_t)48*w+cx]==247);
+        CHECK(ui.screen.gray[(size_t)95*w+cx]==0);
+        CHECK(ui.screen.gray[(size_t)96*w+cx]==255);
+        CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+            .kind=PMKB_EVENT_TOGGLE_KEYBOARD},UTC)==PMKB_OK);
+        CHECK(ui.keyboard.visible);
+        int rowh=w>=680?94:44;
+        int top=h-PMKB_KB_ROWS*rowh;
+        CHECK(top>=96 && top+PMKB_KB_ROWS*rowh==h);
+        CHECK(rowh>=PMKB_TOUCH_MIN);
+        /* Row zero: character at the centre of its full touch column. */
+        int x=(2*0+1)*w/(2*PMKB_KB_COLS);
+        CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+            .kind=PMKB_EVENT_TAP,.x=x,.y=top+rowh/2},UTC)==PMKB_OK);
+        CHECK(strcmp(n->title.data,"a")==0);
+        /* Row five, last cell: Enter moves to body without closing KB. */
+        x=(2*5+1)*w/(2*PMKB_KB_COLS);
+        CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+            .kind=PMKB_EVENT_TAP,.x=x,.y=top+5*rowh+rowh/2},UTC)==PMKB_OK);
+        CHECK(ui.focus==PMKB_FOCUS_BODY&&ui.keyboard.visible);
+        /* SPACE is rendered across two columns: both halves must work. */
+        for(int col=2;col<=3;col++){
+            x=(2*col+1)*w/(2*PMKB_KB_COLS);
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+                .kind=PMKB_EVENT_TAP,.x=x,.y=top+5*rowh+rowh/2},UTC)==PMKB_OK);
+        }
+        CHECK(strcmp(n->body.data,"  ")==0&&n->body.cursor==2);
+        /* The two halves of LEFT and RIGHT are both real tap targets. */
+        for(int col=0;col<4;col++){
+            x=(2*col+1)*w/(2*PMKB_KB_COLS);
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+                .kind=PMKB_EVENT_TAP,.x=x,.y=top+6*rowh+rowh/2},UTC)==PMKB_OK);
+            CHECK(n->body.cursor==(size_t)(col==0?1:col==1?0:col==2?1:2));
+        }
+        /* The right half of the shared HIDE target must close keyboard. */
+        x=(2*5+1)*w/(2*PMKB_KB_COLS);
+        CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+            .kind=PMKB_EVENT_TAP,.x=x,.y=top+6*rowh+rowh/2},UTC)==PMKB_OK);
+        CHECK(!ui.keyboard.visible);
+        pmkb_ui_free(&ui);
+    }
+    groups++;return 0;
+}
+
 static int high_resolution_budget(void){
     PMKBUI ui={0};PMKBRect dirty;
     CHECK(pmkb_ui_init(&ui,1080,1440)==PMKB_OK);
@@ -564,7 +622,7 @@ int main(int argc,char **argv){
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
        empty_title_blur()||title_blur_navigation()||notebook_memory()||
        dirty_canvas()||gray16_invalidation_budget()||
-       ui_flow()||high_resolution_budget()||
+       ui_flow()||keyboard_touch_geometry()||high_resolution_budget()||
        backend_retry()||backend_edits_during_present()||
        bounded_dirty_presentation())return 1;
     printf("PMKB NATIVE: %u assertions PASS, %u groups PASS, 0 FAIL\n",
