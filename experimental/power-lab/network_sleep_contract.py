@@ -5,8 +5,8 @@ control the radio, acquire RTC time, or establish a hardware resume sequence.
 """
 
 ALLOWED = frozenset((
-    "network_request", "sdio_ready", "wifi_on", "wifi_off",
-    "network_release", "suspend", "resume",
+    "network_request", "mmc_ready", "sdio_ready", "sdio_quiesced",
+    "wifi_on", "wifi_off", "network_release", "suspend", "resume",
 ))
 MAX_EVENTS = 128
 
@@ -39,6 +39,17 @@ def replay(events):
                 error = "asleep"
             else:
                 requested = True
+        elif event in ("mmc_ready", "sdio_quiesced"):
+            if sleeping:
+                error = "asleep"
+            elif wifi:
+                error = "wifi_still_enabled"
+            else:
+                # Invalidate the previous SDIO-ready claim on host reset or
+                # quiescence. Preparing to sleep also revokes user intent.
+                sdio = False
+                if event == "sdio_quiesced":
+                    requested = False
         elif event == "sdio_ready":
             if sleeping:
                 error = "asleep"
