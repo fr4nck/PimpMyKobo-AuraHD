@@ -65,8 +65,25 @@ class ArchiveContractTests(unittest.TestCase):
                 raw = package(members=[(archive_name, b"data"), ("bin/demo", b"demo")])
                 if "\\" in path:
                     with ZipFile(BytesIO(raw), "r") as zipfile:
-                        self.assertIn(path, zipfile.namelist())
+                        self.assertIn(
+                            path, [item.orig_filename for item in zipfile.infolist()])
                 self.reject("unsafe_member_path", raw)
+
+    def test_windows_zip_name_normalization_does_not_bypass_preflight(self):
+        # Build an entry with a raw backslash before the archive is read.
+        name = "bin\\demo"
+        entry = ZipInfo("bin/demo")
+        entry.filename = name
+        entry.orig_filename = name
+        raw = package(members=[(entry, b"demo")])
+        # Force the same ZipInfo normalization as the Windows runner.
+        with patch("zipfile.os.sep", "\\"):
+            with ZipFile(BytesIO(raw), "r") as zipfile:
+                self.assertEqual(
+                    ["manifest.json", "bin/demo"], zipfile.namelist())
+                self.assertIn(name, [
+                    item.orig_filename for item in zipfile.infolist()])
+            self.reject("unsafe_member_path", raw)
 
     def test_collision_ignoring_case(self):
         raw = package(members=[("bin/demo", b"demo"), ("BIN/DEMO", b"other")])

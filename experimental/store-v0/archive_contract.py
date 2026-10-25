@@ -59,8 +59,12 @@ def inspect_archive(data, *, available_dependencies=(), allow_network=False):
             files = set()
             total = 0
             for item in infos:
+                # ZipInfo.filename normalizes backslashes on Windows.
+                # Validate the original ZIP name, never a host-normalized alias.
+                if item.orig_filename != item.filename:
+                    raise ArchiveError("unsafe_member_path")
                 is_dir = item.is_dir()
-                path = _check_path(item.filename, is_dir)
+                path = _check_path(item.orig_filename, is_dir)
                 key = path.casefold()
                 if key in names:
                     raise ArchiveError("duplicate_member")
