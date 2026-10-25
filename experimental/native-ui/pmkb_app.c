@@ -166,6 +166,18 @@ void pmkb_ui_show_list(PMKBUI *ui){
 static void redraw_focus(PMKBUI *ui){
     draw_second(ui);draw_body(ui);ui->render_calls++;
 }
+/* ADR-005: keep an empty title editable, restore "Sans titre" only
+ * when leaving that field for the body. Never rewrite while typing. */
+static PMKBStatus focus_body(PMKBUI *ui){
+    PMKBNote *note=selected(ui);
+    if(!note)return PMKB_NOT_FOUND;
+    if(ui->focus==PMKB_FOCUS_TITLE&&note->title.bytes==0){
+        PMKBStatus rc=pmkb_text_set(&note->title,"Sans titre");
+        if(rc!=PMKB_OK)return rc;
+    }
+    ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);
+    return PMKB_OK;
+}
 static PMKBStatus changed(PMKBUI *ui,PMKBStatus rc,const char *utc){
     if(rc==PMKB_OK){
         if(ui->view==PMKB_VIEW_EDITOR){
@@ -184,9 +196,8 @@ static PMKBStatus press_keyboard(PMKBUI *ui,int row,int col,const char *utc){
     if(!text)return PMKB_NOT_FOUND;
     PMKBKey key=pmkb_keyboard_key(&ui->keyboard,row,col);
     if(!key.span)return PMKB_INVALID;
-    if(key.action==PMKB_KEY_ENTER&&ui->focus==PMKB_FOCUS_TITLE){
-        ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);return PMKB_OK;
-    }
+    if(key.action==PMKB_KEY_ENTER&&ui->focus==PMKB_FOCUS_TITLE)
+        return focus_body(ui);
     if((key.action==PMKB_KEY_INSERT||key.action==PMKB_KEY_SPACE||
         key.action==PMKB_KEY_BACKSPACE||key.action==PMKB_KEY_ENTER||
         key.action==PMKB_KEY_CLEAR) &&
@@ -239,8 +250,8 @@ static PMKBStatus tap(PMKBUI *ui,int x,int y,const char *utc){
     }
     if(y<BODY_START){
         if(ui->view==PMKB_VIEW_EDITOR){
-            ui->focus=x>=ui->screen.width-90?PMKB_FOCUS_BODY:PMKB_FOCUS_TITLE;
-            redraw_focus(ui);return PMKB_OK;
+            if(x>=ui->screen.width-90)return focus_body(ui);
+            ui->focus=PMKB_FOCUS_TITLE;redraw_focus(ui);return PMKB_OK;
         }
         return PMKB_NO_CHANGE;
     }
@@ -250,7 +261,7 @@ static PMKBStatus tap(PMKBUI *ui,int x,int y,const char *utc){
             return pmkb_ui_open_note(ui,ui->notebook.count-1u-(size_t)row);
         return PMKB_NO_CHANGE;
     }
-    if(ui->focus!=PMKB_FOCUS_BODY){ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);}
+    if(ui->focus!=PMKB_FOCUS_BODY)return focus_body(ui);
     return PMKB_OK;
 }
 PMKBStatus pmkb_ui_event(PMKBUI *ui,PMKBEvent ev,const char *utc){
@@ -283,9 +294,7 @@ PMKBStatus pmkb_ui_event(PMKBUI *ui,PMKBEvent ev,const char *utc){
     case PMKB_EVENT_LEFT:rc=pmkb_text_move(text,-1);break;
     case PMKB_EVENT_RIGHT:rc=pmkb_text_move(text,1);break;
     case PMKB_EVENT_ENTER:
-        if(ui->focus==PMKB_FOCUS_TITLE){
-            ui->focus=PMKB_FOCUS_BODY;redraw_focus(ui);return PMKB_OK;
-        }
+        if(ui->focus==PMKB_FOCUS_TITLE)return focus_body(ui);
         rc=pmkb_text_insert(text,"\n");break;
     default:return PMKB_INVALID;
     }

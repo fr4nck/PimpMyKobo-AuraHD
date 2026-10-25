@@ -141,6 +141,41 @@ static int scientific_keyboard(void){
     pmkb_text_free(&expr);groups++;return 0;
 }
 
+/* ADR-005: "Sans titre" is restored on blur, never mid-entry.
+ * No browser storage, material device or manga assets are touched. */
+static int empty_title_blur(void){
+    PMKBUI ui={0};char *json=NULL;size_t length=0;
+    CHECK(pmkb_ui_init(&ui,320,480)==PMKB_OK);
+    for(int method=0;method<3;method++){
+        CHECK(pmkb_ui_new_note(&ui,UTC)==PMKB_OK);
+        PMKBNote *note=ui.notebook.items[ui.selected];
+        CHECK(ui.focus==PMKB_FOCUS_TITLE);
+        CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_BACKSPACE},UTC)==PMKB_OK);
+        CHECK(note->title.bytes==0&&strcmp(note->title.data,"")==0);
+        CHECK(ui.focus==PMKB_FOCUS_TITLE); /* no premature normalization */
+        CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_INVALID);
+        CHECK(json==NULL); /* current empty title cannot be exported */
+        if(method==0){
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_OK);
+        }else if(method==1){
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+                .kind=PMKB_EVENT_TAP,.x=20,.y=108},UTC)==PMKB_OK);
+        }else{
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+                .kind=PMKB_EVENT_TOGGLE_KEYBOARD},UTC)==PMKB_OK);
+            int top=ui.screen.height-PMKB_KB_ROWS*44;
+            CHECK(pmkb_ui_event(&ui,(PMKBEvent){
+                .kind=PMKB_EVENT_TAP,.x=310,.y=top+5*44+10},UTC)==PMKB_OK);
+        }
+        CHECK(ui.focus==PMKB_FOCUS_BODY);
+        CHECK(strcmp(note->title.data,"Sans titre")==0);
+        CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_OK);
+        CHECK(json!=NULL&&strstr(json,"\"title\":\"Sans titre\"")!=NULL);
+        free(json);json=NULL;length=0;
+    }
+    pmkb_ui_free(&ui);groups++;return 0;
+}
+
 static int notebook_memory(void){
     PMKBNotebook book;pmkb_notebook_init(&book);
     size_t idx=99;
@@ -477,7 +512,7 @@ int main(int argc,char **argv){
     if(argc==2&&strcmp(argv[1],"--json-fixture")==0)return dump_fixture();
     if(argc!=1)return 2;
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
-       notebook_memory()||
+       empty_title_blur()||notebook_memory()||
        dirty_canvas()||gray16_invalidation_budget()||
        ui_flow()||high_resolution_budget()||
        backend_retry()||backend_edits_during_present()||
