@@ -33,6 +33,8 @@
 
 ### M01 OKReader
 
+**Complément :** [audit des 16 forks directs, branches expérimentales et 5 forks des sous-modules](okreader-forks-audit-2026-10-25-fr.md) (25 octobre 2026) ; comparaison des apports réels, risques HWCONFIG/boot et décisions R1/R5.
+
 **Bibliothèque des adaptations matérielles Kobo — fiche du 25 octobre 2026.** La matrice ci-dessus reste l'index des projets ; cette fiche consigne les faits **lus dans les sources** et les décisions PMKB, sans constituer une recette d'installation.
 
 **Référence figée :** [lgeek/okreader, `2c253e5becbf22fd16960edca4f37eba2c03556a`](https://github.com/lgeek/okreader/tree/2c253e5becbf22fd16960edca4f37eba2c03556a) (dernier commit observé : 29 juin 2018). Lecture statique de `README.md`, `LICENSE`, `.gitmodules`, `build.sh`, `build_rootfs.sh`, `files/fstab`, `files/rc.local`, `files/okreader.sh`, `files/enable-wifi.sh`, `files/disable-wifi.sh`, `files/obtain-ip.sh`, `files/release-ip.sh` et `files/defaults.persistent.lua`. **Aucun téléchargement, compilation, démarrage, essai E606C0 ni copie de code tiers.** Les sous-modules `linux-okreader`, `u-boot-okreader` et `koreader` sont distincts : pour les deux premiers, utiliser également le [comparatif R1/R3](kernel-community-audit-2026-10-24-fr.md), qui a déjà audité neuf fichiers noyau à des révisions épinglées.
