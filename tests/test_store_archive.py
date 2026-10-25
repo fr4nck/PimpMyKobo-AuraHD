@@ -55,7 +55,18 @@ class ArchiveContractTests(unittest.TestCase):
         for path in ("../escape", "bin/../escape", "/bin/demo", "C:/bin/demo",
                      "bin\\demo", "bin//demo", "bin/./demo", "bin/x.", "bin/evil:name"):
             with self.subTest(path=path):
-                self.reject("unsafe_member_path", package(members=[(path, b"data"), ("bin/demo", b"demo")]))
+                # ZipInfo(path) normalizes os.sep on Windows: write a raw ZIP
+                # member name instead of accidentally constructing a duplicate.
+                archive_name = path
+                if "\\" in path:
+                    archive_name = ZipInfo("bin/demo")
+                    archive_name.filename = path
+                    archive_name.orig_filename = path
+                raw = package(members=[(archive_name, b"data"), ("bin/demo", b"demo")])
+                if "\\" in path:
+                    with ZipFile(BytesIO(raw), "r") as zipfile:
+                        self.assertIn(path, zipfile.namelist())
+                self.reject("unsafe_member_path", raw)
 
     def test_collision_ignoring_case(self):
         raw = package(members=[("bin/demo", b"demo"), ("BIN/DEMO", b"other")])
