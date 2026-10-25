@@ -153,6 +153,54 @@ static int extreme_abs_corner_matrix(void){
     groups++;return 0;
 }
 
+
+/* Synthetic centre with 0/90/180/270, mirrors and two display geometries.
+ * Repeated loss of evdev frames must never turn a stale tap into UI input.
+ * These fixtures are NOT measured Aura HD hardware calibration. */
+static int center_rotation_recovery_matrix(void){
+    static const PMKBRotation rotations[]={
+        PMKB_ROT_0,PMKB_ROT_90,PMKB_ROT_180,PMKB_ROT_270
+    };
+    for(int layout=0;layout<2;layout++)
+        for(size_t r=0;r<sizeof(rotations)/sizeof(rotations[0]);r++)
+            for(int mirror=0;mirror<4;mirror++){
+                PMKBTouchConfig c=config(rotations[r]);
+                c.width=layout?1440:1080;
+                c.height=layout?1080:1440;
+                /* Include offset raw ABS ranges: not all inputs start at 0. */
+                c.x_min=layout?-300:0;c.x_max=layout?1140:1440;
+                c.y_min=layout?100:0;c.y_max=layout?1180:1080;
+                c.mirror_x=(mirror&1)!=0;
+                c.mirror_y=(mirror&2)!=0;
+                const int mx=c.x_min+(c.x_max-c.x_min)/2;
+                const int my=c.y_min+(c.y_max-c.y_min)/2;
+                PMKBTouch touch={0};
+                PMKBEvent event={.kind=PMKB_EVENT_TEXT,.x=17,.y=19,.text="stable"};
+                CHECK(pmkb_touch_init(&touch,c)==PMKB_OK);
+                CHECK(tap_press(&touch,mx,my,&event)==PMKB_NO_CHANGE);
+                CHECK(tap_release(&touch,mx,my,&event)==PMKB_OK);
+                CHECK(event.kind==PMKB_EVENT_TAP &&
+                      event.x==c.width/2 && event.y==c.height/2);
+                CHECK(touch.taps==1);
+                CHECK(tap_press(&touch,mx,my,&event)==PMKB_NO_CHANGE);
+                CHECK(pmkb_touch_feed(&touch,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,
+                                      &event)==PMKB_NO_CHANGE);
+                event=(PMKBEvent){.kind=PMKB_EVENT_TEXT,.x=17,.y=19,.text="stable"};
+                /* This first report and its contents are thrown away. */
+                CHECK(tap_press(&touch,mx,my,&event)==PMKB_NO_CHANGE);
+                /* The next clean release clears quarantine, never emits TAP. */
+                CHECK(tap_release(&touch,mx,my,&event)==PMKB_NO_CHANGE);
+                CHECK(touch.taps==1 && touch.drops==1 &&
+                      event.kind==PMKB_EVENT_TEXT &&
+                      event.x==17 && event.y==19);
+                CHECK(tap_press(&touch,mx,my,&event)==PMKB_NO_CHANGE);
+                CHECK(tap_release(&touch,mx,my,&event)==PMKB_OK);
+                CHECK(touch.taps==2 && event.kind==PMKB_EVENT_TAP &&
+                      event.x==c.width/2 && event.y==c.height/2);
+            }
+    groups++;return 0;
+}
+
 static int missing_and_invalid_events(void){
     PMKBTouch t={0};PMKBEvent event={.kind=PMKB_EVENT_TEXT};
     CHECK(pmkb_touch_init(&t,config(PMKB_ROT_0))==PMKB_OK);
@@ -462,7 +510,7 @@ static int end_to_end_legacy_touch(void){
 }
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
-       missing_and_invalid_events()||
+       center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
