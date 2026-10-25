@@ -54,7 +54,7 @@
 **Décisions et suite courte :**
 
 1. **RETENIR** OKReader comme preuve historique de conception « Linux + KOReader sans Nickel » sur d'autres appareils et comme comparateur des choix d'initialisation, stockage, USB, Wi-Fi et gestion mémoire ; **aucun code intégré**.
-2. **COMPARER sous R1** uniquement les éléments U-Boot/EPDC/MMC spécifiques à `dragon` et le comportement `kobo_hwconfig` au HWCONFIG E606C0 déjà décodé ; utiliser le dossier [R1/R3](kernel-community-audit-2026-10-24-fr.md) et l'[analyseur PRE-P1](../experimental/boot-region/README.md) si le fichier existe à la révision utilisée, sans lancer de script d'installation historique.
+2. **COMPARER sous R1** uniquement les éléments U-Boot/EPDC/MMC spécifiques à `dragon` et le comportement `kobo_hwconfig` au HWCONFIG E606C0 déjà décodé ; utiliser le dossier [R1/R3](kernel-community-audit-2026-10-24-fr.md) et la [qualification PRE-P1 de R2](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/feat/pmkb-powerlab-kernel-v0/docs/emulation-e606c0-r2-fr.md), sans lancer de script d'installation historique.
 3. **QUALIFIER sous R5** un éventuel mode USB/Calibre et le Wi-Fi facultatif, avec accès exclusif aux données, politique de services à la demande et mesure de consommation, **après** FIRST BOOT.
 4. **NE PAS FAIRE** : installer Debian Wheezy, importer le paquet KOReader 2018, modifier U-Boot/P2/P3, ou déduire un test Aura HD des réussites sur Touch, Mini, Aura ou Glo.
 
