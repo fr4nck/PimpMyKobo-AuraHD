@@ -21,8 +21,11 @@ static bool coordinates(const PMKBTouch *t,int *x,int *y){
     /* Rational scaling in int64 avoids overflow / floating-point rounding.
      * Transform normalized axes before orientation; the dragon-specific
      * mirror and rotate profile MUST be qualified against real corners. */
-    int64_t ux=((int64_t)(t->raw_x-c.x_min)*1000000)/(c.x_max-c.x_min);
-    int64_t uy=((int64_t)(t->raw_y-c.y_min)*1000000)/(c.y_max-c.y_min);
+    /* Extend both operands before subtraction: ABS spans can exceed INT_MAX. */
+    int64_t x_span=(int64_t)c.x_max-(int64_t)c.x_min;
+    int64_t y_span=(int64_t)c.y_max-(int64_t)c.y_min;
+    int64_t ux=(((int64_t)t->raw_x-(int64_t)c.x_min)*1000000)/x_span;
+    int64_t uy=(((int64_t)t->raw_y-(int64_t)c.y_min)*1000000)/y_span;
     if(c.mirror_x)ux=1000000-ux;
     if(c.mirror_y)uy=1000000-uy;
     int64_t fx=ux,fy=uy;

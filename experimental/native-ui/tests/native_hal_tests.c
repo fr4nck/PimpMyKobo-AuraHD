@@ -2,6 +2,7 @@
 #include "../pmkb_hal.h"
 #include "../pmkb_launcher_bridge.h"
 #include <stdint.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -115,6 +116,43 @@ static int rotate_mirror(void){
     CHECK(pmkb_touch_init(&t,c)==PMKB_INVALID);
     groups++;return 0;
 }
+
+/* Synthetic range/rotation matrix: mathematical transform, not a real dragon
+ * calibration. Also guards against int overflow before the int64 scaling. */
+static int extreme_abs_corner_matrix(void){
+    static const PMKBRotation rotations[]={
+        PMKB_ROT_0,PMKB_ROT_90,PMKB_ROT_180,PMKB_ROT_270
+    };
+    for(int layout=0;layout<2;layout++)
+        for(size_t r=0;r<sizeof(rotations)/sizeof(rotations[0]);r++)
+            for(int mirror=0;mirror<4;mirror++)
+                for(int corner=0;corner<4;corner++){
+                    PMKBTouch t={0};PMKBEvent event={0};
+                    PMKBTouchConfig c=config(rotations[r]);
+                    c.width=layout?1440:1080;
+                    c.height=layout?1080:1440;
+                    c.x_min=INT_MIN;c.x_max=INT_MAX;
+                    c.y_min=INT_MIN;c.y_max=INT_MAX;
+                    c.mirror_x=(mirror&1)!=0;
+                    c.mirror_y=(mirror&2)!=0;
+                    CHECK(pmkb_touch_init(&t,c)==PMKB_OK);
+                    int raw_x=(corner&1)?INT_MAX:INT_MIN;
+                    int raw_y=(corner&2)?INT_MAX:INT_MIN;
+                    CHECK(tap_press(&t,raw_x,raw_y,&event)==PMKB_NO_CHANGE);
+                    CHECK(tap_release(&t,raw_x,raw_y,&event)==PMKB_OK);
+                    int ux=((corner&1)!=0)^c.mirror_x;
+                    int uy=((corner&2)!=0)^c.mirror_y;
+                    int ex=ux,ey=uy;
+                    if(rotations[r]==PMKB_ROT_90){ex=!uy;ey=ux;}
+                    else if(rotations[r]==PMKB_ROT_180){ex=!ux;ey=!uy;}
+                    else if(rotations[r]==PMKB_ROT_270){ex=uy;ey=!ux;}
+                    CHECK(event.kind==PMKB_EVENT_TAP&&
+                          event.x==(ex?c.width-1:0)&&
+                          event.y==(ey?c.height-1:0));
+                }
+    groups++;return 0;
+}
+
 static int missing_and_invalid_events(void){
     PMKBTouch t={0};PMKBEvent event={.kind=PMKB_EVENT_TEXT};
     CHECK(pmkb_touch_init(&t,config(PMKB_ROT_0))==PMKB_OK);
@@ -423,7 +461,8 @@ static int end_to_end_legacy_touch(void){
     groups++;return 0;
 }
 int main(void){
-    if(decode_taps()||rotate_mirror()||missing_and_invalid_events()||
+    if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
+       missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
