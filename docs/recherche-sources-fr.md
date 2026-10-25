@@ -33,6 +33,8 @@
 
 ### M01 OKReader
 
+**Inventaire élargi (25 octobre 2026) :** [60 dépôts publics du compte lgeek et qualification Kobo/ARM](lgeek-account-audit-2026-10-25-fr.md). Les 60 noms sont recensés ; seules les pistes utiles ont fait l'objet d'une lecture de code et de comparaisons ciblées. Les branches KOReader Wi-Fi, veille et RTC y sont analysées contre des sources upstream récentes.
+
 **Complément :** [audit des 16 forks directs, branches expérimentales et 5 forks des sous-modules](okreader-forks-audit-2026-10-25-fr.md) (25 octobre 2026) ; comparaison des apports réels, risques HWCONFIG/boot et décisions R1/R5.
 
 **Bibliothèque des adaptations matérielles Kobo — fiche du 25 octobre 2026.** La matrice ci-dessus reste l'index des projets ; cette fiche consigne les faits **lus dans les sources** et les décisions PMKB, sans constituer une recette d'installation.
