@@ -35,12 +35,24 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - Publication : commit documentaire sur `main` avec `[skip ci]` ; voir historique du fichier pour SHA exact. Aucune PR créée ni fusionnée.
 - Suite précise : **LOT 01-A** — sur #7, relever les contrats FIRST BOOT, la matrice P1/P2/P3 et les vérifications boot encore ouvertes ; croiser uniquement les travaux R2 existants sur #28 ; terminer par conditions satisfaites / non satisfaites / qualification physique en attente. Pas d'écriture matérielle.
 
+## LOT 01 — FIRST BOOT, sous-lot L01-A
+
+**Statut du lot global : IN_PROGRESS. Sous-lot L01-A : DONE.** Ne pas commencer L02 avant clôture explicite de L01.
+
+- Départ : `main@a53f9f9f9968bb65c9d8b18bd51fb96a835985e2` ; PR #7 `integration/pmkb-first-boot-1@6b0506a085c3f19d818f71fbeebcd7c8da8c3abf` ; PR #28 `feat/pmkb-powerlab-kernel-v0@f74fbc0335fc22c6188f752e9526eca66704a41e`.
+- **Livraison [matrice FIRST BOOT L01-A](first-boot-gates-l01a-2026-10-25-fr.md)** : géométrie PRE-P1/P1/P2/P3, outils déjà existants, séparation copie scellée / profil QEMU virtuel, 15 gates avec preuves et limites, six verdicts matériels `UNQUALIFIED`.
+- **Fait réellement** : lecture statique des PR #7/#28, du contrat de démarrage, du rapport d'émulation R2, du partitionnement, de la qualification des interfaces et des boot gates. Aucune modification de code, firmware, image, matériel ou PR.
+- **Tests L01-A** : PASS = contrôles statiques de cohérence documentaire et du commit documentaire (un seul fichier ajouté) ; FAIL = 0 constaté ; **CI, suites Python/Lua et essais matériels : NON EXÉCUTÉS**. Les chiffres des rapports historiques #7/#28 sont des résultats antérieurs cités, pas réexécutés.
+- **Publication** : `main@055f07ca306f1d1947625d81850ee38498725e09`, commit documentaire `[skip ci]` ; aucune PR créée/fusionnée.
+- **Gates restantes** : correspondance effective de l'image FIRST BOOT scellée avec le code, champs binaires U-Boot/uImage et r1/r2, exécution KOReader, EPDC, ZForce, frontlight, montage P3 et transfert Calibre. **Aucun GO matériel**. Les tests QEMU et copies privées restent non exécutés.
+- **Suite précise : L01-B**, sur la branche existante de la PR #7, inspecter le code et les tests de `preflight-koreader` et du contrôle `pmkb-check-onboard` : vérifier que les six gates physiques ne deviennent jamais PASS via fixtures ou JSON synthétiques et qu'une P3 absente refuse le lancement. Si défaut prouvé : fixture/test minimal sur #7, sinon documenter ce contrôle. Pas de fusion, pas d'essai matériel, pas de téléchargement.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
 | --- | --- | --- | --- | --- | --- |
 | L00 — État des lieux | **DONE** | `main@6ff6cabb` | Inventaire + journal, documentation seule | API/lecture statique PASS ; CI et physique NON EXÉCUTÉS | L01-A |
-| L01 — FIRST BOOT | TODO | À vérifier sur PR #7 et #28 | Matrice des gates, dépendances et correctif/test minimal si possible | NON EXÉCUTÉ pour ce lot | L01-A |
+| L01 — FIRST BOOT | **IN_PROGRESS** (L01-A DONE) | `main@a53f9f9`, PR #7 `6b0506a`, PR #28 `f74fbc0` | [Matrice 15 gates L01-A](first-boot-gates-l01a-2026-10-25-fr.md), commit `055f07c` | Statique PASS ; CI/physique NON EXÉCUTÉS | **L01-B** |
 | L02 — HWCONFIG / ZForce / rotation | TODO | À déterminer ; consulter PR #30 | Fixtures des orientations et événements, comparer la HAL existante | NON EXÉCUTÉ | L02-A |
 | L03 — Moteur e-ink | TODO | À déterminer ; consulter PR #30 | Banc d'invalidation / gris / refresh, sans moteur concurrent | NON EXÉCUTÉ | L03-A |
 | L04 — Énergie / Wi-Fi / reprise | TODO | À déterminer ; consulter PR #28 | Contrats de veille, SDIO et RTC ; réseau à la demande | NON EXÉCUTÉ | L04-A |
