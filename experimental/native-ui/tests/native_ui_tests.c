@@ -259,8 +259,14 @@ static int notebook_memory(void){
     CHECK(pmkb_text_set(&book.items[0]->title,"Carnet valide")==PMKB_OK);
     CHECK(pmkb_notebook_export_json(&book,&json,&len)==PMKB_OK);
     free(json);
-    for(size_t i=1;i<PMKB_NOTE_LIMIT;i++)
+    for(size_t i=1;i<PMKB_NOTE_LIMIT;i++){
         CHECK(pmkb_notebook_new(&book,UTC,&idx)==PMKB_OK);
+        char expected[32];
+        (void)snprintf(expected,sizeof(expected),"Sans titre %zu",i+1);
+        CHECK(strcmp(book.items[idx]->title.data,expected)==0);
+    }
+    CHECK(strcmp(book.items[0]->title.data,"Carnet valide")==0);
+    CHECK(strcmp(book.items[99]->id,"pmkb_000100")==0);
     CHECK(book.count==100);
     CHECK(pmkb_notebook_new(&book,UTC,&idx)==PMKB_LIMIT);
     pmkb_notebook_free(&book);
