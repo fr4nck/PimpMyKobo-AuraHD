@@ -592,6 +592,16 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Invariants** : aucun changement de FIRST BOOT, P1/P2/P3, recoveryfs, HWCONFIG, Notes ADR-005, route Launcher, ni fusion #30/#31. Store toujours `runnable=false`. Aucun test physique, ARM, EPDC, tactile ni autonomie.
 - **Reprise L06-D6f** : etudier une API explicite de detach avant destruction cote routeur hote et son test negatif, sans rajouter de framebuffer ni rendre le Store executable. Si aucun defaut concret n'est reproduit, preparer simplement une matrice d'integration et arreter sans lancer L07.
 
+## LOT 06 — D6f, D6g, D6h : qualification des surfaces empruntees
+
+**D6f/D6g/D6h : DONE (hotes uniquement). LOT 06 : IN_PROGRESS.**
+
+- PR #31 `feat/pmkb-store-v0` au HEAD `b3b399b1e76663d297d3e48703eb7a1b0d230e67`; PR #30 au HEAD `e2907a19920100ef2a32ec6587e724ccb5116bc7`. Toutes deux OPEN/DRAFT et non fusionnees.
+- D6f : API `pmkb_store_launcher_guard_before_destroy()` pour detacher les emprunts avant destruction ; test de detach idempotent. D6g : refus du dessin apres detach, puis reentree explicite. D6h : liberation/recreation de surface synthetique apres detach, dessin refuse tant que detache.
+- **Preuve CI D6h** : [run #40338996143](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40338996143) au SHA `882655883e293fee1baa18d9f1dfbdb3187f2414` : **10/10 jobs success, 0 fail** (Python 3.10 a 3.13 sur Windows/Linux, Qt sur les deux). Le commit documentaire `b3b399b` utilise `[skip ci]`.
+- Aucun test d'endurance ARM, aucun boot Kobo, tactile, EPDC, mesure RAM materielle, P3 physique ou test reel Notes ADR-005. Le detachement demeure une obligation de l'appelant, non une garantie automatique en presence d'un use-after-free.
+- Prochaine etape : **D6i — matrice d'integration passive Store–Launcher**, inventorier preconditions, ordre de destruction, surfaces propres, dependances PR #30/#31 et criteres bloquants. Ne pas activer `PMKB_APP_STORE`, ni fusionner les PR.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -602,7 +612,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (L06-D6e DONE hors matériel)** | `main@25ccd44`, PR #31 `6f0e495` | Garde des surfaces et 3 transitions répétées Store/Notes/Calculatrice en test C11 | **CI #40335467922 : 10/10 SUCCESS, 0 FAIL** ; Kobo NON EXÉCUTÉE | **L06-D6f** |
+| L06 — Store *.pmkb | **IN_PROGRESS (L06-D6h DONE hors matériel)** | PR #31 `b3b399b` | Detachement explicite, reentree et liberation de surface empruntee testes | **CI #40338996143 : 10/10 SUCCESS, 0 FAIL** ; Kobo NON EXÉCUTÉE | **L06-D6i** |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
