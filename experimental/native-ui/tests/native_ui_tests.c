@@ -168,9 +168,11 @@ static int empty_title_blur(void){
                 .kind=PMKB_EVENT_TAP,.x=310,.y=top+5*44+10},UTC)==PMKB_OK);
         }
         CHECK(ui.focus==PMKB_FOCUS_BODY);
-        CHECK(strcmp(note->title.data,"Sans titre")==0);
+        char expected[32];
+        (void)snprintf(expected,sizeof(expected),"Sans titre %d",method+1);
+        CHECK(strcmp(note->title.data,expected)==0);
         CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_OK);
-        CHECK(json!=NULL&&strstr(json,"\"title\":\"Sans titre\"")!=NULL);
+        CHECK(json!=NULL&&strstr(json,expected)!=NULL);
         free(json);json=NULL;length=0;
     }
     pmkb_ui_free(&ui);groups++;return 0;
@@ -202,7 +204,7 @@ static int title_blur_navigation(void){
         else if(method==3)status=pmkb_ui_new_note(&ui,UTC);
         else status=pmkb_ui_open_note(&ui,0);
         CHECK(status==PMKB_OK);
-        CHECK(strcmp(old->title.data,"Sans titre")==0);
+        CHECK(strcmp(old->title.data,method==4?"Sans titre 2":"Sans titre 1")==0);
         if(method<=1)CHECK(ui.view==PMKB_VIEW_LIST);
         else CHECK(ui.view==PMKB_VIEW_EDITOR);
         CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_OK);
@@ -216,7 +218,7 @@ static int title_blur_navigation(void){
     PMKBNote *n=ui.notebook.items[0];
     CHECK(pmkb_text_set(&n->title," \xc2\xa0 ")==PMKB_OK);
     CHECK(pmkb_ui_event(&ui,(PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_OK);
-    CHECK(strcmp(n->title.data,"Sans titre")==0);
+    CHECK(strcmp(n->title.data,"Sans titre 1")==0);
     CHECK(pmkb_ui_event(&ui,(PMKBEvent){
         .kind=PMKB_EVENT_TAP,.x=15,.y=75},UTC)==PMKB_OK);
     CHECK(pmkb_text_set(&n->title,"  Projet  ")==PMKB_OK);
@@ -232,7 +234,7 @@ static int notebook_memory(void){
     CHECK(pmkb_notebook_new(&book,"2026-02-30T00:00:00.000Z",&idx)==PMKB_INVALID);
     CHECK(pmkb_notebook_new(&book,UTC,&idx)==PMKB_OK);
     CHECK(idx==0&&book.count==1);
-    CHECK(strcmp(book.items[0]->title.data,"Sans titre")==0);
+    CHECK(strcmp(book.items[0]->title.data,"Sans titre 1")==0);
     CHECK(strcmp(book.items[0]->id,"pmkb_000001")==0);
     CHECK(pmkb_text_set(&book.items[0]->title,"Cahier \xc3\xa9t\xc3\xa9")==PMKB_OK);
     CHECK(pmkb_text_set(&book.items[0]->body,"Une ligne\nEt une \"citation\".")==PMKB_OK);
