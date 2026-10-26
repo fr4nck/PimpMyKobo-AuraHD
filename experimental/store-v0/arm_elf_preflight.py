@@ -16,7 +16,7 @@ class ArmPreflightError(ValueError):
 def inspect_arm_elf(candidate):
     if type(candidate) is not bytes or len(candidate) < 52:
         raise ArmPreflightError("elf_header_truncated")
-    if candidate[:4] != b"\\x7fELF":
+    if candidate[:4] != b"\x7fELF":
         raise ArmPreflightError("not_elf")
     if candidate[4] != 1 or candidate[5] != 1 or candidate[6] != 1:
         raise ArmPreflightError("unsupported_elf_identity")
