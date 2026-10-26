@@ -416,6 +416,15 @@ static void verify_passive_router(void) {
           == PMKB_STORE_PAINT_OK);
     CHECK(router.store.surface.gray == first_gray);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    /* D6y: invalid page discards the current surface and cache. */
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 9999u)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(router.store.surface.gray == NULL);
+    CHECK(!router.store.guard.preview.screen.cache.valid);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
     CHECK(pmkb_store_router_preview(&router, 1080, 1440, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 1555200u);
