@@ -971,6 +971,35 @@ static void verify_eink_counter_saturation(void) {
     CHECK(state.failures==(unsigned)-1);
     CHECK(!state.pending);
 }
+/* D7v: stale/duplicate completions must not affect counters or dirty. */
+static void verify_async_completion_invariants(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    PMKBStoreEinkAsync state={0};
+    unsigned first=0,second=0;
+    PMKBSurface *surface=&router.store.surface;
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&first)==PMKB_OK);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,0u,true)==PMKB_INVALID);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first+1u,true)==PMKB_INVALID);
+    CHECK(state.markers.pending && surface->has_dirty);
+    CHECK(state.markers.completions==0u && state.markers.failures==0u);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first,true)==PMKB_OK);
+    CHECK(!surface->has_dirty && state.markers.completions==1u);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first,false)==PMKB_INVALID);
+    CHECK(state.markers.completions==1u && state.markers.failures==0u);
+    pmkb_surface_rect(surface,(PMKBRect){0,0,5,5},127);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&second)==PMKB_OK);
+    CHECK(second!=first);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first,true)==PMKB_INVALID);
+    CHECK(state.markers.pending && surface->has_dirty);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,second,false)==PMKB_INVALID);
+    CHECK(surface->has_dirty && state.markers.failures==1u);
+    CHECK(state.markers.completions==1u);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1023,6 +1052,7 @@ int main(void) {
     verify_async_reset_stale_marker();
     verify_eink_marker_exhaustion();
     verify_eink_counter_saturation();
+    verify_async_completion_invariants();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
