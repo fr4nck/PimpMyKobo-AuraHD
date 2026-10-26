@@ -432,6 +432,26 @@ static void verify_passive_router(void) {
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
     pmkb_store_router_dismiss(&router);
 }
+static void verify_router_shutdown(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_launch_app(&router, PMKB_APP_NOTES, 320, 480)
+          == PMKB_OK);
+    PMKBUI *notes = (PMKBUI *)router.host.instance;
+    CHECK(notes != NULL);
+    if (!notes) return;
+    notes->notebook.count = 1;
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_router_shutdown(&router, false) == PMKB_UNSAVED);
+    CHECK(router.host.active == PMKB_APP_NOTES && router.host.instance == notes);
+    CHECK(notes->notebook.count == 1);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    CHECK(pmkb_store_router_shutdown(&router, true) == PMKB_OK);
+    CHECK(router.host.active == PMKB_APP_NONE && router.host.instance == NULL);
+    CHECK(pmkb_store_router_shutdown(&router, false) == PMKB_NO_CHANGE);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+}
 int main(void) {
     memset(&catalog,0,sizeof(catalog));
     catalog.count=1;
@@ -444,6 +464,7 @@ int main(void) {
     verify_guarded_surface_ownership();
     verify_surface_owner();
     verify_passive_router();
+    verify_router_shutdown();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
