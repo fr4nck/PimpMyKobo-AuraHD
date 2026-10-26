@@ -650,6 +650,35 @@ static void verify_dismiss_before_present(void) {
     CHECK(mock.calls>=1u);
     pmkb_store_router_dismiss(&router);
 }
+/* D7i: resizing requires the owned surface and backend dimensions to match. */
+typedef struct { unsigned calls; int expected_w, expected_h; } D7iBackend;
+static PMKBStatus d7i_present(void *context, const uint8_t *gray,
+                             int width, int height, PMKBRect dirty) {
+    D7iBackend *m=(D7iBackend *)context;
+    ++m->calls;
+    return gray && width==m->expected_w && height==m->expected_h &&
+           dirty.w>0 && dirty.h>0 &&
+           dirty.x>=0 && dirty.y>=0 &&
+           dirty.x+dirty.w<=width && dirty.y+dirty.h<=height
+           ? PMKB_OK : PMKB_INVALID;
+}
+static void verify_resize_before_present(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_router_preview(&router,1080,1440,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store)==1555200u);
+    D7iBackend mock={0,1080,1440};
+    PMKBBackend backend={&mock,d7i_present};
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_OK);
+    CHECK(mock.calls>=1u);
+    CHECK(!router.store.surface.has_dirty);
+    pmkb_store_router_dismiss(&router);
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
+    CHECK(mock.calls>=1u);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -689,6 +718,7 @@ int main(void) {
     verify_backend_absent();
     verify_stale_host_before_present();
     verify_dismiss_before_present();
+    verify_resize_before_present();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
