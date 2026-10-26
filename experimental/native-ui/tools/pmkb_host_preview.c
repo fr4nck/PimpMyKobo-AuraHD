@@ -26,10 +26,26 @@ static int application(const char *name,int width,int height,const char *file){
     PMKBAppHost host;
     pmkb_app_host_init(&host);
     PMKBAppId kind=strcmp(name,"notes")==0?PMKB_APP_NOTES:
-                   strcmp(name,"calculator")==0?PMKB_APP_CALCULATOR:PMKB_APP_NONE;
+                   strcmp(name,"calculator")==0?PMKB_APP_CALCULATOR:
+                   (!strcmp(name,"store")||!strcmp(name,"store-detail"))
+                       ?PMKB_APP_STORE:PMKB_APP_NONE;
     if(pmkb_app_host_launch(&host,kind,width,height)!=PMKB_OK)return 1;
     PMKBStatus rc=PMKB_OK;
-    if(kind==PMKB_APP_CALCULATOR){
+    if(kind==PMKB_APP_STORE){
+        static const uint8_t snapshot[] =
+            "{\"cleanup_pending_count\":1,\"items\":["
+            "{\"id\":\"org.pmkb.calculator\",\"label\":\"Calculatrice\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"0.1.0\"},"
+            "{\"id\":\"org.pmkb.notes\",\"label\":\"Mes notes\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"0.2.0\"},"
+            "{\"id\":\"org.pmkb.weather\",\"label\":\"Meteo locale\",\"launchable\":false,\"network_declared\":true,\"state\":\"installed_unverified\",\"version\":\"0.1.0\"}],"
+            "\"schema\":\"pmkb-store-view-v1\",\"scope\":\"synthetic_read_only\"}";
+        if(pmkb_app_host_store_load(&host,snapshot,sizeof(snapshot)-1u)!=PMKB_OK)
+            rc=PMKB_INVALID;
+        if(rc==PMKB_OK&&!strcmp(name,"store-detail")&&
+           pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_TAP,
+                               .x=width==320?20:50,
+                               .y=width==320?70:130},NULL)!=PMKB_OK)
+            rc=PMKB_INVALID;
+    }else if(kind==PMKB_APP_CALCULATOR){
         PMKBCalcUI *calc=(PMKBCalcUI*)host.instance;
         if(pmkb_calc_ui_set_expression(calc,"sin(30)")!=PMKB_OK||
            pmkb_calc_ui_evaluate(calc)!=PMKB_OK||
@@ -71,13 +87,14 @@ static int fonts(int width,int height,const char *file){
 }
 int main(int argc,char **argv){
     if(argc!=5){
-        fputs("Usage: pmkb-host-preview notes|calculator|glyphs WIDTH HEIGHT OUTPUT.pgm\n",
+        fputs("Usage: pmkb-host-preview notes|calculator|store|store-detail|glyphs WIDTH HEIGHT OUTPUT.pgm\n",
               stderr);
         return 2;
     }
     int width=dimension(argv[2]),height=dimension(argv[3]);
     if(!width||height<320||width>2000||height>2500)return 2;
     if(strcmp(argv[1],"glyphs")==0)return fonts(width,height,argv[4]);
-    if(strcmp(argv[1],"notes")&&strcmp(argv[1],"calculator"))return 2;
+    if(strcmp(argv[1],"notes")&&strcmp(argv[1],"calculator")&&
+       strcmp(argv[1],"store")&&strcmp(argv[1],"store-detail"))return 2;
     return application(argv[1],width,height,argv[4]);
 }
