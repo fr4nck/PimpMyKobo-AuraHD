@@ -1110,6 +1110,69 @@ static void verify_async_transition_to_calculator(void) {
           &owner,PMKB_APP_STORE,320,480)==PMKB_NOT_FOUND);
     CHECK(owner.router.host.active==PMKB_APP_NONE);
 }
+/* D7z: a direct Launcher change must invalidate any pending Store marker
+ * before an old refresh completion can consume the Store dirty region. */
+static void verify_async_external_launch_before_complete(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned stale=0, fresh=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&stale)==PMKB_OK);
+    CHECK(owner.async.markers.pending);
+    /* Deliberately bypass pmkb_store_eink_lifecycle_launch_app. */
+    CHECK(pmkb_app_host_launch(&owner.router.host,PMKB_APP_CALCULATOR,320,480)
+          == PMKB_OK);
+    PMKBSurface *calc_screen=pmkb_app_host_screen(&owner.router.host);
+    CHECK(calc_screen!=NULL && calc_screen->gray!=NULL);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(!owner.async.markers.pending);
+    CHECK(owner.async.markers.completions==0u);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(owner.router.host.active==PMKB_APP_CALCULATOR);
+    CHECK(pmkb_app_host_screen(&owner.router.host)==calc_screen);
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&fresh)==PMKB_OK);
+    CHECK(fresh!=stale);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(owner.async.markers.pending && owner.router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,fresh,true)==PMKB_OK);
+    CHECK(!owner.router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_lifecycle_close_app(&owner,true)==PMKB_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+}
+static void verify_async_external_launch_before_submit(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned refused=77u;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    /* Direct host launch invalidates the preview even without a marker. */
+    CHECK(pmkb_app_host_launch(&owner.router.host,PMKB_APP_NOTES,320,480)
+          == PMKB_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&refused)==PMKB_INVALID);
+    CHECK(refused==77u);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(owner.router.host.active==PMKB_APP_NOTES);
+    CHECK(pmkb_store_eink_lifecycle_close_app(&owner,true)==PMKB_OK);
+}
+static void verify_async_external_store_dismiss(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned stale=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&stale)==PMKB_OK);
+    /* Direct router dismissal bypasses the async cancellation contract. */
+    pmkb_store_router_dismiss(&owner.router);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(!owner.async.markers.pending);
+    CHECK(owner.async.markers.completions==0u);
+    CHECK(pmkb_store_eink_lifecycle_shutdown(&owner,true)==PMKB_NO_CHANGE);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1167,6 +1230,9 @@ int main(void) {
     verify_async_cancel_after_edits();
     verify_async_transition_to_notes();
     verify_async_transition_to_calculator();
+    verify_async_external_launch_before_complete();
+    verify_async_external_launch_before_submit();
+    verify_async_external_store_dismiss();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
