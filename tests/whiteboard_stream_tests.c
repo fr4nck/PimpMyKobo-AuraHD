@@ -42,6 +42,42 @@ int main(void) {
  CHECK(pmkb_wb_redo(&board)==PMKB_WB_NO_CHANGE);
  CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
  CHECK(board.visible==0u);
+ /* L07-H: interruption after a committed chunk preserves that chunk;
+  * undo still removes the interrupted logical gesture as one action. */
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ CHECK(pmkb_surface_take_dirty(&screen,&dirty));
+ CHECK(pmkb_wb_down(&board,0,200,0,1)==PMKB_WB_OK);
+ for(int i=1;i<96;i++)
+     CHECK(pmkb_wb_touch_stream_move(&board,&screen,i,200)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch_stream_move(&board,&screen,96,200)==PMKB_WB_OK);
+ CHECK(board.visible==1u && board.in_stroke && board.working.continuation==1u);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
+ CHECK(!board.in_stroke && board.visible==1u && board.total==1u);
+ CHECK(board.strokes[0].continuation==0u);
+ CHECK(screen.gray[(size_t)200*320u+95u]==0);
+ CHECK(screen.gray[(size_t)200*320u+96u]==255);
+ CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==0u);
+ CHECK(pmkb_wb_render_replay(&board,&screen)==PMKB_OK);
+ CHECK(screen.gray[(size_t)200*320u+95u]==255);
+ CHECK(pmkb_wb_redo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==1u);
+ /* Capacity must fail closed before the 64th committed chunk is consumed. */
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ for(int i=0;i<63;i++) {
+     CHECK(pmkb_wb_down(&board,i,0,0,1)==PMKB_WB_OK);
+     CHECK(pmkb_wb_up(&board,i,0)==PMKB_WB_OK);
+ }
+ CHECK(board.visible==63u && board.total==63u);
+ CHECK(pmkb_wb_down(&board,0,300,0,1)==PMKB_WB_OK);
+ for(int i=1;i<96;i++)
+     CHECK(pmkb_wb_touch_stream_move(&board,&screen,i,300)==PMKB_WB_OK);
+ CHECK(board.working.count==96u && board.in_stroke);
+ CHECK(pmkb_wb_touch_stream_move(&board,&screen,96,300)==PMKB_WB_LIMIT);
+ CHECK(board.working.count==96u && board.visible==63u && board.total==63u);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
+ CHECK(board.visible==63u && !board.in_stroke);
+ CHECK(sizeof(PMKBWBModel)<32768u);
  pmkb_surface_free(&screen);
  if(fails)return 1;
  printf("WHITEBOARD STREAM: %u assertions PASS, 0 FAIL\n",checks);
