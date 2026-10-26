@@ -73,13 +73,15 @@ PMKBStatus pmkb_notebook_new(PMKBNotebook *book,const char *utc,size_t *index){
     if(book->next_id>=999999u)return PMKB_LIMIT;
     PMKBNote *n=(PMKBNote*)calloc(1,sizeof(*n));
     if(!n)return PMKB_MEMORY;
-    PMKBStatus rc=pmkb_text_init(&n->title,PMKB_TITLE_LIMIT,"Sans titre");
+    unsigned next=book->next_id+1u;
+    char fallback[32];
+    (void)snprintf(fallback,sizeof(fallback),"Sans titre %u",next);
+    PMKBStatus rc=pmkb_text_init(&n->title,PMKB_TITLE_LIMIT,fallback);
     if(rc==PMKB_OK)rc=pmkb_text_init(&n->body,PMKB_BODY_LIMIT,"");
     if(rc!=PMKB_OK){
         pmkb_text_free(&n->title);pmkb_text_free(&n->body);free(n);
         return rc;
     }
-    unsigned next=book->next_id+1u;
     (void)snprintf(n->id,sizeof(n->id),"pmkb_%06u",next);
     memcpy(n->created,utc,strlen(utc)+1);
     memcpy(n->updated,utc,strlen(utc)+1);
