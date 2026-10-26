@@ -6,12 +6,22 @@
 
 typedef enum {
     PMKB_WB_TOUCH_DOWN, PMKB_WB_TOUCH_MOVE,
-    PMKB_WB_TOUCH_UP, PMKB_WB_TOUCH_CANCEL
+    PMKB_WB_TOUCH_UP, PMKB_WB_TOUCH_CANCEL,
+    PMKB_WB_TOUCH_INTERRUPT
 } PMKBWBTouchKind;
 
+/* Explicit input-stream loss: discard an uncommitted gesture even if the
+ * framebuffer was already released. Never redraw or fabricate a final UP. */
+static inline PMKBWBStatus pmkb_wb_touch_interrupt(PMKBWBModel *board) {
+    if (!board) return PMKB_WB_INVALID;
+    if (!board->in_stroke) return PMKB_WB_NO_CHANGE;
+    return pmkb_wb_cancel(board);
+}
 static inline PMKBWBStatus pmkb_wb_touch(
     PMKBWBModel *board, PMKBSurface *surface, PMKBWBTouchKind kind,
     int x, int y, unsigned shade, unsigned thickness) {
+    if (kind==PMKB_WB_TOUCH_INTERRUPT)
+        return pmkb_wb_touch_interrupt(board);
     if (!board || !surface || !surface->gray ||
         board->width!=surface->width || board->height!=surface->height)
         return PMKB_WB_INVALID;
