@@ -405,6 +405,15 @@ static void verify_passive_router(void) {
     CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    CHECK(pmkb_store_router_preview(&router, 320, 480, NULL, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    CHECK(router.store.surface.gray == NULL);
+    CHECK(router.store.guard.host == NULL);
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+
     CHECK(pmkb_store_router_launch_app(&router, PMKB_APP_STORE, 320, 480)
           == PMKB_NOT_FOUND);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
