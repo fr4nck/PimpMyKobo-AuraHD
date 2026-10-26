@@ -16,3 +16,30 @@ python3 -m unittest discover -s tests -p 'test_store_manifest.py' -v
 ```
 
 **NON QUALIFIÉS :** création d'archive `*.pmkb`, installation/désinstallation, P3, lancement ARM, intégration Launcher, écriture matérielle, signatures et compatibilité E606C0 réelle.
+
+
+## État intégré — Store natif hors ligne V0
+
+Le Store est maintenant une application enregistrée dans le Launcher natif sur
+`main`. Le lancement alloue sa propre surface PMKB-UI, sans partager les pixels
+de Notes ou de la Calculatrice. L'hôte peut lui transmettre une charge bornée
+`pmkb-store-view-v1` ; un JSON invalide est refusé sans remplacer le catalogue
+précédent.
+
+Fonctions qualifiées sur hôte :
+
+- lancement et fermeture via `PMKBAppHost`, avec génération de cycle ;
+- catalogue vide ou jusqu'à 64 applications installées non vérifiées ;
+- pagination par gauche/droite ou zones tactiles du pied de page ;
+- ouverture tactile d'une fiche : nom, version, identifiant, déclaration réseau
+  et état explicitement non lançable ;
+- retour à la liste sans service résident ;
+- présentation par le backend PMKB injecté, avec conservation des régions
+  `dirty` en cas d'échec ;
+- captures C réelles liste/détail en 320×480 et 1080×1440 dans la QA hôte.
+
+Le Store V0 reste **hors ligne et non installateur sur la Kobo**. Les archives
+`*.pmkb`, l'installation et la désinstallation restent qualifiées uniquement
+dans des racines temporaires synthétiques par les contrats Python existants.
+Aucun paquet n'est exécuté, aucun réseau n'est activé et aucune écriture P3,
+FIRST BOOT, P1, P2 ou microSD physique n'est ajoutée.

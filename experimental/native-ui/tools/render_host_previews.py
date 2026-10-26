@@ -45,7 +45,7 @@ def main():
         destination.mkdir(parents=True, exist_ok=True)
         checks = 0
         signatures = set()
-        for mode in ("notes", "calculator", "glyphs"):
+        for mode in ("notes", "calculator", "store", "store-detail", "glyphs"):
             for width, height in ((320, 480), (1080, 1440)):
                 stem = f"pmkb-{mode}-{width}x{height}"
                 pgm = destination / f"{stem}.pgm"
@@ -59,7 +59,7 @@ def main():
                 assert len(set(pixels)) >= (2 if mode == "glyphs" else 3)
                 assert sum(value < 30 for value in pixels) > width * 2
                 if mode != "glyphs":
-                    # The bottom panel has black key borders on white background.
+                    # The bottom navigation area retains visible black and white pixels.
                     bottom = pixels[(height-44)*width:]
                     assert any(value == 0 for value in bottom)
                     assert any(value == 255 for value in bottom)
@@ -74,8 +74,8 @@ def main():
                 checks += 1
                 # No need to retain duplicate PGM once the host PNG was checked.
                 pgm.unlink()
-        assert checks == 6
-        print(f"PMKB HOST SNAPSHOTS: {checks}/6 PASS, 0 FAIL")
+        assert checks == 10
+        print(f"PMKB HOST SNAPSHOTS: {checks}/10 PASS, 0 FAIL")
     finally:
         if temp is not None:
             temp.cleanup()
