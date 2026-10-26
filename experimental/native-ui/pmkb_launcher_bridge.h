@@ -4,6 +4,7 @@
 #define PMKB_LAUNCHER_BRIDGE_H
 #include "pmkb_ui.h"
 #include "pmkb_calculator_ui.h"
+#include "pmkb_store_app.h"
 #include <stdint.h>
 
 typedef enum {
@@ -17,7 +18,7 @@ typedef struct {
     PMKBAppId kind;
     const char *id;       /* stable opaque ID for a future native launcher */
     const char *label;    /* user-facing UTF-8 */
-    bool runnable;        /* Store reserved, not runnable in this version */
+    bool runnable;        /* registered for launch by this native host */
 } PMKBAppInfo;
 
 /* Owns exactly one application at a time, created on launch.
@@ -36,6 +37,9 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
                                 int width,int height);
 /* Notes RAM is unsaved by definition: unless discard=true, leaving a
  * populated notebook must be refused to prevent silent data loss. */
+/* Load a bounded read-only Store snapshot. Only valid while Store is active. */
+PMKBStatus pmkb_app_host_store_load(PMKBAppHost *host,
+                                    const uint8_t *json,size_t length);
 PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard);
 PMKBSurface *pmkb_app_host_screen(PMKBAppHost *host);
 PMKBStatus pmkb_app_host_event(PMKBAppHost *host,
