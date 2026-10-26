@@ -13,7 +13,7 @@ spec.loader.exec_module(module)
 
 def header(*, machine=40, elf_type=2, size=52):
     value = bytearray(52)
-    value[:7] = b"\\x7fELF\\x01\\x01\\x01"
+    value[:7] = b"\x7fELF\x01\x01\x01"
     struct.pack_into("<HHI", value, 16, elf_type, machine, 1)
     struct.pack_into("<H", value, 40, size)
     return bytes(value)
