@@ -144,7 +144,7 @@ class WhiteboardModelC11(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(first.stdout, second.stdout)
-            header = b"P5\\n320 480\\n255\\n"
+            header = b"P5\n320 480\n255\n"
             self.assertTrue(first.stdout.startswith(header))
             pixels = first.stdout[len(header):]
             self.assertEqual(len(pixels), 320 * 480)
