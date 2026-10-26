@@ -265,7 +265,10 @@ static void verify_guarded_surface_ownership(void) {
                   == PMKB_STORE_PAINT_OK);
             CHECK(hash_frame(app_surface) == app_before);
         }
-        pmkb_store_launcher_guard_leave(&guard); /* before host destruction */
+        pmkb_store_launcher_guard_before_destroy(&guard);
+        CHECK(guard.host == NULL && guard.preview.target == NULL);
+        pmkb_store_launcher_guard_before_destroy(&guard); /* idempotent */
+        CHECK(!guard.preview.screen.visible);
         CHECK(pmkb_app_host_close(&host, true) == PMKB_OK);
         CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
               == PMKB_STORE_PAINT_INVALID);
