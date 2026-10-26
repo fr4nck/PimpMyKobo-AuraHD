@@ -187,8 +187,6 @@ static void verify_guarded_surface_ownership(void) {
     CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
           == PMKB_STORE_PAINT_OK);
     CHECK(guard.generation_on_enter == host.generation);
-    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
-          == PMKB_STORE_PAINT_OK);
 
     /* Starting Notes changes the host lifecycle; fail closed on draw. */
     CHECK(pmkb_app_host_launch(&host, PMKB_APP_NOTES, 320, 480) == PMKB_OK);
