@@ -48,7 +48,7 @@ def inspect_arm_elf(candidate):
         if filesize == 0 or filesize > 256 or fileoff + filesize > len(candidate):
             raise ArmPreflightError("invalid_interpreter")
         raw = candidate[fileoff:fileoff + filesize]
-        if not raw.endswith(b"\\x00") or b"\\x00" in raw[:-1]:
+        if not raw.endswith(b"\x00") or b"\x00" in raw[:-1]:
             raise ArmPreflightError("invalid_interpreter")
         try:
             path = raw[:-1].decode("ascii")
