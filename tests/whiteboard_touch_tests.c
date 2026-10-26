@@ -33,8 +33,9 @@ int main(void) {
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,319,479,15,1)==PMKB_WB_OK);
  CHECK(board.visible==2u);
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,320,479,0,1)==PMKB_WB_INVALID);
+ /* White-on-white is no pixel change: do not require a dirty region. */
+ CHECK(!screen.has_dirty);
  /* LOST-UP: interruption never commits the unfinished gesture. */
- CHECK(pmkb_surface_take_dirty(&screen,&dirty));
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,40,40,0,1)==PMKB_WB_OK);
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_MOVE,41,41,0,1)==PMKB_WB_OK);
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_INTERRUPT,-1,-1,0,0)==PMKB_WB_OK);
