@@ -189,6 +189,14 @@ static void verify_guarded_surface_ownership(void) {
           == PMKB_STORE_PAINT_INVALID);
     CHECK(hash_frame(notes) == note_hash);
 
+    /* Overlap regression: offset alias is not a separate allocation. */
+    PMKBSurface overlap = *notes;
+    overlap.gray = notes->gray + 1;
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &overlap)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
+    CHECK(hash_frame(notes) == note_hash);
+
     CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
