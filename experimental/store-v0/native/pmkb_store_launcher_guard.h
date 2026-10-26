@@ -73,6 +73,13 @@ static inline PMKBStorePaintStatus pmkb_store_launcher_guard_draw(
     }
     return pmkb_store_ui_preview_draw(&g->preview, catalogue, page_index);
 }
+/* Owner must call this BEFORE destroying either borrowed object.
+ * After detaching, no host or target pointer is dereferenced.  It is safe
+ * to call repeatedly, including when no Store preview is active. */
+static inline void pmkb_store_launcher_guard_before_destroy(
+    PMKBStoreLauncherGuard *g) {
+    pmkb_store_launcher_guard_leave(g);
+}
 /* Mandatory after another writer draws onto the borrowed Store buffer. */
 static inline void pmkb_store_launcher_guard_external_draw(
     PMKBStoreLauncherGuard *g) {
