@@ -3,6 +3,7 @@
  * Store preview (PR #31). Does NOT activate PMKB_APP_STORE. */
 #ifndef PMKB_STORE_LAUNCHER_GUARD_H
 #define PMKB_STORE_LAUNCHER_GUARD_H
+#include <stdint.h>
 #include "pmkb_launcher_bridge.h"
 #include "pmkb_store_ui_preview.h"
 
@@ -26,8 +27,21 @@ static inline bool pmkb_store_launcher_surface_separate(
          host->active != PMKB_APP_CALCULATOR) || !host->instance)
         return false;
     PMKBSurface *app = pmkb_app_host_screen(host);
-    return app && app->gray && app != candidate &&
-           app->gray != candidate->gray;
+    if (!app || !app->gray || app == candidate ||
+        app->width <= 0 || app->height <= 0 ||
+        candidate->width <= 0 || candidate->height <= 0)
+        return false;
+    /* Compare byte ranges without subtracting unrelated C pointers.
+     * The owner must still guarantee that both allocations remain alive. */
+    const size_t an = (size_t)app->width * (size_t)app->height;
+    const size_t cn = (size_t)candidate->width * (size_t)candidate->height;
+    if (an == 0 || cn == 0 || an > UINTPTR_MAX || cn > UINTPTR_MAX)
+        return false;
+    const uintptr_t a = (uintptr_t)app->gray;
+    const uintptr_t c = (uintptr_t)candidate->gray;
+    if (a > UINTPTR_MAX - an || c > UINTPTR_MAX - cn)
+        return false;
+    return a + an <= c || c + cn <= a;
 }
 static inline void pmkb_store_launcher_guard_init(PMKBStoreLauncherGuard *g) {
     if (!g) return;
