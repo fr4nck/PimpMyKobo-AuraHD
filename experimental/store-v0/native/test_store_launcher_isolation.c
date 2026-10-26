@@ -1051,6 +1051,65 @@ static void verify_async_cancel_after_edits(void) {
     CHECK(!surface->has_dirty);
     pmkb_store_router_dismiss(&router);
 }
+/* D7y: app transitions must cancel pending Store updates first. */
+static void verify_async_transition_to_notes(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned stale=0, again=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&stale)==PMKB_OK);
+    CHECK(owner.async.markers.pending);
+    CHECK(pmkb_store_eink_lifecycle_launch_app(
+          &owner,PMKB_APP_NOTES,320,480)==PMKB_OK);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(owner.router.host.active==PMKB_APP_NOTES);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&again)==PMKB_INVALID);
+    PMKBUI *notes=(PMKBUI *)owner.router.host.instance;
+    CHECK(notes!=NULL);
+    if (!notes) {
+        pmkb_store_eink_lifecycle_reset(&owner);
+        return;
+    }
+    notes->notebook.count=1;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&again)==PMKB_OK);
+    CHECK(again!=stale);
+    CHECK(pmkb_store_eink_lifecycle_close_app(&owner,false)==PMKB_UNSAVED);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(owner.router.host.active==PMKB_APP_NOTES);
+    CHECK(owner.router.host.instance==notes && notes->notebook.count==1);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,again,true)==PMKB_INVALID);
+    CHECK(pmkb_store_eink_lifecycle_close_app(&owner,true)==PMKB_OK);
+    CHECK(owner.router.host.active==PMKB_APP_NONE &&
+          owner.router.host.instance==NULL);
+}
+static void verify_async_transition_to_calculator(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned stale=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&stale)==PMKB_OK);
+    CHECK(pmkb_store_eink_lifecycle_launch_app(
+          &owner,PMKB_APP_CALCULATOR,320,480)==PMKB_OK);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(owner.router.host.active==PMKB_APP_CALCULATOR);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    PMKBSurface *calc_screen=pmkb_app_host_screen(&owner.router.host);
+    CHECK(calc_screen!=NULL && calc_screen->gray!=NULL);
+    CHECK(pmkb_store_eink_lifecycle_close_app(&owner,false)==PMKB_OK);
+    CHECK(owner.router.host.active==PMKB_APP_NONE);
+    CHECK(owner.router.host.instance==NULL);
+    CHECK(pmkb_store_eink_lifecycle_launch_app(
+          &owner,PMKB_APP_STORE,320,480)==PMKB_NOT_FOUND);
+    CHECK(owner.router.host.active==PMKB_APP_NONE);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1106,6 +1165,8 @@ int main(void) {
     verify_async_completion_invariants();
     verify_async_edits_during_pending();
     verify_async_cancel_after_edits();
+    verify_async_transition_to_notes();
+    verify_async_transition_to_calculator();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
