@@ -411,6 +411,24 @@ static void verify_passive_router(void) {
     CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    /* D6z: turn real pages in the same owned framebuffer. */
+    PMKBStoreView many = catalog;
+    many.count = PMKB_STORE_VIEW_MAX_APPS;
+    for (unsigned i=1; i<many.count; ++i) {
+        many.items[i] = catalog.items[0];
+        (void)snprintf(many.items[i].id,sizeof(many.items[i].id),
+                       "org.pmkb.preview.%u",i);
+    }
+    CHECK(pmkb_store_router_preview(&router,320,480,&many,0)
+          == PMKB_STORE_PAINT_OK);
+    uint8_t *page_gray = router.store.surface.gray;
+    CHECK(pmkb_store_router_preview(&router,320,480,&many,1)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(router.store.surface.gray == page_gray);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    CHECK(pmkb_store_router_preview(&router,320,480,&many,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(router.store.surface.gray == page_gray);
     uint8_t *first_gray = router.store.surface.gray;
     CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
