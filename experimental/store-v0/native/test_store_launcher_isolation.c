@@ -562,7 +562,7 @@ static void verify_split_present_failure(void) {
     CHECK(pmkb_surface_present(surface,&backend)==PMKB_NO_CHANGE);
     pmkb_store_router_dismiss(&router);
 }
-typedef struct { PMKBSurface *surface; unsigned calls; } D7dBackend;
+typedef struct { PMKBSurface *surface; unsigned calls; bool edited; } D7dBackend;
 static PMKBStatus d7d_present(void *ctx, const uint8_t *gray,
                              int width, int height, PMKBRect rect) {
     D7dBackend *mock=(D7dBackend *)ctx;
@@ -570,8 +570,10 @@ static PMKBStatus d7d_present(void *ctx, const uint8_t *gray,
     if (!gray || width != 320 || height != 480 || rect.w <= 0)
         return PMKB_INVALID;
     /* Synchronous simulated host edit while the callback is running. */
-    if (mock->calls == 1u)
-        pmkb_surface_rect(mock->surface,(PMKBRect){0,0,9,9},0);
+    if (!mock->edited) {
+        mock->edited = true;
+        pmkb_surface_rect(mock->surface,(PMKBRect){0,0,9,9},123);
+    }
     return PMKB_OK;
 }
 static void verify_reentrant_present(void) {
@@ -583,13 +585,13 @@ static void verify_reentrant_present(void) {
     PMKBRect ignored;
     CHECK(pmkb_surface_take_dirty(surface,&ignored));
     pmkb_surface_rect(surface,(PMKBRect){300,450,8,8},0);
-    D7dBackend mock={surface,0};
+    D7dBackend mock={surface,0,false};
     PMKBBackend backend={&mock,d7d_present};
     CHECK(pmkb_surface_present(surface,&backend)==PMKB_OK);
     CHECK(mock.calls==1u);
     CHECK(surface->has_dirty);
-    mock.calls=0u;
     CHECK(pmkb_surface_present(surface,&backend)==PMKB_OK);
+    CHECK(mock.calls>=2u);
     CHECK(!surface->has_dirty);
     pmkb_store_router_dismiss(&router);
 }
