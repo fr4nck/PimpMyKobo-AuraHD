@@ -1025,6 +1025,32 @@ static void verify_async_edits_during_pending(void) {
     CHECK(pmkb_store_eink_async_submit(&async,surface,&retry)==PMKB_NO_CHANGE);
     pmkb_store_router_dismiss(&router);
 }
+/* D7x: cancelling a refresh after edits must preserve dirty pixels. */
+static void verify_async_cancel_after_edits(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    PMKBSurface *surface=&router.store.surface;
+    PMKBStoreEinkAsync async={0};
+    unsigned cancelled=0,retry=0;
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&cancelled)==PMKB_OK);
+    pmkb_surface_rect(surface,(PMKBRect){0,0,7,7},115);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_cancel(&async)==PMKB_OK);
+    CHECK(!async.markers.pending && surface->has_dirty);
+    CHECK(pmkb_store_eink_async_complete(&async,surface,cancelled,true)
+          == PMKB_INVALID);
+    CHECK(surface->has_dirty && async.markers.completions==0u);
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&retry)==PMKB_OK);
+    CHECK(retry!=cancelled);
+    CHECK(pmkb_store_eink_async_complete(&async,surface,cancelled,true)
+          == PMKB_INVALID);
+    CHECK(surface->has_dirty && async.markers.pending);
+    CHECK(pmkb_store_eink_async_complete(&async,surface,retry,true)==PMKB_OK);
+    CHECK(!surface->has_dirty);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1079,6 +1105,7 @@ int main(void) {
     verify_eink_counter_saturation();
     verify_async_completion_invariants();
     verify_async_edits_during_pending();
+    verify_async_cancel_after_edits();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
