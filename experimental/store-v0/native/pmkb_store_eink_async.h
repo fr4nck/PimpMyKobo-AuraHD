@@ -19,6 +19,18 @@ static inline PMKBStatus pmkb_store_eink_async_submit(
     state->submitted_changes=surface->changed_pixels;
     return PMKB_OK;
 }
+/* Cancel BEFORE the caller dismisses or reallocates the surface.
+ * A late completion for this marker must not touch freed/reused pixels. */
+static inline PMKBStatus pmkb_store_eink_async_cancel(
+    PMKBStoreEinkAsync *state) {
+    if (!state) return PMKB_INVALID;
+    if (!state->markers.pending) return PMKB_NO_CHANGE;
+    state->markers.pending=false;
+    state->markers.pending_marker=0;
+    state->surface=NULL;
+    state->submitted_changes=0;
+    return PMKB_OK;
+}
 static inline PMKBStatus pmkb_store_eink_async_complete(
     PMKBStoreEinkAsync *state, PMKBSurface *live_surface,
     unsigned marker, bool success) {
