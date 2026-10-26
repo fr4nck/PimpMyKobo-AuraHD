@@ -8,6 +8,7 @@
 #include "pmkb_store_eink_sim.h"
 #include "pmkb_store_eink_pending.h"
 #include "pmkb_store_eink_async.h"
+#include "pmkb_store_eink_lifecycle.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -871,6 +872,34 @@ static void verify_async_cancel_before_dismiss(void) {
     CHECK(pmkb_store_eink_async_cancel(&state)==PMKB_NO_CHANGE);
     pmkb_store_router_dismiss(&router);
 }
+/* D7r: lifecycle owner cancels before resize, redraw and shutdown. */
+static void verify_async_lifecycle_owner(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned old=0,next=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&old)==PMKB_OK);
+    CHECK(owner.async.markers.pending);
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,1080,1440,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,old,true)==PMKB_INVALID);
+    CHECK(owner.router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&next)==PMKB_OK);
+    CHECK(next!=old);
+    pmkb_store_eink_lifecycle_dismiss(&owner);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,next,true)==PMKB_INVALID);
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&next)==PMKB_OK);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,next,true)==PMKB_OK);
+    CHECK(!owner.router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_lifecycle_shutdown(&owner,true)==PMKB_NO_CHANGE);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -919,6 +948,7 @@ int main(void) {
     verify_eink_pending_marker();
     verify_async_dirty_contract();
     verify_async_cancel_before_dismiss();
+    verify_async_lifecycle_owner();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
