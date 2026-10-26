@@ -27,6 +27,13 @@ static inline PMKBStorePaintStatus pmkb_store_owner_open(
     PMKBStoreSurfaceOwner *owner, PMKBAppHost *host, int width, int height) {
     if (!owner || !host) return PMKB_STORE_PAINT_INVALID;
     pmkb_store_owner_close(owner);
+    /* Reject incoherent host state before allocating any gray pixels. */
+    if ((host->active == PMKB_APP_NONE && host->instance != NULL) ||
+        (host->active != PMKB_APP_NONE &&
+         (host->instance == NULL ||
+          (host->active != PMKB_APP_NOTES &&
+           host->active != PMKB_APP_CALCULATOR))))
+        return PMKB_STORE_PAINT_INVALID;
     /* Only preview-tested sizes. Never allocate before validating. */
     if (!((width == 320 && height == 480) ||
           (width == 1080 && height == 1440) ||
