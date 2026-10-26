@@ -208,7 +208,7 @@ static int title_blur_navigation(void){
         if(method<=1)CHECK(ui.view==PMKB_VIEW_LIST);
         else CHECK(ui.view==PMKB_VIEW_EDITOR);
         CHECK(pmkb_notebook_export_json(&ui.notebook,&json,&length)==PMKB_OK);
-        CHECK(json!=NULL&&strstr(json,"\"title\":\"Sans titre\"")!=NULL);
+        CHECK(json!=NULL&&strstr(json,method==4?"Sans titre 2":"Sans titre 1")!=NULL);
         free(json);
         pmkb_ui_free(&ui);
     }
