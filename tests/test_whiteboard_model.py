@@ -124,6 +124,35 @@ class WhiteboardModelC11(unittest.TestCase):
             self.assertRegex(outcome.stdout,
                              r"WHITEBOARD COHERENCE: \d+ assertions PASS, 0 FAIL")
 
+    def test_demo_pgm_is_deterministic(self):
+        compiler = next((shutil.which(name) for name in ("cc", "gcc", "clang")
+                         if shutil.which(name)), None)
+        with tempfile.TemporaryDirectory(prefix="pmkb-whiteboard-demo-") as d:
+            binary = Path(d) / ("wb-demo.exe" if os.name == "nt" else "wb-demo")
+            native = ROOT / "experimental" / "native-ui"
+            build = subprocess.run(
+                [compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                 "-pedantic", "-I", str(HEADER), "-I", str(native),
+                 str(native / "pmkb_surface.c"),
+                 str(HEADER / "whiteboard_host_demo.c"), "-o", str(binary)],
+                capture_output=True, text=True, timeout=45, check=False)
+            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+            first = subprocess.run([str(binary)], capture_output=True,
+                                   timeout=10, check=False)
+            second = subprocess.run([str(binary)], capture_output=True,
+                                    timeout=10, check=False)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(first.stdout, second.stdout)
+            header = b"P5\\n320 480\\n255\\n"
+            self.assertTrue(first.stdout.startswith(header))
+            pixels = first.stdout[len(header):]
+            self.assertEqual(len(pixels), 320 * 480)
+            self.assertEqual(pixels[20 * 320 + 20], 0)
+            self.assertEqual(pixels[130 * 320 + 120], 0)
+            self.assertEqual(pixels[150 * 320 + 100], 136)
+            self.assertEqual(pixels[400 * 320 + 300], 255)
+
     def test_bounded_journal_and_undo_redo(self):
         run = subprocess.run([str(self.binary)], capture_output=True,
                              text=True, timeout=10, check=False)
