@@ -5,6 +5,7 @@
 #include "pmkb_store_launcher_guard.h"
 #include "pmkb_store_surface_owner.h"
 #include "pmkb_store_passive_router.h"
+#include "pmkb_store_eink_sim.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -771,6 +772,29 @@ static void verify_full_present_lifecycle(void) {
     CHECK(pmkb_store_router_shutdown(&router,true)==PMKB_NO_CHANGE);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store)==0u);
 }
+/* D7n: injected transport tracks submissions vs acknowledgements. */
+static void verify_eink_sim_transport(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    D7bBackend transport={0};
+    PMKBStoreEinkSim sim={&transport,d7b_present,0,0};
+    PMKBBackend backend=pmkb_store_eink_sim_backend(&sim);
+    transport.fail=true;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
+    CHECK(sim.submissions>=1u && sim.acknowledgements==0u);
+    CHECK(router.store.surface.has_dirty);
+    transport.fail=false;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_OK);
+    CHECK(sim.acknowledgements>=1u);
+    CHECK(sim.submissions==transport.calls);
+    CHECK(!router.store.surface.has_dirty);
+    unsigned before=sim.submissions;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_NO_CHANGE);
+    CHECK(sim.submissions==before);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -815,6 +839,7 @@ int main(void) {
     verify_failed_present_then_dismiss();
     verify_repeated_present_failure();
     verify_full_present_lifecycle();
+    verify_eink_sim_transport();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
