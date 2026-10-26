@@ -64,6 +64,7 @@ static inline PMKBWBStatus pmkb_wb_touch_stream_move(
     (void)pmkb_wb_render_commit(board,surface);
     if (pmkb_wb_down(board,last.x,last.y,shade,thickness)!=PMKB_WB_OK)
         return PMKB_WB_INVALID;
+    board->working.continuation=1u;
     return pmkb_wb_move(board,x,y);
 }
 #endif
