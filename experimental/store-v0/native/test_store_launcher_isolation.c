@@ -415,6 +415,13 @@ static void verify_passive_router(void) {
     if (notes) notes->notebook.count = 1;
     CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
+    /* D6t: an attempted switch must preserve the unsaved Notes session. */
+    CHECK(pmkb_store_router_launch_app(&router, PMKB_APP_CALCULATOR, 320, 480)
+          == PMKB_INVALID);
+    CHECK(router.host.active == PMKB_APP_NOTES);
+    CHECK(router.host.instance == notes);
+    CHECK(notes->notebook.count == 1);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
     CHECK(pmkb_store_router_close_app(&router, false) == PMKB_UNSAVED);
     CHECK(router.host.active == PMKB_APP_NOTES);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
