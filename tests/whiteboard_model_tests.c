@@ -29,6 +29,8 @@ static void test_dot_and_undo_redo(void) {
     CHECK(pmkb_wb_down(&board,1079,1439,15,25)==PMKB_WB_OK);
     CHECK(pmkb_wb_move(&board,1079,1439)==PMKB_WB_NO_CHANGE);
     CHECK(pmkb_wb_up(&board,1079,1439)==PMKB_WB_OK);
+    CHECK(pmkb_wb_init(&board,1441,1440)==PMKB_WB_INVALID);
+    CHECK(board.width==1080 && board.height==1440);
     CHECK(board.total==1u && board.visible==1u);
     CHECK(board.strokes[0].count==1u);
     CHECK(board.strokes[0].points[0].x==1079);
