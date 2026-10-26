@@ -59,7 +59,7 @@ class WhiteboardModelC11(unittest.TestCase):
                                      text=True, timeout=10, check=False)
             self.assertEqual(outcome.returncode, 0, outcome.stdout + outcome.stderr)
             self.assertRegex(outcome.stdout,
-                             r"WHITEBOARD RENDER: \\d+ assertions PASS, 0 FAIL")
+                             r"WHITEBOARD RENDER: \d+ assertions PASS, 0 FAIL")
 
     def test_bounded_journal_and_undo_redo(self):
         run = subprocess.run([str(self.binary)], capture_output=True,
