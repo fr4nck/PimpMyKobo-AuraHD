@@ -2,7 +2,14 @@
  * Synthetic fixture only. Writes to stdout, never to the Kobo or P3. */
 #include "pmkb_whiteboard_touch.h"
 #include <stdio.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 int main(void) {
+#ifdef _WIN32
+    if (_setmode(_fileno(stdout), _O_BINARY) == -1) return 5;
+#endif
     PMKBWBModel board={0};
     PMKBSurface surface={0};
     PMKBRect dirty;
