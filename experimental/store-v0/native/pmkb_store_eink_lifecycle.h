@@ -1,0 +1,46 @@
+/* D7r: optional host-only lifecycle wrapper for pending simulated refreshes.
+ * The original passive router remains unchanged and synchronous. */
+#ifndef PMKB_STORE_EINK_LIFECYCLE_H
+#define PMKB_STORE_EINK_LIFECYCLE_H
+#include "pmkb_store_eink_async.h"
+typedef struct {
+    PMKBStorePassiveRouter router;
+    PMKBStoreEinkAsync async;
+} PMKBStoreEinkLifecycle;
+static inline void pmkb_store_eink_lifecycle_init(PMKBStoreEinkLifecycle *owner) {
+    if (!owner) return;
+    pmkb_store_router_init(&owner->router);
+    owner->async=(PMKBStoreEinkAsync){0};
+}
+static inline void pmkb_store_eink_lifecycle_dismiss(PMKBStoreEinkLifecycle *owner) {
+    if (!owner) return;
+    (void)pmkb_store_eink_async_cancel(&owner->async);
+    pmkb_store_router_dismiss(&owner->router);
+}
+static inline PMKBStorePaintStatus pmkb_store_eink_lifecycle_preview(
+    PMKBStoreEinkLifecycle *owner,int width,int height,
+    const PMKBStoreView *view,unsigned page) {
+    if (!owner) return PMKB_STORE_PAINT_INVALID;
+    /* Even same-sized redraws must cancel outstanding snapshots. */
+    (void)pmkb_store_eink_async_cancel(&owner->async);
+    return pmkb_store_router_preview(&owner->router,width,height,view,page);
+}
+static inline PMKBStatus pmkb_store_eink_lifecycle_submit(
+    PMKBStoreEinkLifecycle *owner,unsigned *marker) {
+    if (!owner || !owner->router.store.allocated) return PMKB_INVALID;
+    return pmkb_store_eink_async_submit(
+        &owner->async,&owner->router.store.surface,marker);
+}
+static inline PMKBStatus pmkb_store_eink_lifecycle_complete(
+    PMKBStoreEinkLifecycle *owner,unsigned marker,bool success) {
+    if (!owner || !owner->router.store.allocated) return PMKB_INVALID;
+    return pmkb_store_eink_async_complete(
+        &owner->async,&owner->router.store.surface,marker,success);
+}
+static inline PMKBStatus pmkb_store_eink_lifecycle_shutdown(
+    PMKBStoreEinkLifecycle *owner,bool discard) {
+    if (!owner) return PMKB_INVALID;
+    pmkb_store_eink_lifecycle_dismiss(owner);
+    return pmkb_store_router_shutdown(&owner->router,discard);
+}
+#endif
