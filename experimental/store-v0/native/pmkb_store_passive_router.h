@@ -43,4 +43,12 @@ static inline PMKBStatus pmkb_store_router_launch_app(
     pmkb_store_router_dismiss(router);
     return pmkb_app_host_launch(&router->host, kind, width, height);
 }
+/* Shutdown is explicit, not a destructor: refusal preserves Notes.
+ * The Store surface is always detached before touching app lifetime. */
+static inline PMKBStatus pmkb_store_router_shutdown(
+    PMKBStorePassiveRouter *router, bool discard) {
+    if (!router) return PMKB_INVALID;
+    pmkb_store_router_dismiss(router);
+    return pmkb_app_host_close(&router->host, discard);
+}
 #endif
