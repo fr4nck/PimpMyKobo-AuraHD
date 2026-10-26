@@ -76,7 +76,7 @@ PMKBStorePageStatus pmkb_store_page_build(const PMKBStoreView *view,
         row->version = (PMKBStorePageRect){row->bounds.x + 16,
                                            row->bounds.y + (width == 320 ? 32 : 49),
                                            row->bounds.w - 32,
-                                           width == 320 ? 16 : 21};
+                                           width == 320 ? 20 : 30};
         row->shade = (i % 2u) ? PMKB_STORE_PAGE_ALTERNATE : PMKB_STORE_PAGE_WHITE;
     }
     return PMKB_STORE_PAGE_OK;
