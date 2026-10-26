@@ -235,6 +235,41 @@ static void verify_guarded_surface_ownership(void) {
               == PMKB_STORE_PAINT_INVALID);
         CHECK(!dedicated.has_dirty && hash_frame(&dedicated) == initial);
     }
+    /* L06-D6e: repeated lifecycle transitions using the real host bridge.
+     * Every stale draw must detach before painting, and the dedicated buffer
+     * remains owned by this test for the entire guard lifetime. */
+    for (unsigned round = 0; round < 3; ++round) {
+        const PMKBAppId next = (round & 1u)
+            ? PMKB_APP_CALCULATOR : PMKB_APP_NOTES;
+        CHECK(host.active == PMKB_APP_NONE && host.instance == NULL);
+        CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(pmkb_surface_take_dirty(&dedicated, &dirty) ||
+              !dedicated.has_dirty);
+        const uint64_t store_before = hash_frame(&dedicated);
+        CHECK(pmkb_app_host_launch(&host, next, 320, 480) == PMKB_OK);
+        PMKBSurface *app_surface = pmkb_app_host_screen(&host);
+        CHECK(app_surface && app_surface->gray);
+        if (app_surface && app_surface->gray) {
+            const uint64_t app_before = hash_frame(app_surface);
+            CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+                  == PMKB_STORE_PAINT_INVALID);
+            CHECK(guard.host == NULL && guard.preview.target == NULL);
+            CHECK(hash_frame(app_surface) == app_before);
+            CHECK(hash_frame(&dedicated) == store_before);
+            CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+                  == PMKB_STORE_PAINT_OK);
+            CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+                  == PMKB_STORE_PAINT_OK);
+            CHECK(hash_frame(app_surface) == app_before);
+        }
+        pmkb_store_launcher_guard_leave(&guard); /* before host destruction */
+        CHECK(pmkb_app_host_close(&host, true) == PMKB_OK);
+        CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+              == PMKB_STORE_PAINT_INVALID);
+    }
     pmkb_store_launcher_guard_leave(&guard);
     pmkb_store_launcher_guard_leave(NULL);
     pmkb_store_launcher_guard_external_draw(NULL);
