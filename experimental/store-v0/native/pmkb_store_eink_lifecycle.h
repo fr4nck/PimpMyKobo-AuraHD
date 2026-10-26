@@ -66,6 +66,7 @@ static inline bool pmkb_store_eink_lifecycle_surface_valid(
            guard->host == &router->host &&
            guard->preview.screen.visible &&
            guard->preview.target == &router->store.surface &&
+           guard->generation_on_enter == router->host.generation &&
            guard->active_on_enter == router->host.active &&
            guard->instance_on_enter == router->host.instance &&
            pmkb_store_launcher_surface_separate(

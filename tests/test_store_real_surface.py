@@ -14,13 +14,13 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 NATIVE = REPO / "experimental/store-v0/native"
-REV = "e2907a19920100ef2a32ec6587e724ccb5116bc7"
+REV = "209324c3b3246c752e1c57b5220ee46955ad412e"
 SOURCE_HASHES = {
     "pmkb_ui.h": "1adcc6656007183c6eee23da4c76d9f3eff3c12d",
     "pmkb_surface.c": "946c1d90e9c8c9feca54f36678959323327806b4",
     "pmkb_backend.c": "cc1f227d32021582f65c386f9804af2b8c8cc33d",
-    "pmkb_launcher_bridge.h": "74e6339b87b205029c5a6917ddf27cfe08b2695c",
-    "pmkb_launcher_bridge.c": "92f26693efc1d67743d1b8816812c37f14d3003c",
+    "pmkb_launcher_bridge.h": "fa0dd05276d6ab766a9209293c3fd375fc234142",
+    "pmkb_launcher_bridge.c": "f72d9edde13e504ec787e8259fa650b3107e99a2",
     "pmkb_calculator_ui.h": "8dcb297446516c016fc090d3440cede7853f47a3",
     "pmkb_calculator.h": "2a9c03c1fa29c427b8e69f25da5503deea84fe8d",
 }

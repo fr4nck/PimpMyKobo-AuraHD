@@ -14,6 +14,7 @@ typedef struct {
     PMKBAppHost *host;          /* borrowed; never owns an app */
     PMKBAppId active_on_enter;
     void *instance_on_enter;    /* compared only; never dereferenced */
+    uint64_t generation_on_enter; /* detects close/relaunch ABA reuse */
 } PMKBStoreLauncherGuard;
 
 /* Reject the ACTIVE app surface AND a struct copy sharing its gray buffer.
@@ -49,6 +50,7 @@ static inline void pmkb_store_launcher_guard_init(PMKBStoreLauncherGuard *g) {
     g->host = NULL;
     g->active_on_enter = PMKB_APP_NONE;
     g->instance_on_enter = NULL;
+    g->generation_on_enter = 0u;
 }
 static inline void pmkb_store_launcher_guard_leave(PMKBStoreLauncherGuard *g) {
     if (!g) return;
@@ -56,19 +58,22 @@ static inline void pmkb_store_launcher_guard_leave(PMKBStoreLauncherGuard *g) {
     g->host = NULL;
     g->active_on_enter = PMKB_APP_NONE;
     g->instance_on_enter = NULL;
+    g->generation_on_enter = 0u;
 }
 /* A rejection detaches the old surface too: no stale preview survives. */
 static inline PMKBStorePaintStatus pmkb_store_launcher_guard_enter(
     PMKBStoreLauncherGuard *g, PMKBAppHost *host, PMKBSurface *dedicated) {
     if (!g) return PMKB_STORE_PAINT_INVALID;
     pmkb_store_launcher_guard_leave(g);
-    if (!pmkb_store_launcher_surface_separate(host, dedicated))
+    if (!host || host->generation == UINT64_MAX ||
+        !pmkb_store_launcher_surface_separate(host, dedicated))
         return PMKB_STORE_PAINT_INVALID;
     if (pmkb_store_ui_preview_enter(&g->preview, dedicated)
         != PMKB_STORE_PAINT_OK) return PMKB_STORE_PAINT_INVALID;
     g->host = host;
     g->active_on_enter = host->active;
     g->instance_on_enter = host->instance;
+    g->generation_on_enter = host->generation;
     return PMKB_STORE_PAINT_OK;
 }
 /* Recheck on EVERY drawing attempt, including a cache hit. A host launch,
@@ -79,7 +84,8 @@ static inline PMKBStorePaintStatus pmkb_store_launcher_guard_draw(
     unsigned page_index) {
     if (!g || !g->host || !g->preview.screen.visible)
         return PMKB_STORE_PAINT_INVALID;
-    if (g->active_on_enter != g->host->active ||
+    if (g->generation_on_enter != g->host->generation ||
+        g->active_on_enter != g->host->active ||
         g->instance_on_enter != g->host->instance ||
         !pmkb_store_launcher_surface_separate(g->host, g->preview.target)) {
         pmkb_store_launcher_guard_leave(g);

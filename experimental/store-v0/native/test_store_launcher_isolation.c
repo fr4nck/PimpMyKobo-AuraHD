@@ -172,6 +172,24 @@ static void verify_guarded_surface_ownership(void) {
           == PMKB_STORE_PAINT_OK);
     CHECK(!dedicated.has_dirty && dedicated.changed_pixels == 0);
 
+    /* D8a: active/instance equality is insufficient after allocator reuse.
+     * A changed generation must detach even when both legacy fields match. */
+    const uint64_t generation_before = host.generation;
+    host.generation++;
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
+    CHECK(hash_frame(&dedicated) == initial && !dedicated.has_dirty);
+    host.generation = UINT64_MAX;
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_INVALID);
+    host.generation = generation_before + 1u;
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(guard.generation_on_enter == host.generation);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+
     /* Starting Notes changes the host lifecycle; fail closed on draw. */
     CHECK(pmkb_app_host_launch(&host, PMKB_APP_NOTES, 320, 480) == PMKB_OK);
     if (host.active != PMKB_APP_NOTES || !host.instance) {

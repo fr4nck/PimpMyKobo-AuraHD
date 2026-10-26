@@ -49,6 +49,7 @@ static inline PMKBStatus pmkb_store_router_present(
     if (!router || !router->store.allocated ||
         !router->store.guard.host ||
         router->store.guard.host != &router->host ||
+        router->store.guard.generation_on_enter != router->host.generation ||
         router->store.guard.active_on_enter != router->host.active ||
         router->store.guard.instance_on_enter != router->host.instance ||
         !pmkb_store_launcher_surface_separate(
