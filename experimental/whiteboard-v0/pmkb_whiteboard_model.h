@@ -23,6 +23,7 @@ typedef struct {
     uint16_t count;
     uint8_t shade;          /* 0..15, 16 fixed e-ink grayscale levels */
     uint8_t thickness;      /* 1..25 logical pixels; no pressure input */
+    uint8_t continuation;   /* this chunk follows the previous same gesture */
 } PMKBWBStroke;
 typedef struct {
     PMKBWBStroke strokes[PMKB_WB_MAX_STROKES];
@@ -99,13 +100,19 @@ static inline PMKBWBStatus pmkb_wb_cancel(PMKBWBModel *board) {
 static inline PMKBWBStatus pmkb_wb_undo(PMKBWBModel *board) {
     if (!board || board->in_stroke) return PMKB_WB_INVALID;
     if (!board->visible) return PMKB_WB_NO_CHANGE;
-    --board->visible;
+    do {
+        --board->visible;
+    } while (board->visible>0u &&
+             board->strokes[board->visible].continuation);
     return PMKB_WB_OK;
 }
 static inline PMKBWBStatus pmkb_wb_redo(PMKBWBModel *board) {
     if (!board || board->in_stroke) return PMKB_WB_INVALID;
     if (board->visible==board->total) return PMKB_WB_NO_CHANGE;
-    ++board->visible;
+    do {
+        ++board->visible;
+    } while (board->visible<board->total &&
+             board->strokes[board->visible].continuation);
     return PMKB_WB_OK;
 }
 static inline PMKBWBStatus pmkb_wb_clear(PMKBWBModel *board) {
