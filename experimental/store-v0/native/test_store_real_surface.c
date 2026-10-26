@@ -3,6 +3,7 @@
 #include "pmkb_ui.h"
 #include "pmkb_store_paint.h"
 #include "pmkb_store_screen.h"
+#include "pmkb_store_ui_preview.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -443,6 +444,98 @@ static void check_store_screen_session(void) {
     printf("PMKB STORE SCREEN: lifecycle PASS, cache_limit=%zu bytes\n",
            sizeof(PMKBStoreScreen));
 }
+
+/* L06-D6a: real PMKB-UI surface integration, but NO AppHost/Launcher route.
+ * The preview borrows an existing host surface and must be entered explicitly.
+ * All test pixels are produced by pinned PR #30 pmkb_surface.c. */
+static void check_store_ui_preview_bridge(void) {
+    prepare(7, 2); /* two pages on 320x480 */
+    previous = view;
+    PMKBSurface surface;
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&surface, 320, 480) == PMKB_OK);
+    if (!surface.gray) return;
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    PMKBStoreUIPreview preview;
+    memset(&preview, 0xa5, sizeof(preview));
+    pmkb_store_ui_preview_init(&preview);
+    CHECK(sizeof(PMKBStoreUIPreview) <= 72u);
+    CHECK(preview.target == NULL && !preview.screen.visible);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty);
+
+    CHECK(pmkb_store_ui_preview_enter(&preview, &surface)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(preview.target == &surface && preview.screen.visible);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.has_dirty && surface.changed_pixels > 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    const uint64_t page0 = digest(&surface);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!surface.has_dirty && surface.changed_pixels == 0);
+
+    /* A borrowed surface can also be written to by another view/widget. */
+    pmkb_surface_rect(&surface, (PMKBRect){0, 0, 4, 4}, 0);
+    CHECK(surface.gray[0] == 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    pmkb_store_ui_preview_external_draw(&preview);
+    CHECK(!preview.screen.cache.valid);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.gray[0] == 255 && surface.has_dirty);
+    CHECK(digest(&surface) == page0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 1)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.has_dirty && surface.changed_pixels > 0);
+    CHECK(digest(&surface) != page0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    const uint64_t page1 = digest(&surface);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 99)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && digest(&surface) == page1);
+
+    /* Exit prevents drawing or resurrecting a detached buffer. */
+    pmkb_store_ui_preview_leave(&preview);
+    CHECK(!preview.screen.visible && preview.target == NULL);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && digest(&surface) == page1);
+    CHECK(pmkb_store_ui_preview_enter(&preview, &surface)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!preview.screen.cache.valid);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(digest(&surface) == page0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    CHECK(memcmp(&view, &previous, sizeof(view)) == 0);
+
+    /* An invalid target fails closed, including when one was active. */
+    PMKBSurface invalid_surface = {0};
+    uint8_t sample = 255;
+    invalid_surface.gray = &sample;
+    invalid_surface.width = 1;
+    invalid_surface.height = 1;
+    CHECK(pmkb_store_ui_preview_enter(&preview, &invalid_surface)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!preview.screen.visible && preview.target == NULL);
+    CHECK(pmkb_store_ui_preview_enter(&preview, NULL)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_ui_preview_draw(&preview, &view, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_ui_preview_enter(NULL, &surface)
+          == PMKB_STORE_PAINT_INVALID);
+    pmkb_store_ui_preview_leave(NULL);
+    pmkb_store_ui_preview_external_draw(NULL);
+    pmkb_surface_free(&surface);
+    CHECK(surface.gray == NULL);
+    printf("PMKB STORE UI PREVIEW: passive bridge PASS, size=%zu bytes\n",
+           sizeof(PMKBStoreUIPreview));
+}
 int main(void){
     CHECK(pmkb_surface_glyph_supported(0x00e9u));
     check_surface(320,480,0,3,0,3);
@@ -459,6 +552,7 @@ int main(void){
     check_cache_lifecycle();
     measure_host_cache_cost();
     check_store_screen_session();
+    check_store_ui_preview_bridge();
     if(failed)return 1;
     printf("PMKB REAL UI STORE: %d assertions PASS, 0 FAIL\n",checks);
     return 0;
