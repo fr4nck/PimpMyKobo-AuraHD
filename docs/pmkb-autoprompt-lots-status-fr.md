@@ -616,6 +616,18 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Suite** : au lieu d'ajouter des gardes indefiniment, identifier le vrai routeur proprietaire des surfaces dans PR #30, puis integrer de maniere volontaire un point de raccordement passif uniquement si son cycle de vie est maitrise. Ne pas activer Store ni fusionner #30/#31.
 - **Limites** : pas d'essai ARM/Kobo/EPDC/tactile ; aucune ecriture sur FIRST BOOT, P1/P2/P3, recoveryfs ou microSD physique.
 
+
+## LOT 06 — D7z / D8a : identité de cycle Launcher
+
+**D8a : DONE et qualifié sur hôtes. LOT 06 reste IN_PROGRESS.** PR #30 et #31 restent ouvertes, DRAFT et non fusionnées ; Store reste `runnable=false`.
+
+- **D7z requalifié** : le correctif des confirmations asynchrones après un changement direct du Launcher, testé au commit `fe1ec551ed113fb987eeb696464ce192147f208b`, a obtenu [CI #40376521847](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40376521847) **10/10 jobs SUCCESS, 0 FAIL**.
+- **Socle Launcher PR #30** : commit [`209324c3`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/209324c3b3246c752e1c57b5220ee46955ad412e). `PMKBAppHost` porte maintenant une génération 64 bits qui avance après chaque lancement ou fermeture réussi, sans avancer lors d'un refus ou d'une sortie Notes non sauvegardée. Les workflows [Tests #40377531028](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40377531028) et [Native PMKB UI #40377531016](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40377531016) sont **SUCCESS**.
+- **Raccord Store PR #31** : commits [`199fa3f`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/199fa3f6d5a3592b7d099c03c363c5fceaee771b) puis [`711b0b8`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/711b0b80328ec6e585fd8d53876015d017d0f729). Le garde capture la génération et la revérifie avant dessin, présentation, soumission et confirmation. Une vue ancienne est détachée même si `active` et `instance` redeviennent identiques ; `UINT64_MAX` est refusé à l'entrée.
+- **Contre-qualification réelle** : la première CI D8a a détecté un défaut dans le **test** après réentrée (état `dirty` volontairement recréé par le redessin), sans défaut du garde. Le test a été resserré puis [CI #40378189442](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40378189442) a terminé **10/10 jobs SUCCESS, 0 FAIL**, avec le raccord C11 réel exécuté sur Linux et Windows Python 3.11.
+- **Limites** : tests hôte avec doubles métier Notes/Calculatrice ; aucun ARM, EPDC, tactile, mesure RAM réelle, boot Kobo ou écriture FIRST BOOT/P1/P2/P3/recoveryfs. Aucun service, thread ou réseau ajouté.
+- **Reprise exacte** : D8b — vérifier que toute mutation publique future de `PMKBAppHost` passe par les fonctions qui avancent la génération ; si aucune voie de contournement n'existe dans PR #30, produire une matrice de clôture du raccord Store/Launcher au lieu d'ajouter un garde supplémentaire. Ne pas rendre le Store exécutable ni fusionner les PR automatiquement.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -626,7 +638,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (D6k DONE ; D6l en qualification)** | PR #31 `6c85f3c` | Rejet d'alias memoire partiels, tests debut et fin de buffer | **CI D6k #40343605490 : 10/10 SUCCESS** ; CI D6l a verifier ; Kobo NON EXÉCUTÉE | D6l puis integration |
+| L06 — Store *.pmkb | **IN_PROGRESS (D8a DONE)** | PR #30 `209324c`, PR #31 `711b0b8` | Cycle Launcher versionné, garde Store protégé contre la réutilisation de pointeurs | **CI PR #30 : 2 workflows SUCCESS ; CI PR #31 #40378189442 : 10/10 SUCCESS** ; Kobo NON EXÉCUTÉE | D8b — audit des mutations puis matrice de clôture |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
