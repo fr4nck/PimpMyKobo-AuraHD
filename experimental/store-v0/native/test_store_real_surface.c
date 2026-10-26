@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 static PMKBStoreView view, previous;
 static PMKBStorePage page;
 static int failed=0, checks=0;
@@ -231,6 +232,127 @@ static void check_duplicate_draw(int w, int h, unsigned count, unsigned pending)
     printf("PMKB STORE REDRAW %dx%d: baseline=%zu changed_pixels, "
            "cached=%zu changed_pixels\\n", w, h, baseline, cached);
 }
+
+/* L06-D4e: explicit ownership rules for invalidation. The optional cache
+ * cannot observe unrelated writes to PMKBSurface. This test demonstrates
+ * that limitation, and that a deliberate reset restores the correct frame.
+ * It does not validate any Kobo E-Ink/EPDC behavior. */
+static void check_cache_lifecycle(void) {
+    prepare(12, 0); /* 3 pages on the 320x480 host geometry */
+    PMKBSurface first, other;
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&first, 320, 480) == PMKB_OK);
+    if (!first.gray) return;
+    CHECK(pmkb_surface_take_dirty(&first, &dirty));
+    CHECK(pmkb_store_page_build(&view, 320, 480, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    PMKBStorePainter painter = pmkb_store_painter_for_ui(&first);
+    PMKBStorePaintCache cache = {0};
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(cache.valid);
+    CHECK(pmkb_surface_take_dirty(&first, &dirty));
+    const uint64_t original = digest(&first);
+    CHECK(first.gray[0] == 255);
+
+    /* Another view dirties exactly the same surface. Cache is unaware. */
+    pmkb_surface_rect(&first, (PMKBRect){0, 0, 4, 4}, 0);
+    CHECK(first.gray[0] == 0 && first.has_dirty);
+    CHECK(pmkb_surface_take_dirty(&first, &dirty));
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(first.gray[0] == 0); /* stale WITHOUT explicit reset: known limit */
+    CHECK(!first.has_dirty && first.changed_pixels == 0);
+
+    /* Caller-owned reset restores pixels and generates a dirty rectangle. */
+    pmkb_store_paint_cache_reset(&cache);
+    CHECK(!cache.valid);
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(first.gray[0] == 255 && first.has_dirty);
+    CHECK(digest(&first) == original);
+    CHECK(pmkb_surface_take_dirty(&first, &dirty));
+
+    /* Navigation between pages must repaint even on the same buffer. */
+    CHECK(pmkb_store_page_build(&view, 320, 480, 1, &page)
+          == PMKB_STORE_PAGE_OK);
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(first.has_dirty && first.changed_pixels > 0);
+    CHECK(pmkb_surface_take_dirty(&first, &dirty));
+    CHECK(pmkb_store_page_build(&view, 320, 480, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+
+    /* A different surface pointer must miss the cache automatically. */
+    CHECK(pmkb_surface_init(&other, 320, 480) == PMKB_OK);
+    if (other.gray) {
+        CHECK(pmkb_surface_take_dirty(&other, &dirty));
+        PMKBStorePainter other_painter = pmkb_store_painter_for_ui(&other);
+        CHECK(pmkb_store_paint_page_cached(&view, &page, &other_painter, &cache)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(other.has_dirty && other.changed_pixels > 0);
+        CHECK(digest(&other) == original);
+        pmkb_surface_free(&other);
+    }
+    pmkb_surface_free(&first);
+}
+static void measure_host_cache_cost(void) {
+    CHECK(sizeof(PMKBStorePaintCache) <= 64u);
+    CHECK(sizeof(PMKBStorePage) <= 2048u);
+    CHECK(sizeof(PMKBStoreView) <= 65536u);
+    printf("PMKB CACHE RAM host: cache=%zu bytes, page=%zu bytes, "
+           "catalogue=%zu bytes, surface_header=%zu bytes\n",
+           sizeof(PMKBStorePaintCache), sizeof(PMKBStorePage),
+           sizeof(PMKBStoreView), sizeof(PMKBSurface));
+
+    prepare(5, 0);
+    PMKBSurface surface;
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&surface, 320, 480) == PMKB_OK);
+    if (!surface.gray) return;
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    CHECK(pmkb_store_page_build(&view, 320, 480, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    PMKBStorePainter painter = pmkb_store_painter_for_ui(&surface);
+    PMKBStorePaintCache cache = {0};
+
+    /* CPU timing is informative, not a flaky pass/fail speed threshold. */
+    const unsigned full_count = 48u, hit_count = 2048u;
+    unsigned full_errors = 0, hit_errors = 0;
+    clock_t start_full = clock();
+    for (unsigned i = 0; i < full_count; ++i)
+        if (pmkb_store_paint_page(&view, &page, &painter) != PMKB_STORE_PAINT_OK)
+            ++full_errors;
+    clock_t end_full = clock();
+    CHECK(full_errors == 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    clock_t start_hit = clock();
+    for (unsigned i = 0; i < hit_count; ++i)
+        if (pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+                != PMKB_STORE_PAINT_OK)
+            ++hit_errors;
+    clock_t end_hit = clock();
+    CHECK(hit_errors == 0);
+    CHECK(!surface.has_dirty && surface.changed_pixels == 0);
+    if (start_full != (clock_t)-1 && end_full != (clock_t)-1 &&
+        start_hit != (clock_t)-1 && end_hit != (clock_t)-1 &&
+        end_full >= start_full && end_hit >= start_hit) {
+        const double full_ms = 1000.0 * (double)(end_full-start_full) /
+                               ((double)CLOCKS_PER_SEC * full_count);
+        const double hit_ms = 1000.0 * (double)(end_hit-start_hit) /
+                              ((double)CLOCKS_PER_SEC * hit_count);
+        printf("PMKB CACHE CPU host 320x480: full_ms_per_call=%.6f, "
+               "hit_ms_per_call=%.6f (%u full / %u hits; diagnostic only)\n",
+               full_ms, hit_ms, full_count, hit_count);
+    } else {
+        puts("PMKB CACHE CPU host: clock unavailable (NON MESURE)");
+    }
+    pmkb_surface_free(&surface);
+}
 int main(void){
     CHECK(pmkb_surface_glyph_supported(0x00e9u));
     check_surface(320,480,0,3,0,3);
@@ -244,6 +366,8 @@ int main(void){
     check_duplicate_draw(320,480,3,0);
     check_duplicate_draw(1080,1440,64,2);
     check_duplicate_draw(1440,1080,64,0);
+    check_cache_lifecycle();
+    measure_host_cache_cost();
     if(failed)return 1;
     printf("PMKB REAL UI STORE: %d assertions PASS, 0 FAIL\n",checks);
     return 0;
