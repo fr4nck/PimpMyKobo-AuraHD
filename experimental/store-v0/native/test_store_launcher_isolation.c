@@ -900,6 +900,28 @@ static void verify_async_lifecycle_owner(void) {
     CHECK(pmkb_store_eink_lifecycle_shutdown(&owner,true)==PMKB_NO_CHANGE);
     CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
 }
+/* D7s: lifecycle reset must not reuse a canceled marker. */
+static void verify_async_reset_stale_marker(void) {
+    PMKBStoreEinkLifecycle owner={0};
+    pmkb_store_eink_lifecycle_init(&owner);
+    unsigned stale=0,fresh=0;
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&stale)==PMKB_OK);
+    pmkb_store_eink_lifecycle_reset(&owner);
+    CHECK(!owner.async.markers.pending);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner.router.store)==0u);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(pmkb_store_eink_lifecycle_preview(&owner,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_eink_lifecycle_submit(&owner,&fresh)==PMKB_OK);
+    CHECK(fresh!=stale);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,stale,true)==PMKB_INVALID);
+    CHECK(owner.async.markers.pending && owner.router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_lifecycle_complete(&owner,fresh,true)==PMKB_OK);
+    CHECK(!owner.router.store.surface.has_dirty);
+    pmkb_store_eink_lifecycle_reset(&owner);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -949,6 +971,7 @@ int main(void) {
     verify_async_dirty_contract();
     verify_async_cancel_before_dismiss();
     verify_async_lifecycle_owner();
+    verify_async_reset_stale_marker();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
