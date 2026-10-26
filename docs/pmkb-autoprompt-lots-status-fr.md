@@ -628,6 +628,30 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Limites** : tests hôte avec doubles métier Notes/Calculatrice ; aucun ARM, EPDC, tactile, mesure RAM réelle, boot Kobo ou écriture FIRST BOOT/P1/P2/P3/recoveryfs. Aucun service, thread ou réseau ajouté.
 - **Reprise exacte** : D8b — vérifier que toute mutation publique future de `PMKBAppHost` passe par les fonctions qui avancent la génération ; si aucune voie de contournement n'existe dans PR #30, produire une matrice de clôture du raccord Store/Launcher au lieu d'ajouter un garde supplémentaire. Ne pas rendre le Store exécutable ni fusionner les PR automatiquement.
 
+## LOT 06 — D8b : clôture Store / Launcher
+
+**D8b : DONE et qualifié sur hôtes. LOT 06 est DONE côté logiciel hors matériel.** Les PR #30 et #31 ont été fusionnées dans cet ordre puis fermées ; Store reste `runnable=false` et non exécutable.
+
+- **Audit des mutations** : dans le code de production de la PR #30, les écritures de `PMKBAppHost.active`, `instance` et `generation` sont confinées à `pmkb_launcher_bridge.c`, via l'initialisation, le lancement et la fermeture. Les écritures directes restantes se trouvent dans les tests négatifs de la PR #31 et servent volontairement à construire des états incohérents. Le Store n'écrit pas l'hôte : il capture puis compare son identité de cycle.
+- **Fusion Launcher** : PR [#30](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/30) fusionnée et fermée par le commit [`5865db8c`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/5865db8cb162ca141c966120d58a560867c85997).
+- **Fusion Store** : PR [#31](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/31) fusionnée et fermée par le commit [`86ec6c0a`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/86ec6c0a609e4e99ce67e60fa0d64fec1ad74dc4).
+- **Qualification post-fusion** : [CI main #40383481053](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40383481053) **10/10 jobs SUCCESS, 0 FAIL** sur Linux/Windows.
+
+| Risque de raccord | Décision D8b | Preuve |
+| --- | --- | --- |
+| lancement ou fermeture réellement réussi | PASS | la génération avance après la mutation complète |
+| lancement refusé, fermeture vide ou Notes non sauvegardées | PASS | la génération et l'instance restent inchangées |
+| réutilisation ABA avec mêmes `active` et `instance` | PASS | génération différente, garde détaché avant tout dessin |
+| génération saturée | PASS | `UINT64_MAX` refusé dès l'entrée Store |
+| Store lancé comme application | REFUSÉ | catalogue `runnable=false`, lancement `PMKB_NOT_FOUND` |
+| alias ou chevauchement avec la surface applicative | REFUSÉ | contrôle de plages mémoire et surface dédiée |
+| confirmation ou présentation devenue obsolète | REFUSÉ | identité du cycle revérifiée avant soumission et confirmation |
+| fermeture Notes avec données RAM sans accord de perte | REFUSÉ | session préservée et `PMKB_UNSAVED` |
+
+- **Limite de contrat C** : `PMKBAppHost` reste une structure publique dans ce prototype. Une écriture directe par un futur code tiers serait une violation de contrat ; l'audit ne trouve aucune telle voie dans le code de production fusionné. Toute nouvelle mutation devra passer par le bridge et faire avancer la génération.
+- **Limites matérielles inchangées** : aucun ARM, EPDC, ZForce réel, mesure RAM/énergie, boot Kobo, installation Store, réseau ou écriture FIRST BOOT/P1/P2/P3/recoveryfs. La fusion intègre des contrats et simulations hôte ; elle ne qualifie aucun déploiement sur liseuse.
+- **Reprise exacte** : L07-A — cadrer un tableau blanc hors ligne avec état synthétique et tests hôte, sans activer de chemin matériel ni modifier FIRST BOOT.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -638,7 +662,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (D8a DONE)** | PR #30 `209324c`, PR #31 `711b0b8` | Cycle Launcher versionné, garde Store protégé contre la réutilisation de pointeurs | **CI PR #30 : 2 workflows SUCCESS ; CI PR #31 #40378189442 : 10/10 SUCCESS** ; Kobo NON EXÉCUTÉE | D8b — audit des mutations puis matrice de clôture |
+| L06 — Store *.pmkb | **DONE (logiciel hors matériel)** | PR #30 `209324c` → merge `5865db8`, PR #31 `711b0b8` → merge `86ec6c0` | Contrats Store hors ligne, surface dédiée, garde de cycle Launcher et matrice de clôture D8b | **CI post-fusion main #40383481053 : 10/10 SUCCESS** ; Kobo / Store exécutable NON EXÉCUTÉS | **L07-A** |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
