@@ -841,6 +841,36 @@ static void verify_async_dirty_contract(void) {
     CHECK(pmkb_store_eink_async_submit(&state,surface,&third)==PMKB_NO_CHANGE);
     pmkb_store_router_dismiss(&router);
 }
+/* D7q: cancel before dismissal, then reject a delayed completion. */
+static void verify_async_cancel_before_dismiss(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    PMKBStoreEinkAsync state={0};
+    unsigned stale=0,fresh=0;
+    CHECK(pmkb_store_eink_async_submit(
+        &state,&router.store.surface,&stale)==PMKB_OK);
+    CHECK(router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_async_cancel(&state)==PMKB_OK);
+    pmkb_store_router_dismiss(&router);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store)==0u);
+    CHECK(pmkb_store_eink_async_complete(&state,NULL,stale,true)==PMKB_INVALID);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_async_submit(
+        &state,&router.store.surface,&fresh)==PMKB_OK);
+    CHECK(fresh!=stale);
+    CHECK(pmkb_store_eink_async_complete(
+        &state,&router.store.surface,stale,true)==PMKB_INVALID);
+    CHECK(router.store.surface.has_dirty && state.markers.pending);
+    CHECK(pmkb_store_eink_async_complete(
+        &state,&router.store.surface,fresh,true)==PMKB_OK);
+    CHECK(!router.store.surface.has_dirty);
+    CHECK(pmkb_store_eink_async_cancel(&state)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -888,6 +918,7 @@ int main(void) {
     verify_eink_sim_transport();
     verify_eink_pending_marker();
     verify_async_dirty_contract();
+    verify_async_cancel_before_dismiss();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
