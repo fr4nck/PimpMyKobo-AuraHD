@@ -20,7 +20,7 @@ Les codes de retour distinguent `OK`, `INVALID`, `LIMIT` et `NO_CHANGE`. Un dép
 - Source des tests : `tests/whiteboard_model_tests.c`.
 - Pont de CI : `tests/test_whiteboard_model.py`, compilation par un compilateur C11 déjà installé, sans installation de dépendance. En Actions, exécuter la preuve sur Linux et Windows, Python 3.11 uniquement, pour éviter huit compilations identiques.
 - Scénarios : validation géométrique et entrée, dot et coins extrêmes, niveaux de gris/épaisseurs, événements invalides, duplicata de points, undo/redo, `CANCEL`, branche redo remplacée à `UP`, débordement de traits et de points, effacement.
-- Une présence du test n'est **pas** un PASS : attendre une exécution effective de CI et enregistrer son résultat.
+- **Qualification effective :** [CI PR #32 #40386076919](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40386076919) sur `f8cc17b2a3bd7db9d281cf9caf5fbc69ac622caf` : **10/10 jobs SUCCESS, 0 FAIL**. Le test C11 `test_bounded_journal_and_undo_redo` est réellement exécuté et **PASS** sur Linux et Windows (Python 3.11), et non simplement ignoré. Les 6 autres emplois unitaires de la matrice Python sautent volontairement cette compilation redondante.
 
 ## Hors périmètre TB0
 
