@@ -2,6 +2,7 @@
  * Store uses a dedicated synthetic surface. No app route is activated. */
 #include "pmkb_launcher_bridge.h"
 #include "pmkb_store_ui_preview.h"
+#include "pmkb_store_launcher_guard.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -135,6 +136,114 @@ static void verify_calculator_isolation(void) {
     CHECK(host.active==PMKB_APP_NONE && host.instance==NULL);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_NOT_FOUND);
 }
+
+/* L06-D6d: real Launcher bridge, fail-closed guard, independent Store pixels.
+ * Notes/Calc business logic is deliberately supplied by the doubles above. */
+static void verify_guarded_surface_ownership(void) {
+    PMKBAppHost host; pmkb_app_host_init(&host);
+    PMKBStoreLauncherGuard guard;
+    memset(&guard, 0xa5, sizeof(guard));
+    pmkb_store_launcher_guard_init(&guard);
+    CHECK(!guard.preview.screen.visible && guard.host == NULL);
+    CHECK(sizeof(PMKBStoreLauncherGuard) <= 96u);
+
+    PMKBSurface dedicated = {0};
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&dedicated, 320, 480) == PMKB_OK);
+    if (!dedicated.gray) return;
+    CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_launcher_guard_enter(&guard, NULL, &dedicated)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+    uint64_t initial = hash_frame(&dedicated);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!dedicated.has_dirty && dedicated.changed_pixels == 0);
+
+    /* Starting Notes changes the host lifecycle; fail closed on draw. */
+    CHECK(pmkb_app_host_launch(&host, PMKB_APP_NOTES, 320, 480) == PMKB_OK);
+    if (host.active != PMKB_APP_NOTES || !host.instance) {
+        pmkb_surface_free(&dedicated);
+        return;
+    }
+    PMKBSurface *notes = pmkb_app_host_screen(&host);
+    CHECK(notes && notes->gray);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
+    CHECK(hash_frame(&dedicated) == initial && !dedicated.has_dirty);
+
+    const uint64_t note_hash = hash_frame(notes);
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, notes)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && !guard.preview.screen.visible);
+    PMKBSurface alias = *notes; /* same pixels despite different struct */
+    CHECK(&alias != notes && alias.gray == notes->gray);
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &alias)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(hash_frame(notes) == note_hash);
+
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(hash_frame(notes) == note_hash);
+    CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+    pmkb_surface_rect(&dedicated, (PMKBRect){0,0,3,3}, 0);
+    CHECK(dedicated.gray[0] == 0);
+    CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+    pmkb_store_launcher_guard_external_draw(&guard);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(dedicated.gray[0] == 255 && hash_frame(&dedicated) == initial);
+    CHECK(hash_frame(notes) == note_hash);
+    CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+
+    /* Closing Notes changes the host; a stale guarded draw is refused. */
+    CHECK(pmkb_app_host_close(&host, true) == PMKB_OK);
+    CHECK(host.active == PMKB_APP_NONE && host.instance == NULL);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!guard.preview.screen.visible && guard.host == NULL);
+    CHECK(!dedicated.has_dirty && hash_frame(&dedicated) == initial);
+
+    CHECK(pmkb_app_host_launch(&host, PMKB_APP_CALCULATOR, 320, 480)
+          == PMKB_OK);
+    if (host.active == PMKB_APP_CALCULATOR && host.instance) {
+        PMKBSurface *calculator = pmkb_app_host_screen(&host);
+        CHECK(calculator && calculator->gray);
+        CHECK(pmkb_store_launcher_guard_enter(&guard, &host, calculator)
+              == PMKB_STORE_PAINT_INVALID);
+        PMKBSurface duplicate = *calculator;
+        CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &duplicate)
+              == PMKB_STORE_PAINT_INVALID);
+        uint64_t calc_hash = hash_frame(calculator);
+        CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(hash_frame(calculator) == calc_hash);
+        CHECK(pmkb_surface_take_dirty(&dedicated, &dirty));
+        CHECK(pmkb_app_host_close(&host, false) == PMKB_OK);
+        CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+              == PMKB_STORE_PAINT_INVALID);
+        CHECK(!dedicated.has_dirty && hash_frame(&dedicated) == initial);
+    }
+    pmkb_store_launcher_guard_leave(&guard);
+    pmkb_store_launcher_guard_leave(NULL);
+    pmkb_store_launcher_guard_external_draw(NULL);
+    CHECK(guard.host == NULL && !guard.preview.screen.visible);
+    pmkb_surface_free(&dedicated);
+    CHECK(dedicated.gray == NULL);
+    printf("PMKB STORE LAUNCHER GUARD: %zu bytes, isolation PASS\n",
+           sizeof(PMKBStoreLauncherGuard));
+}
 int main(void) {
     memset(&catalog,0,sizeof(catalog));
     catalog.count=1;
@@ -144,6 +253,7 @@ int main(void) {
     verify_reserved();
     verify_notes_isolation();
     verify_calculator_isolation();
+    verify_guarded_surface_ownership();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
