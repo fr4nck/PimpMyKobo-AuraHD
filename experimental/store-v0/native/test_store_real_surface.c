@@ -153,6 +153,84 @@ static void check_french_glyph_pixels(void) {
     CHECK(digest(&surface) != unaccented);
     pmkb_surface_free(&surface);
 }
+
+/* L06-D4d: compare legacy unconditional redraw with optional cached redraw
+ * on the REAL PMKB-UI pixel surface. No physical E-Ink refresh is performed. */
+static void check_duplicate_draw(int w, int h, unsigned count, unsigned pending) {
+    prepare(count, pending);
+    PMKBSurface surface;
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&surface, w, h) == PMKB_OK);
+    if (!surface.gray) return;
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    CHECK(pmkb_store_page_build(&view, w, h, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    PMKBStorePainter painter = pmkb_store_painter_for_ui(&surface);
+
+    /* Baseline: unchanged data repaints visible glyphs twice. */
+    CHECK(pmkb_store_paint_page(&view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    CHECK(pmkb_store_paint_page(&view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    const size_t baseline = surface.changed_pixels;
+    CHECK(baseline > 0);
+    CHECK(surface.has_dirty);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    PMKBStorePaintCache cache = {0};
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(cache.valid);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    const uint64_t unchanged = digest(&surface);
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    const size_t cached = surface.changed_pixels;
+    CHECK(cached == 0 && !surface.has_dirty);
+    CHECK(digest(&surface) == unchanged);
+
+    /* An updated label requires a repaint even on the same context. */
+    if (count) {
+        (void)strcpy(view.items[0].label, "Autre application");
+        CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(surface.changed_pixels > 0 && surface.has_dirty);
+        CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    }
+
+    /* Visible footer counts also invalidate the cache correctly. */
+    view.cleanup_pending_count = pending ? 0u : 1u;
+    CHECK(pmkb_store_page_build(&view, w, h, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.changed_pixels > 0 && surface.has_dirty);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    /* Repainting another screen MUST be followed by explicit reset. */
+    pmkb_surface_rect(&surface, (PMKBRect){0, 0, 4, 4}, 0);
+    CHECK(surface.changed_pixels > 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    pmkb_store_paint_cache_reset(&cache);
+    CHECK(!cache.valid);
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.gray[0] == 255);
+    CHECK(surface.has_dirty && surface.changed_pixels > 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    /* A forged page must never draw, including with a valid cache. */
+    uint64_t image = digest(&surface);
+    page.page_index = page.page_count;
+    CHECK(pmkb_store_paint_page_cached(&view, &page, &painter, &cache)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && surface.changed_pixels == 0);
+    CHECK(image == digest(&surface));
+    pmkb_surface_free(&surface);
+    printf("PMKB STORE REDRAW %dx%d: baseline=%zu changed_pixels, "
+           "cached=%zu changed_pixels\\n", w, h, baseline, cached);
+}
 int main(void){
     CHECK(pmkb_surface_glyph_supported(0x00e9u));
     check_surface(320,480,0,3,0,3);
@@ -163,6 +241,9 @@ int main(void){
     check_real_pixels(1080,1440,0,64,2);
     check_real_pixels(1440,1080,7,64,512);
     check_french_glyph_pixels();
+    check_duplicate_draw(320,480,3,0);
+    check_duplicate_draw(1080,1440,64,2);
+    check_duplicate_draw(1440,1080,64,0);
     if(failed)return 1;
     printf("PMKB REAL UI STORE: %d assertions PASS, 0 FAIL\n",checks);
     return 0;

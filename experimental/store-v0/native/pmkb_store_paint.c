@@ -78,3 +78,66 @@ PMKBStorePaintStatus pmkb_store_paint_page(const PMKBStoreView *view,
     }
     return PMKB_STORE_PAINT_OK;
 }
+
+/* L06-D4d: cheap content fingerprint; no heap, I/O or platform dependencies.
+ * A caller must invalidate the cache if OTHER UI drawing touches the buffer.
+ * All inputs have been validated by pmkb_store_page_build before stamping. */
+static uint64_t stamp_byte(uint64_t h, uint8_t value) {
+    return (h ^ (uint64_t)value) * UINT64_C(1099511628211);
+}
+static uint64_t stamp_int(uint64_t h, uint32_t value) {
+    for (unsigned n = 0; n < 4; ++n)
+        h = stamp_byte(h, (uint8_t)(value >> (n * 8u)));
+    return h;
+}
+static uint64_t stamp_string(uint64_t h, const char *text) {
+    const unsigned char *p = (const unsigned char *)text;
+    while (*p) h = stamp_byte(h, *p++);
+    return stamp_byte(h, 0); /* unambiguous field boundary */
+}
+static uint64_t stamp_page(const PMKBStoreView *view,
+                            const PMKBStorePage *page) {
+    uint64_t h = UINT64_C(1469598103934665603);
+    h = stamp_int(h, (uint32_t)page->width);
+    h = stamp_int(h, (uint32_t)page->height);
+    h = stamp_int(h, page->page_index);
+    h = stamp_int(h, page->page_count);
+    h = stamp_int(h, page->visible_count);
+    h = stamp_int(h, page->total_items);
+    h = stamp_int(h, page->cleanup_pending_count);
+    for (unsigned i = 0; i < page->visible_count; ++i) {
+        const PMKBStorePageRow *row = &page->rows[i];
+        const PMKBStoreViewItem *entry = &view->items[row->source_index];
+        h = stamp_int(h, row->source_index);
+        h = stamp_string(h, entry->id);
+        h = stamp_string(h, entry->label);
+        h = stamp_string(h, entry->version);
+        h = stamp_byte(h, entry->network_declared ? 1u : 0u);
+    }
+    return h;
+}
+void pmkb_store_paint_cache_reset(PMKBStorePaintCache *cache) {
+    if (cache) memset(cache, 0, sizeof(*cache));
+}
+PMKBStorePaintStatus pmkb_store_paint_page_cached(
+    const PMKBStoreView *view, const PMKBStorePage *page,
+    const PMKBStorePainter *painter, PMKBStorePaintCache *cache) {
+    if (!cache || !view || !page || !painter || !painter->context ||
+        !painter->rect || !painter->text_box || !valid_page(view, page))
+        return PMKB_STORE_PAINT_INVALID;
+    uint64_t stamp = stamp_page(view, page);
+    if (cache->valid && cache->stamp == stamp &&
+        cache->context == painter->context &&
+        cache->rect == painter->rect &&
+        cache->text_box == painter->text_box)
+        return PMKB_STORE_PAINT_OK; /* ZERO draw calls and invalidations */
+    PMKBStorePaintStatus result = pmkb_store_paint_page(view, page, painter);
+    if (result == PMKB_STORE_PAINT_OK) {
+        cache->stamp = stamp;
+        cache->context = painter->context;
+        cache->rect = painter->rect;
+        cache->text_box = painter->text_box;
+        cache->valid = true;
+    }
+    return result;
+}

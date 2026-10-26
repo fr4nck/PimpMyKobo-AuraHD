@@ -72,6 +72,7 @@ class RealSurfaceIntegration(unittest.TestCase):
             [str(self.executable)], capture_output=True, text=True,
             timeout=30, check=False)
         self.assertEqual(0, outcome.returncode, outcome.stderr)
+        print(outcome.stdout.strip())  # native redraw metrics in CI logs
         self.assertRegex(outcome.stdout,
                          r"PMKB REAL UI STORE: \d+ assertions PASS, 0 FAIL")
 

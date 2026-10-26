@@ -23,6 +23,26 @@ PMKBStorePaintStatus pmkb_store_paint_page(const PMKBStoreView *view,
                                            const PMKBStorePage *page,
                                            const PMKBStorePainter *painter);
 
+
+/* Optional caller-owned, ~40-byte hint for an unchanged on-screen Store page.
+ * The caller MUST reset it when any other drawing changes the target surface,
+ * including UI navigation, full refresh, surface re-init and framebuffer
+ * repaint. A 64-bit content stamp is NOT an authentication/integrity proof.
+ * The uncached function above stays the default and retains its semantics. */
+typedef struct {
+    uint64_t stamp;
+    void *context;
+    void (*rect)(void *context, int x, int y, int w, int h, uint8_t shade);
+    void (*text_box)(void *context, int x, int y, const char *utf8,
+                     uint8_t shade, int max_width, int max_height);
+    bool valid;
+} PMKBStorePaintCache;
+
+void pmkb_store_paint_cache_reset(PMKBStorePaintCache *cache);
+PMKBStorePaintStatus pmkb_store_paint_page_cached(
+    const PMKBStoreView *view, const PMKBStorePage *page,
+    const PMKBStorePainter *painter, PMKBStorePaintCache *cache);
+
 /* Optional compile-time seam. Include pmkb_ui.h from PR #30 BEFORE this
  * header when both branches are integrated; no clone or UI vendoring here.
  * C11 wrappers prevent function-pointer casts between PMKBSurface* and void*. */
