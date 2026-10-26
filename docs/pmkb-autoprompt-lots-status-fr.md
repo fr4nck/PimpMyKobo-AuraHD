@@ -609,6 +609,13 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Limites** : les tests du pont emploient encore des doubles des applications Notes/Calculatrice ; aucun ARM, EPDC, tactile, mesures de RAM ou essai Kobo. Garder le Store `runnable=false`, PR #30/#31 non fusionnees, FIRST BOOT et P2 preserves.
 - **Reprise** : revoir la matrice d'integration avec le veritable proprietaire de surface du futur routeur ; ne pas activer le Store. Eviter de prolonger indefiniment les tests negatifs sans nouveau risque identifie.
 
+## LOT 06 — D6k et D6l : frontieres de memoire du Store
+
+- **D6k QUALIFIE sur hotes** : correction des alias partiels `b932497`, test `16d3016`, documentation `afc9760`. [CI #40343605490](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40343605490) : **10/10 SUCCESS, 0 FAIL** au commit teste `16d3016876b7956a4025d306df4727d21c535420`. La PR #31 demeure DRAFT/non fusionnee.
+- **D6l EN QUALIFICATION** : test supplementaire d'un alias a la derniere position du buffer Notes, commit `6c85f3c6b12f5556aee5cd35ed186ce38974a28a` dans PR #31. Aucune modification du code de production dans D6l. Consulter sa CI avant de clore.
+- **Suite** : au lieu d'ajouter des gardes indefiniment, identifier le vrai routeur proprietaire des surfaces dans PR #30, puis integrer de maniere volontaire un point de raccordement passif uniquement si son cycle de vie est maitrise. Ne pas activer Store ni fusionner #30/#31.
+- **Limites** : pas d'essai ARM/Kobo/EPDC/tactile ; aucune ecriture sur FIRST BOOT, P1/P2/P3, recoveryfs ou microSD physique.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -619,7 +626,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (L06-D6j DONE hors matériel)** | PR #31 `6af5dcb` | Matrice de raccord passif et tests negatifs d'etats incoherents du Launcher | **CI #40341596937 : 10/10 SUCCESS, 0 FAIL** ; Kobo NON EXÉCUTÉE | Revue d'integration |
+| L06 — Store *.pmkb | **IN_PROGRESS (D6k DONE ; D6l en qualification)** | PR #31 `6c85f3c` | Rejet d'alias memoire partiels, tests debut et fin de buffer | **CI D6k #40343605490 : 10/10 SUCCESS** ; CI D6l a verifier ; Kobo NON EXÉCUTÉE | D6l puis integration |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
