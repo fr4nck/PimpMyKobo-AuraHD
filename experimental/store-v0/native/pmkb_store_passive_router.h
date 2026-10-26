@@ -22,8 +22,21 @@ static inline PMKBStorePaintStatus pmkb_store_router_preview(
         pmkb_store_owner_close(&router->store);
         return PMKB_STORE_PAINT_INVALID;
     }
-    if (pmkb_store_owner_open(&router->store, &router->host, width, height)
-        != PMKB_STORE_PAINT_OK) return PMKB_STORE_PAINT_INVALID;
+    /* Reuse an existing owned buffer of identical dimensions. Re-enter
+     * the guard to validate the current app identity and memory ranges. */
+    PMKBStorePaintStatus opened;
+    if (router->store.allocated &&
+        router->store.surface.width == width &&
+        router->store.surface.height == height) {
+        opened = pmkb_store_launcher_guard_enter(
+            &router->store.guard, &router->host, &router->store.surface);
+        if (opened != PMKB_STORE_PAINT_OK)
+            pmkb_store_owner_close(&router->store);
+    } else {
+        opened = pmkb_store_owner_open(&router->store, &router->host,
+                                       width, height);
+    }
+    if (opened != PMKB_STORE_PAINT_OK) return PMKB_STORE_PAINT_INVALID;
     PMKBStorePaintStatus status =
         pmkb_store_launcher_guard_draw(&router->store.guard, catalogue, page);
     if (status != PMKB_STORE_PAINT_OK) pmkb_store_owner_close(&router->store);
