@@ -383,6 +383,20 @@ static void verify_surface_owner(void) {
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&owner) == 1555200u);
     pmkb_store_owner_close(&owner);
+    /* D6q: repeated allocation/free cycles with bounded pixel accounting. */
+    for (unsigned cycle = 0; cycle < 16; ++cycle) {
+        const int w = (cycle & 1u) ? 1080 : 320;
+        const int h = (cycle & 1u) ? 1440 : 480;
+        const size_t expected = (size_t)w * (size_t)h;
+        CHECK(pmkb_store_owner_open(&owner, &host, w, h)
+              == PMKB_STORE_PAINT_OK);
+        CHECK(pmkb_store_owner_pixel_bytes(&owner) == expected);
+        CHECK(owner.surface.gray != NULL);
+        pmkb_store_owner_close(&owner);
+        CHECK(owner.surface.gray == NULL && !owner.allocated);
+        CHECK(owner.guard.host == NULL && owner.guard.preview.target == NULL);
+        CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    }
 }
 int main(void) {
     memset(&catalog,0,sizeof(catalog));
