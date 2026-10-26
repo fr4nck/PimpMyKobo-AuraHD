@@ -6,6 +6,7 @@
 #include "pmkb_store_surface_owner.h"
 #include "pmkb_store_passive_router.h"
 #include "pmkb_store_eink_sim.h"
+#include "pmkb_store_eink_pending.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -795,6 +796,24 @@ static void verify_eink_sim_transport(void) {
     CHECK(sim.submissions==before);
     pmkb_store_router_dismiss(&router);
 }
+/* D7o: acceptance, stale marker rejection and completion are distinct. */
+static void verify_eink_pending_marker(void) {
+    PMKBStoreEinkPending state={0};
+    unsigned first=0,second=0;
+    CHECK(pmkb_store_eink_begin(&state,&first)==PMKB_OK);
+    CHECK(first!=0 && state.pending);
+    CHECK(state.completions==0u);
+    CHECK(pmkb_store_eink_begin(&state,&second)==PMKB_LIMIT);
+    CHECK(pmkb_store_eink_complete(&state,first+1u,true)==PMKB_INVALID);
+    CHECK(state.pending && state.completions==0u);
+    CHECK(pmkb_store_eink_complete(&state,first,false)==PMKB_INVALID);
+    CHECK(!state.pending && state.failures==1u);
+    CHECK(pmkb_store_eink_begin(&state,&second)==PMKB_OK);
+    CHECK(second!=first && state.pending);
+    CHECK(pmkb_store_eink_complete(&state,second,true)==PMKB_OK);
+    CHECK(!state.pending && state.completions==1u);
+    CHECK(pmkb_store_eink_complete(&state,second,true)==PMKB_INVALID);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -840,6 +859,7 @@ int main(void) {
     verify_repeated_present_failure();
     verify_full_present_lifecycle();
     verify_eink_sim_transport();
+    verify_eink_pending_marker();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
