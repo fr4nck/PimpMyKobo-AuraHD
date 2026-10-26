@@ -42,6 +42,22 @@ static inline PMKBStorePaintStatus pmkb_store_router_preview(
     if (status != PMKB_STORE_PAINT_OK) pmkb_store_owner_close(&router->store);
     return status;
 }
+/* Host-only HAL seam: forward the owned Store dirty surface to the
+ * injected backend. Does not acknowledge failed presents or touch devices. */
+static inline PMKBStatus pmkb_store_router_present(
+    PMKBStorePassiveRouter *router, const PMKBBackend *backend) {
+    if (!router || !router->store.allocated ||
+        !router->store.guard.host ||
+        router->store.guard.host != &router->host ||
+        router->store.guard.active_on_enter != router->host.active ||
+        router->store.guard.instance_on_enter != router->host.instance ||
+        !pmkb_store_launcher_surface_separate(
+            &router->host, &router->store.surface)) {
+        if (router) pmkb_store_owner_close(&router->store);
+        return PMKB_INVALID;
+    }
+    return pmkb_surface_present(&router->store.surface, backend);
+}
 /* Store is transient: no pixels remain when it is dismissed. */
 static inline void pmkb_store_router_dismiss(PMKBStorePassiveRouter *router) {
     if (router) pmkb_store_owner_close(&router->store);
