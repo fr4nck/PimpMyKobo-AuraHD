@@ -494,6 +494,37 @@ static void verify_passive_router(void) {
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
     pmkb_store_router_dismiss(&router);
 }
+typedef struct { unsigned calls; bool fail; PMKBRect last; } D7bBackend;
+static PMKBStatus d7b_present(void *ctx, const uint8_t *gray,
+                              int width, int height, PMKBRect rect) {
+    D7bBackend *mock = (D7bBackend *)ctx;
+    ++mock->calls;
+    mock->last = rect;
+    if (!gray || rect.w <= 0 || rect.h <= 0 ||
+        rect.x < 0 || rect.y < 0 ||
+        rect.x + rect.w > width || rect.y + rect.h > height)
+        return PMKB_INVALID;
+    return mock->fail ? PMKB_INVALID : PMKB_OK;
+}
+static void verify_router_presentation(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    D7bBackend mock = {0};
+    PMKBBackend backend = {&mock,d7b_present};
+    mock.fail = true;
+    CHECK(pmkb_surface_present(&router.store.surface,&backend)==PMKB_INVALID);
+    CHECK(mock.calls >= 1u);
+    CHECK(router.store.surface.has_dirty);
+    mock.fail = false;
+    unsigned before = mock.calls;
+    CHECK(pmkb_surface_present(&router.store.surface,&backend)==PMKB_OK);
+    CHECK(mock.calls > before);
+    CHECK(!router.store.surface.has_dirty);
+    CHECK(pmkb_surface_present(&router.store.surface,&backend)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -527,6 +558,7 @@ int main(void) {
     verify_surface_owner();
     verify_passive_router();
     verify_router_shutdown();
+    verify_router_presentation();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
