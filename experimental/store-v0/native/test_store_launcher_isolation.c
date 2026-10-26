@@ -273,6 +273,16 @@ static void verify_guarded_surface_ownership(void) {
         CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
               == PMKB_STORE_PAINT_INVALID);
     }
+    /* L06-D6g: detached guards may not draw until explicit re-entry. */
+    pmkb_store_launcher_guard_before_destroy(&guard);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    pmkb_store_launcher_guard_before_destroy(&guard);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
     pmkb_store_launcher_guard_leave(&guard);
     pmkb_store_launcher_guard_leave(NULL);
     pmkb_store_launcher_guard_external_draw(NULL);
