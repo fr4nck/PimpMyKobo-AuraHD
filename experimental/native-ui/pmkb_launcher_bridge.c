@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void pmkb_app_host_advance_generation(PMKBAppHost *host){
+    if(host->generation<UINT64_MAX)host->generation++;
+}
+
 static const PMKBAppInfo catalog[]={
     {PMKB_APP_NOTES,"notes","Mes notes",true},
     {PMKB_APP_CALCULATOR,"calculator","Calculatrice",true},
@@ -37,6 +41,7 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
         host->instance=calc;
     }else return PMKB_NOT_FOUND;
     host->active=kind;
+    pmkb_app_host_advance_generation(host);
     return PMKB_OK;
 }
 PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard){
@@ -52,6 +57,7 @@ PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard){
     free(host->instance);
     host->instance=NULL;
     host->active=PMKB_APP_NONE;
+    pmkb_app_host_advance_generation(host);
     return PMKB_OK;
 }
 PMKBSurface *pmkb_app_host_screen(PMKBAppHost *host){

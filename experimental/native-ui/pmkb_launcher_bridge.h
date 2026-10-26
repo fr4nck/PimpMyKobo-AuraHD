@@ -4,6 +4,7 @@
 #define PMKB_LAUNCHER_BRIDGE_H
 #include "pmkb_ui.h"
 #include "pmkb_calculator_ui.h"
+#include <stdint.h>
 
 typedef enum {
     PMKB_APP_NONE=0,
@@ -24,6 +25,9 @@ typedef struct {
 typedef struct {
     PMKBAppId active;
     void *instance;
+    /* Monotonic lifecycle token. It changes after each successful launch or
+     * close and never wraps; passive borrowers must reject UINT64_MAX. */
+    uint64_t generation;
 } PMKBAppHost;
 
 const PMKBAppInfo *pmkb_app_info(PMKBAppId kind);

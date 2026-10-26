@@ -32,10 +32,13 @@ static int catalog(void){
 }
 static int safe_lifecycle(void){
     PMKBAppHost host;pmkb_app_host_init(&host);
+    CHECK(host.generation==0u);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_NOT_FOUND);
     CHECK(host.instance==NULL && host.active==PMKB_APP_NONE);
+    CHECK(host.generation==0u);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
     CHECK(host.active==PMKB_APP_NOTES && host.instance);
+    CHECK(host.generation==1u);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_CALCULATOR,320,480)==PMKB_INVALID);
     CHECK(pmkb_app_host_event(&host,
           (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=14,.y=14},UTC)==PMKB_OK);
@@ -43,6 +46,7 @@ static int safe_lifecycle(void){
     CHECK(notes->notebook.count==1);
     CHECK(pmkb_app_host_close(&host,false)==PMKB_UNSAVED);
     CHECK(host.active==PMKB_APP_NOTES && host.instance==notes);
+    CHECK(host.generation==1u);
     CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_TEXT,
           .text="Saisie gard\xc3\xa9""e"},UTC)==PMKB_OK);
     CHECK(strcmp(notes->notebook.items[0]->title.data,"Saisie gard\xc3\xa9""e")==0);
@@ -56,9 +60,11 @@ static int safe_lifecycle(void){
     CHECK(pmkb_app_host_present(&host,&adapter)==PMKB_NO_CHANGE);
     CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
     CHECK(host.active==PMKB_APP_NONE&&host.instance==NULL);
+    CHECK(host.generation==2u);
     CHECK(pmkb_app_host_event(&host,
           (PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_NOT_FOUND);
     CHECK(pmkb_app_host_close(&host,false)==PMKB_NO_CHANGE);
+    CHECK(host.generation==2u);
     groups++;return 0;
 }
 static int calculator_via_launcher(void){
