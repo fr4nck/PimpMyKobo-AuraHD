@@ -8,6 +8,8 @@ typedef struct {
     PMKBSurface screen;
     PMKBStoreView catalogue;
     unsigned page_index;
+    unsigned selected_index;
+    bool showing_detail;
     bool initial_drawn;
     unsigned render_calls;
 } PMKBStoreApp;

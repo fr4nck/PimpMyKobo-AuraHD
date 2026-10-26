@@ -121,6 +121,15 @@ static int store_via_launcher(void){
     CHECK(mock.calls>=1&&!store->screen.has_dirty);
     CHECK(pmkb_app_host_store_load(&host,many,sizeof(many)-1u)==PMKB_OK);
     CHECK(store->catalogue.count==6u&&store->page_index==0u);
+    CHECK(!store->showing_detail);
+    CHECK(pmkb_app_host_event(&host,
+          (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=20,.y=70},NULL)==PMKB_OK);
+    CHECK(store->showing_detail&&store->selected_index==0u);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_RIGHT},NULL)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_SHOW_LIST},NULL)
+          ==PMKB_OK);
+    CHECK(!store->showing_detail&&store->page_index==0u);
     CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_RIGHT},NULL)
           ==PMKB_OK);
     CHECK(store->page_index==1u);
