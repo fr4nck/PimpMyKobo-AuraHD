@@ -1000,6 +1000,31 @@ static void verify_async_completion_invariants(void) {
     CHECK(state.markers.completions==1u);
     pmkb_store_router_dismiss(&router);
 }
+/* D7w: two edits during pending refresh require a second submission. */
+static void verify_async_edits_during_pending(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    PMKBSurface *surface=&router.store.surface;
+    PMKBStoreEinkAsync async={0};
+    unsigned original=0,retry=0;
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&original)==PMKB_OK);
+    CHECK(surface->has_dirty);
+    pmkb_surface_rect(surface,(PMKBRect){0,0,4,4},123);
+    pmkb_surface_rect(surface,(PMKBRect){310,470,4,4},231);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&retry)==PMKB_LIMIT);
+    CHECK(pmkb_store_eink_async_complete(&async,surface,original,true)==PMKB_OK);
+    CHECK(surface->has_dirty);
+    CHECK(async.markers.completions==1u);
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&retry)==PMKB_OK);
+    CHECK(retry!=original);
+    CHECK(pmkb_store_eink_async_complete(&async,surface,retry,true)==PMKB_OK);
+    CHECK(!surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&async,surface,&retry)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1053,6 +1078,7 @@ int main(void) {
     verify_eink_marker_exhaustion();
     verify_eink_counter_saturation();
     verify_async_completion_invariants();
+    verify_async_edits_during_pending();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
