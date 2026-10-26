@@ -55,7 +55,7 @@ class ArmELFPreflightTests(unittest.TestCase):
         struct.pack_into("<HH", malformed, 42, 32, 1)
         with self.assertRaisesRegex(module.ArmPreflightError, "invalid_program_headers"):
             module.inspect_arm_elf(bytes(malformed))
-        payload = bytearray(valid + bytes(32) + b"/lib/ld-linux.so.3\\x00")
+        payload = bytearray(valid + bytes(32) + b"/lib/ld-linux.so.3\x00")
         struct.pack_into("<I", payload, 28, 52)
         struct.pack_into("<HH", payload, 42, 32, 1)
         struct.pack_into("<IIIII", payload, 52, 3, 84, 0, 0, 19)
