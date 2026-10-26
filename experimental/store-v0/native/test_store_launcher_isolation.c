@@ -603,14 +603,14 @@ static void verify_backend_absent(void) {
           == PMKB_STORE_PAINT_OK);
     PMKBSurface *surface=&router.store.surface;
     CHECK(surface->has_dirty);
-    CHECK(pmkb_surface_present(surface,NULL)==PMKB_INVALID);
+    CHECK(pmkb_store_router_present(&router,NULL)==PMKB_INVALID);
     CHECK(surface->has_dirty);
     PMKBBackend missing={0};
-    CHECK(pmkb_surface_present(surface,&missing)==PMKB_INVALID);
+    CHECK(pmkb_store_router_present(&router,&missing)==PMKB_INVALID);
     CHECK(surface->has_dirty);
     D7bBackend mock={0};
     PMKBBackend backend={&mock,d7b_present};
-    CHECK(pmkb_surface_present(surface,&backend)==PMKB_OK);
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_OK);
     CHECK(mock.calls>=1u);
     CHECK(!surface->has_dirty);
     pmkb_store_router_dismiss(&router);
