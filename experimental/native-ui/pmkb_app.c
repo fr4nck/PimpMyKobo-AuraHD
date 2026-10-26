@@ -1,5 +1,6 @@
 #include "pmkb_ui.h"
 #include <string.h>
+#include <stdio.h>
 
 #define TOP 48
 #define TITLE_ROW 48
@@ -146,7 +147,12 @@ static PMKBStatus normalize_title_on_leave(PMKBUI *ui){
     PMKBNote *n=selected(ui);
     if(!n)return PMKB_NOT_FOUND;
     if(pmkb_notes_meaningful_title(n->title.data))return PMKB_OK;
-    return pmkb_text_set(&n->title,"Sans titre");
+    unsigned number=0;
+    if(sscanf(n->id,"pmkb_%u",&number)!=1 || number==0)
+        return PMKB_INVALID;
+    char fallback[32];
+    (void)snprintf(fallback,sizeof(fallback),"Sans titre %u",number);
+    return pmkb_text_set(&n->title,fallback);
 }
 PMKBStatus pmkb_ui_new_note(PMKBUI *ui,const char *utc){
     if(!ui||!ui->screen.gray||!pmkb_notes_valid_utc(utc))return PMKB_INVALID;
