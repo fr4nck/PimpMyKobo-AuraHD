@@ -615,6 +615,23 @@ static void verify_backend_absent(void) {
     CHECK(!surface->has_dirty);
     pmkb_store_router_dismiss(&router);
 }
+/* D7g: a host identity transition without going through the router
+ * must fail closed before presentation, without calling the backend. */
+static void verify_stale_host_before_present(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    D7bBackend mock={0};
+    PMKBBackend backend={&mock,d7b_present};
+    CHECK(pmkb_app_host_launch(&router.host,PMKB_APP_CALCULATOR,320,480)
+          == PMKB_OK);
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
+    CHECK(mock.calls==0u);
+    CHECK(router.store.surface.gray==NULL);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store)==0u);
+    CHECK(pmkb_app_host_close(&router.host,true)==PMKB_OK);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -652,6 +669,7 @@ int main(void) {
     verify_split_present_failure();
     verify_reentrant_present();
     verify_backend_absent();
+    verify_stale_host_before_present();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
