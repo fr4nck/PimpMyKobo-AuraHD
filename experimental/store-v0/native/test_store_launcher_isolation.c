@@ -283,6 +283,16 @@ static void verify_guarded_surface_ownership(void) {
           == PMKB_STORE_PAINT_OK);
     pmkb_store_launcher_guard_before_destroy(&guard);
     CHECK(guard.host == NULL && guard.preview.target == NULL);
+    /* D6h: closing a borrowed surface is safe only after detach.
+     * Verify the guard stays inert when the dedicated pixels are released,
+     * then restore the surface for the remaining cleanup checks. */
+    pmkb_store_launcher_guard_before_destroy(&guard);
+    pmkb_surface_free(&dedicated);
+    CHECK(dedicated.gray == NULL);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_surface_init(&dedicated, 320, 480) == PMKB_OK);
+    CHECK(dedicated.gray != NULL);
     pmkb_store_launcher_guard_leave(&guard);
     pmkb_store_launcher_guard_leave(NULL);
     pmkb_store_launcher_guard_external_draw(NULL);
