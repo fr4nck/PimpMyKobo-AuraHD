@@ -726,6 +726,28 @@ static void verify_failed_present_then_dismiss(void) {
     CHECK(!router.store.surface.has_dirty);
     pmkb_store_router_dismiss(&router);
 }
+/* D7l: a failed present must not clear dirty during a repeated failure. */
+static void verify_repeated_present_failure(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    D7bBackend mock={0};
+    PMKBBackend backend={&mock,d7b_present};
+    mock.fail=true;
+    for (unsigned attempt=0;attempt<3;attempt++) {
+        unsigned before=mock.calls;
+        CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
+        CHECK(mock.calls>before);
+        CHECK(router.store.surface.has_dirty);
+        CHECK(pmkb_store_owner_pixel_bytes(&router.store)==153600u);
+    }
+    mock.fail=false;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_OK);
+    CHECK(!router.store.surface.has_dirty);
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -768,6 +790,7 @@ int main(void) {
     verify_resize_before_present();
     verify_resize_present_retry();
     verify_failed_present_then_dismiss();
+    verify_repeated_present_failure();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
