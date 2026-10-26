@@ -426,6 +426,14 @@ static void verify_passive_router(void) {
           == PMKB_STORE_PAINT_OK);
     CHECK(router.store.surface.gray == page_gray);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    /* D7a: page switch has a bounded host dirty rectangle. */
+    PMKBRect dirty = {0};
+    CHECK(pmkb_surface_take_dirty(&router.store.surface, &dirty));
+    CHECK(dirty.w > 0 && dirty.h > 0);
+    CHECK(dirty.x >= 0 && dirty.y >= 0);
+    CHECK(dirty.x + dirty.w <= router.store.surface.width);
+    CHECK(dirty.y + dirty.h <= router.store.surface.height);
+    CHECK(!pmkb_surface_take_dirty(&router.store.surface, &dirty));
     CHECK(pmkb_store_router_preview(&router,320,480,&many,0)
           == PMKB_STORE_PAINT_OK);
     CHECK(router.store.surface.gray == page_gray);
