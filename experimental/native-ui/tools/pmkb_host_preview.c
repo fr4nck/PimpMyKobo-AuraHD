@@ -42,7 +42,8 @@ static int application(const char *name,int width,int height,const char *file){
             rc=PMKB_INVALID;
         if(rc==PMKB_OK&&!strcmp(name,"store-detail")&&
            pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_TAP,
-                               .x=20,.y=70},NULL)!=PMKB_OK)
+                               .x=width==320?20:50,
+                               .y=width==320?70:130},NULL)!=PMKB_OK)
             rc=PMKB_INVALID;
     }else if(kind==PMKB_APP_CALCULATOR){
         PMKBCalcUI *calc=(PMKBCalcUI*)host.instance;
