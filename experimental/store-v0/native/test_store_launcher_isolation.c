@@ -353,6 +353,15 @@ static void verify_surface_owner(void) {
     CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
+    /* D6o: reopening with invalid dimensions must detach and free. */
+    CHECK(pmkb_store_owner_open(&owner, &host, 319, 480)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(owner.surface.gray == NULL && !owner.allocated);
+    CHECK(owner.guard.host == NULL && owner.guard.preview.target == NULL);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
     pmkb_store_owner_close(&owner);
     pmkb_store_owner_close(&owner);
     CHECK(owner.surface.gray == NULL);
