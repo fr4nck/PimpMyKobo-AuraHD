@@ -1,0 +1,65 @@
+name: Native PMKB UI
+
+on:
+  pull_request:
+    paths:
+      - "experimental/native-ui/**"
+      - ".github/workflows/native-ui.yml"
+  push:
+    branches: [feat/pmkb-ui-native-v0]
+    paths:
+      - "experimental/native-ui/**"
+      - ".github/workflows/native-ui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  c11-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile C11 without packages or downloads
+        run: |
+          cd experimental/native-ui
+          make CC=gcc
+      - name: C regressions, launcher simulation and PNG snapshot QA
+        run: |
+          cd experimental/native-ui
+          make test
+      - name: Sanitizer builds with preinstalled compiler
+        run: |
+          cd experimental/native-ui
+          gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I. \
+            pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c tests/native_ui_tests.c -o pmkb-native-sanitized
+          ./pmkb-native-sanitized
+          gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I. \
+            pmkb_text_keyboard.c pmkb_surface.c pmkb_calculator.c pmkb_calculator_ui.c tests/native_calc_tests.c -lm -o pmkb-calculator-sanitized
+          ./pmkb-calculator-sanitized
+          gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I. \
+            pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c pmkb_calculator.c pmkb_calculator_ui.c pmkb_launcher_bridge.c tests/native_bridge_tests.c -lm -o pmkb-bridge-sanitized
+          ./pmkb-bridge-sanitized
+          gcc -std=c11 -g -O1 -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I. \
+            pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c pmkb_calculator.c pmkb_calculator_ui.c pmkb_launcher_bridge.c pmkb_hal.c tests/native_hal_tests.c -lm -o pmkb-hal-sanitized
+          ./pmkb-hal-sanitized
+      - name: Probe preinstalled ARM compiler without installation
+        run: |
+          cd experimental/native-ui
+          compiler=""
+          for candidate in arm-linux-gnueabihf-gcc arm-linux-gnueabi-gcc; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              compiler="$candidate"
+              break
+            fi
+          done
+          if [ -z "$compiler" ]; then
+            echo "ARM_OBJECTS=SKIP: no preinstalled cross-compiler"
+            exit 0
+          fi
+          dir="$(mktemp -d)"
+          trap 'rm -rf "$dir"' EXIT
+          for source in pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c pmkb_calculator.c pmkb_calculator_ui.c pmkb_launcher_bridge.c pmkb_hal.c; do
+            "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic -mcpu=cortex-a8 -I. -c "$source" -o "$dir/${source%.c}.o"
+          done
+          readelf -h "$dir/pmkb_hal.o" | grep -E 'Machine: *ARM'
+          echo "ARM_OBJECTS=PASS: $compiler (objects only; legacy rootfs ABI unqualified)"
