@@ -293,6 +293,23 @@ static void verify_guarded_surface_ownership(void) {
           == PMKB_STORE_PAINT_INVALID);
     CHECK(pmkb_surface_init(&dedicated, 320, 480) == PMKB_OK);
     CHECK(dedicated.gray != NULL);
+    /* D6j negative seam contract: inconsistent inactive host is refused,
+     * and a failed enter must discard the previous borrowed surface. */
+    host.active = PMKB_APP_NONE;
+    host.instance = (void *)&dedicated; /* deliberately inconsistent */
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
+    host.instance = NULL;
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &dedicated)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    host.instance = (void *)&dedicated; /* invalidated between draws */
+    CHECK(pmkb_store_launcher_guard_draw(&guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(guard.host == NULL && guard.preview.target == NULL);
+    host.instance = NULL;
     pmkb_store_launcher_guard_leave(&guard);
     pmkb_store_launcher_guard_leave(NULL);
     pmkb_store_launcher_guard_external_draw(NULL);
