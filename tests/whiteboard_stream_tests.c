@@ -1,0 +1,85 @@
+#include "pmkb_whiteboard_touch.h"
+#include <stdio.h>
+static unsigned checks,fails;
+#define CHECK(x) do { ++checks; if(!(x)){ ++fails; fprintf(stderr,"STREAM FAIL %u: %s\n",(unsigned)__LINE__,#x); }}while(0)
+int main(void) {
+ PMKBWBModel board={0}; PMKBSurface screen={0}; PMKBRect dirty;
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ CHECK(pmkb_surface_init(&screen,320,480)==PMKB_OK);
+ if(!screen.gray)return 1;
+ CHECK(pmkb_surface_take_dirty(&screen,&dirty));
+ CHECK(pmkb_wb_down(&board,0,100,0,1)==PMKB_WB_OK);
+ for(int i=1;i<96;i++) CHECK(pmkb_wb_touch_stream_move(&board,&screen,i,100)==PMKB_WB_OK);
+ CHECK(board.visible==0u && board.in_stroke && !screen.has_dirty);
+ CHECK(pmkb_wb_touch_stream_move(&board,&screen,96,100)==PMKB_WB_OK);
+ CHECK(board.visible==1u && board.total==1u && board.in_stroke);
+ CHECK(board.strokes[0].count==96u && board.working.count==2u);
+ CHECK(board.strokes[0].points[95].x==95u && board.working.points[0].x==95u);
+ CHECK(board.working.points[1].x==96u && screen.gray[(size_t)100*320u+95u]==0);
+ CHECK(screen.gray[(size_t)100*320u+96u]==255);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,97,100,0,1)==PMKB_WB_OK);
+ CHECK(board.visible==2u && !board.in_stroke);
+ CHECK(screen.gray[(size_t)100*320u+97u]==0);
+ CHECK(pmkb_surface_take_dirty(&screen,&dirty));
+ CHECK(dirty.x==0 && dirty.y==100 && dirty.w==98 && dirty.h==1);
+ CHECK(board.strokes[0].continuation==0u);
+ CHECK(board.strokes[1].continuation==1u);
+ CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==0u && board.total==2u);
+ CHECK(pmkb_wb_render_replay(&board,&screen)==PMKB_OK);
+ CHECK(screen.gray[(size_t)100*320u+95u]==255);
+ CHECK(screen.gray[(size_t)100*320u+97u]==255);
+ CHECK(pmkb_wb_redo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==2u);
+ CHECK(pmkb_wb_render_replay(&board,&screen)==PMKB_OK);
+ CHECK(screen.gray[(size_t)100*320u+95u]==0);
+ CHECK(screen.gray[(size_t)100*320u+97u]==0);
+ CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
+ CHECK(pmkb_wb_down(&board,5,120,0,1)==PMKB_WB_OK);
+ CHECK(pmkb_wb_up(&board,6,120)==PMKB_WB_OK);
+ CHECK(board.visible==1u && board.total==1u);
+ CHECK(board.strokes[0].continuation==0u);
+ CHECK(pmkb_wb_redo(&board)==PMKB_WB_NO_CHANGE);
+ CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==0u);
+ /* L07-H: interruption after a committed chunk preserves that chunk;
+  * undo still removes the interrupted logical gesture as one action. */
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ CHECK(pmkb_surface_take_dirty(&screen,&dirty));
+ CHECK(pmkb_wb_down(&board,0,200,0,1)==PMKB_WB_OK);
+ for(int i=1;i<96;i++)
+     CHECK(pmkb_wb_touch_stream_move(&board,&screen,i,200)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch_stream_move(&board,&screen,96,200)==PMKB_WB_OK);
+ CHECK(board.visible==1u && board.in_stroke && board.working.continuation==1u);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
+ CHECK(!board.in_stroke && board.visible==1u && board.total==1u);
+ CHECK(board.strokes[0].continuation==0u);
+ CHECK(screen.gray[(size_t)200*320u+95u]==0);
+ CHECK(screen.gray[(size_t)200*320u+96u]==255);
+ CHECK(pmkb_wb_undo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==0u);
+ CHECK(pmkb_wb_render_replay(&board,&screen)==PMKB_OK);
+ CHECK(screen.gray[(size_t)200*320u+95u]==255);
+ CHECK(pmkb_wb_redo(&board)==PMKB_WB_OK);
+ CHECK(board.visible==1u);
+ /* Capacity must fail closed before the 64th committed chunk is consumed. */
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ for(int i=0;i<63;i++) {
+     CHECK(pmkb_wb_down(&board,i,0,0,1)==PMKB_WB_OK);
+     CHECK(pmkb_wb_up(&board,i,0)==PMKB_WB_OK);
+ }
+ CHECK(board.visible==63u && board.total==63u);
+ CHECK(pmkb_wb_down(&board,0,300,0,1)==PMKB_WB_OK);
+ for(int i=1;i<96;i++)
+     CHECK(pmkb_wb_touch_stream_move(&board,&screen,i,300)==PMKB_WB_OK);
+ CHECK(board.working.count==96u && board.in_stroke);
+ CHECK(pmkb_wb_touch_stream_move(&board,&screen,96,300)==PMKB_WB_LIMIT);
+ CHECK(board.working.count==96u && board.visible==63u && board.total==63u);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
+ CHECK(board.visible==63u && !board.in_stroke);
+ CHECK(sizeof(PMKBWBModel)<32768u);
+ pmkb_surface_free(&screen);
+ if(fails)return 1;
+ printf("WHITEBOARD STREAM: %u assertions PASS, 0 FAIL\n",checks);
+ return 0;
+}

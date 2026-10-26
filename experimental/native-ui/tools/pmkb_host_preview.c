@@ -28,10 +28,16 @@ static int application(const char *name,int width,int height,const char *file){
     PMKBAppId kind=strcmp(name,"notes")==0?PMKB_APP_NOTES:
                    strcmp(name,"calculator")==0?PMKB_APP_CALCULATOR:
                    (!strcmp(name,"store")||!strcmp(name,"store-detail"))
-                       ?PMKB_APP_STORE:PMKB_APP_NONE;
+                       ?PMKB_APP_STORE:(strcmp(name,"whiteboard")==0
+                       ?PMKB_APP_WHITEBOARD:PMKB_APP_NONE);
     if(pmkb_app_host_launch(&host,kind,width,height)!=PMKB_OK)return 1;
     PMKBStatus rc=PMKB_OK;
-    if(kind==PMKB_APP_STORE){
+    if(kind==PMKB_APP_WHITEBOARD){
+        if(pmkb_app_host_whiteboard_touch(&host,PMKB_WB_TOUCH_DOWN,20,20)!=PMKB_WB_OK ||
+           pmkb_app_host_whiteboard_touch(&host,PMKB_WB_TOUCH_MOVE,width-30,20)!=PMKB_WB_OK ||
+           pmkb_app_host_whiteboard_touch(&host,PMKB_WB_TOUCH_UP,width-30,height-30)!=PMKB_WB_OK)
+            rc=PMKB_INVALID;
+    }else if(kind==PMKB_APP_STORE){
         static const uint8_t snapshot[] =
             "{\"cleanup_pending_count\":1,\"items\":["
             "{\"id\":\"org.pmkb.calculator\",\"label\":\"Calculatrice\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"0.1.0\"},"
@@ -87,7 +93,7 @@ static int fonts(int width,int height,const char *file){
 }
 int main(int argc,char **argv){
     if(argc!=5){
-        fputs("Usage: pmkb-host-preview notes|calculator|store|store-detail|glyphs WIDTH HEIGHT OUTPUT.pgm\n",
+        fputs("Usage: pmkb-host-preview notes|calculator|store|store-detail|whiteboard|glyphs WIDTH HEIGHT OUTPUT.pgm\n",
               stderr);
         return 2;
     }
@@ -95,6 +101,7 @@ int main(int argc,char **argv){
     if(!width||height<320||width>2000||height>2500)return 2;
     if(strcmp(argv[1],"glyphs")==0)return fonts(width,height,argv[4]);
     if(strcmp(argv[1],"notes")&&strcmp(argv[1],"calculator")&&
-       strcmp(argv[1],"store")&&strcmp(argv[1],"store-detail"))return 2;
+       strcmp(argv[1],"store")&&strcmp(argv[1],"store-detail")&&
+       strcmp(argv[1],"whiteboard"))return 2;
     return application(argv[1],width,height,argv[4]);
 }

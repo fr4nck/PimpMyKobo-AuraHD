@@ -187,9 +187,28 @@ static int font_and_clipping(void){
     pmkb_surface_free(&a);pmkb_surface_free(&b);
     groups++;return 0;
 }
+static int whiteboard_via_launcher(void){
+    PMKBAppHost host;pmkb_app_host_init(&host);
+    const PMKBAppInfo *info=pmkb_app_info(PMKB_APP_WHITEBOARD);
+    CHECK(info && info->runnable && strcmp(info->id,"whiteboard")==0);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_WHITEBOARD,320,480)==PMKB_OK);
+    CHECK(pmkb_app_host_screen(&host)!=NULL);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_INVALID);
+    CHECK(pmkb_app_host_whiteboard_touch(&host,PMKB_WB_TOUCH_DOWN,12,12)==PMKB_WB_OK);
+    CHECK(pmkb_app_host_whiteboard_touch(&host,PMKB_WB_TOUCH_UP,20,12)==PMKB_WB_OK);
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_UNSAVED);
+    CHECK(host.active==PMKB_APP_WHITEBOARD && host.instance!=NULL);
+    CHECK(pmkb_app_host_whiteboard_undo(&host)==PMKB_WB_OK);
+    CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
+    CHECK(host.instance==NULL && host.active==PMKB_APP_NONE);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_OK);
+    CHECK(pmkb_app_host_screen(&host)!=NULL);
+    CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
+    groups++;return 0;
+}
 int main(void){
     if(catalog()||safe_lifecycle()||calculator_via_launcher()||
-       store_via_launcher()||font_and_clipping())return 1;
+       store_via_launcher()||whiteboard_via_launcher()||font_and_clipping())return 1;
     printf("PMKB LAUNCHER/RENDER: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            passed,groups);
     return 0;
