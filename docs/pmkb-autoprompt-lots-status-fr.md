@@ -654,16 +654,16 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 
 ## LOT 07 — Tableau blanc, sous-lot L07-A
 
-**L07-A : IN_PROGRESS (code C11, tests et PR publiés ; CI non encore qualifiée).**
+**L07-A : DONE (code C11 et tests hôtes qualifiés ; PR #32 en brouillon, non fusionnée). LOT 07 global : IN_PROGRESS.**
 
 - **Base de départ :** `main@39322729c8aebaad0a9395f422fc398bdcccdc82`. Branche `feat/pmkb-whiteboard-tb0`, [PR #32](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/32) ouverte en brouillon, **non fusionnée**.
 - **Livraison :** `experimental/whiteboard-v0/pmkb_whiteboard_model.h`, journal C11 borné < 32 KiB : 64 traits × 96 points, 16 niveaux de gris, DOWN/MOVE/UP/CANCEL, undo/redo, effacement explicite et erreurs conservatrices. Aucun tampon de pixels ni sauvegarde.
 - **Tests ajoutés :** `tests/whiteboard_model_tests.c` et `tests/test_whiteboard_model.py`, compilation hôte sur compilateur C11 préinstallé, Linux et Windows Python 3.11 en CI. Les cas couvrent géométries, bornes, annulation d'un trait non validé, branche redo, quotas et absence de mutation après erreur.
 - **Contrat :** `docs/whiteboard-tb0-contract-fr.md`. L'audit `docs/kobo-whiteboard-forks-audit-2026-10-25-fr.md` sert d'inspiration, sans import de code JavaScript tiers.
-- **Preuve :** fichiers et PR GitHub publiés ; **aucun résultat CI revendiqué tant que la CI exacte PR #32 n'est pas terminée**, aucun test ARM ni matériel. `tests.yml` est prévu pour les PR ; absence de run à la première consultation GitHub.
+- **Qualification réelle :** [Actions #40386076919](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40386076919), commit C11/test `f8cc17b2a3bd7db9d281cf9caf5fbc69ac622caf` : **10/10 jobs SUCCESS, 0 FAIL** (8 unités Linux/Windows Python 3.10 à 3.13 et 2 Qt). Les journaux prouvent l'exécution effective du test C11 **Linux 3.11 : PASS** et **Windows 3.11 : PASS**, ni skipped ni simple vérification statique. Aucun test ARM ni matériel.
 - **Périmètre physique :** FIRST BOOT, P1/P2/P3, recoveryfs, EPDC et données utilisateur inchangés. Aucun accès réseau ou service embarqué.
 - **Concurrence GitHub :** après la création de la branche, `main` a reçu `2fcfe272ce...`, activant séparément le Store hors ligne. La PR #32 ne modifie pas ce code ; requalifier son diff avant fusion.
-- **Suite :** qualifier la CI C11 L07-A ; si PASS, L07-B = rendu des traits sur `PMKBSurface` et rectangles modifiés, sans réécrire PMKB-UI.
+- **Suite : L07-B** — rendu des traits sur `PMKBSurface` avec bornage et invalidations des rectangles, puis tests hôtes. Requalifier les modifications parallèles de `main` avant fusion PR #32.
 
 ## Tableau de pilotage
 
@@ -676,7 +676,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
 | L06 — Store *.pmkb | **DONE (logiciel hors matériel)** | PR #30 `209324c` → merge `5865db8`, PR #31 `711b0b8` → merge `86ec6c0` | Contrats Store hors ligne, surface dédiée, garde de cycle Launcher et matrice de clôture D8b | **CI post-fusion main #40383481053 : 10/10 SUCCESS** ; Kobo / Store exécutable NON EXÉCUTÉS | **L07-A** |
-| L07 — Tableau blanc | **IN_PROGRESS (L07-A)** | PR #32 `feat/pmkb-whiteboard-tb0` | Journal de traits C11 borné, undo/redo et tests hôte, sans stockage | Tests publiés, **CI à qualifier**, matériel NON EXÉCUTÉ | L07-B après qualification L07-A |
+| L07 — Tableau blanc | **IN_PROGRESS (L07-A DONE)** | PR #32 `feat/pmkb-whiteboard-tb0` | Journal de traits C11 borné, undo/redo, tests hôte, sans stockage | **CI #40386076919 : 10/10 SUCCESS**, tests C11 Linux/Windows PASS ; matériel NON EXÉCUTÉ | L07-B — rendu hôte |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
 | L10 — Utilitaires natifs | TODO | À déterminer ; consulter #30 | Démarrer par le composant le plus mûr (calculatrice à requalifier) | NON EXÉCUTÉ | L10-A |
