@@ -20,15 +20,17 @@ static inline PMKBStatus pmkb_store_eink_async_submit(
     return PMKB_OK;
 }
 static inline PMKBStatus pmkb_store_eink_async_complete(
-    PMKBStoreEinkAsync *state, unsigned marker, bool success) {
+    PMKBStoreEinkAsync *state, PMKBSurface *live_surface,
+    unsigned marker, bool success) {
     if (!state || !state->markers.pending ||
         marker!=state->markers.pending_marker) return PMKB_INVALID;
     PMKBStatus result=pmkb_store_eink_complete(&state->markers,marker,success);
     /* No completion or a changed surface means no dirty acknowledgement. */
-    if (result==PMKB_OK && state->surface && state->surface->gray &&
-        state->surface->changed_pixels==state->submitted_changes) {
+    if (result==PMKB_OK && live_surface &&
+        live_surface==state->surface && live_surface->gray &&
+        live_surface->changed_pixels==state->submitted_changes) {
         PMKBRect ignored;
-        (void)pmkb_surface_take_dirty(state->surface,&ignored);
+        (void)pmkb_surface_take_dirty(live_surface,&ignored);
     }
     state->surface=NULL;
     return result;
