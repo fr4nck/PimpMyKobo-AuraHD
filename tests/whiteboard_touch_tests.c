@@ -33,7 +33,20 @@ int main(void) {
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,319,479,15,1)==PMKB_WB_OK);
  CHECK(board.visible==2u);
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,320,479,0,1)==PMKB_WB_INVALID);
+ /* LOST-UP: interruption never commits the unfinished gesture. */
+ CHECK(pmkb_surface_take_dirty(&screen,&dirty));
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,40,40,0,1)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_MOVE,41,41,0,1)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_INTERRUPT,-1,-1,0,0)==PMKB_WB_OK);
+ CHECK(!board.in_stroke && board.visible==2u && !screen.has_dirty);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,42,42,0,1)==PMKB_WB_INVALID);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_NO_CHANGE);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,50,50,0,1)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
+ CHECK(board.visible==2u && !screen.has_dirty);
  pmkb_surface_free(&screen);
+ CHECK(pmkb_wb_touch_interrupt(NULL)==PMKB_WB_INVALID);
+ CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_NO_CHANGE);
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,1,1,0,1)==PMKB_WB_INVALID);
  if(fails)return 1;
  printf("WHITEBOARD TOUCH: %u assertions PASS, 0 FAIL\n",checks);
