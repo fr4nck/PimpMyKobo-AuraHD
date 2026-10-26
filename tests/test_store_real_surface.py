@@ -18,6 +18,7 @@ REV = "e2907a19920100ef2a32ec6587e724ccb5116bc7"
 SOURCE_HASHES = {
     "pmkb_ui.h": "1adcc6656007183c6eee23da4c76d9f3eff3c12d",
     "pmkb_surface.c": "946c1d90e9c8c9feca54f36678959323327806b4",
+    "pmkb_backend.c": "cc1f227d32021582f65c386f9804af2b8c8cc33d",
 }
 
 
@@ -67,6 +68,22 @@ class RealSurfaceIntegration(unittest.TestCase):
         if built.returncode:
             raise AssertionError("real PMKB-UI build FAILED: " + built.stdout + built.stderr)
 
+        cls.presenter = root / ("store-present.exe" if os.name == "nt"
+                                 else "store-present")
+        presentation = subprocess.run([
+            compiler, "-std=c11", "-O2", "-Wall", "-Wextra",
+            "-Werror", "-pedantic", "-I", str(ui), "-I", str(NATIVE),
+            str(ui / "pmkb_surface.c"),
+            str(ui / "pmkb_backend.c"),
+            str(NATIVE / "pmkb_store_page.c"),
+            str(NATIVE / "pmkb_store_paint.c"),
+            str(NATIVE / "test_store_present_contract.c"),
+            "-o", str(cls.presenter)],
+            capture_output=True, text=True, timeout=45, check=False)
+        if presentation.returncode:
+            raise AssertionError("real PMKB backend + Store build FAILED: "
+                                 + presentation.stdout + presentation.stderr)
+
     def test_real_surface_framebuffer_and_invariants(self):
         outcome = subprocess.run(
             [str(self.executable)], capture_output=True, text=True,
@@ -75,6 +92,15 @@ class RealSurfaceIntegration(unittest.TestCase):
         print(outcome.stdout.strip())  # native redraw metrics in CI logs
         self.assertRegex(outcome.stdout,
                          r"PMKB REAL UI STORE: \d+ assertions PASS, 0 FAIL")
+
+
+    def test_real_backend_presentation_and_dirty_rectangles(self):
+        outcome = subprocess.run([str(self.presenter)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+        self.assertEqual(0, outcome.returncode, outcome.stderr)
+        print(outcome.stdout.strip())
+        self.assertRegex(outcome.stdout,
+                         r"PMKB REAL STORE PRESENT: \d+ assertions PASS, 0 FAIL")
 
 
 if __name__ == "__main__":
