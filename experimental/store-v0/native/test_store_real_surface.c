@@ -2,6 +2,7 @@
  * No framebuffer present(), touchscreen, filesystem or app launcher. */
 #include "pmkb_ui.h"
 #include "pmkb_store_paint.h"
+#include "pmkb_store_screen.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -353,6 +354,95 @@ static void measure_host_cache_cost(void) {
     }
     pmkb_surface_free(&surface);
 }
+
+/* L06-D5: simulate Store screen ownership with the REAL pinned UI surface.
+ * No launcher integration; the external writer notification is deliberate. */
+static void check_store_screen_session(void) {
+    prepare(3, 0);
+    PMKBSurface surface;
+    PMKBRect dirty;
+    CHECK(pmkb_surface_init(&surface, 320, 480) == PMKB_OK);
+    if (!surface.gray) return;
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    CHECK(pmkb_store_page_build(&view, 320, 480, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    PMKBStorePainter painter = pmkb_store_painter_for_ui(&surface);
+
+    PMKBStoreScreen screen;
+    memset(&screen, 0xa5, sizeof(screen));
+    pmkb_store_screen_init(&screen);
+    CHECK(!screen.visible && !screen.cache.valid);
+    CHECK(sizeof(PMKBStoreScreen) <= 64u);
+    const uint64_t empty = digest(&surface);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && digest(&surface) == empty);
+
+    pmkb_store_screen_enter(&screen);
+    CHECK(screen.visible && !screen.cache.valid);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.has_dirty && screen.cache.valid);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    const uint64_t desired = digest(&surface);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!surface.has_dirty && surface.changed_pixels == 0);
+    CHECK(digest(&surface) == desired);
+
+    /* A status-widget write is signalled before Store is rendered again. */
+    pmkb_surface_rect(&surface, (PMKBRect){0, 0, 4, 4}, 0);
+    CHECK(surface.gray[0] == 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    pmkb_store_screen_external_draw(&screen);
+    CHECK(screen.visible && !screen.cache.valid);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.gray[0] == 255 && surface.has_dirty);
+    CHECK(digest(&surface) == desired);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    /* An exited screen must not redraw, regardless of its old contents. */
+    pmkb_store_screen_leave(&screen);
+    CHECK(!screen.visible && !screen.cache.valid);
+    pmkb_surface_rect(&surface, (PMKBRect){0, 0, 4, 4}, 0);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+    const uint64_t other_view = digest(&surface);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && digest(&surface) == other_view);
+
+    /* Re-entry automatically resets cache: same Store contents repaint. */
+    pmkb_store_screen_enter(&screen);
+    CHECK(screen.visible && !screen.cache.valid);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(surface.gray[0] == 255 && surface.has_dirty);
+    CHECK(digest(&surface) == desired);
+    CHECK(pmkb_surface_take_dirty(&surface, &dirty));
+
+    /* Page navigation is detected by the existing content fingerprint. */
+    CHECK(pmkb_store_page_build(&view, 320, 480, 1, &page)
+          == PMKB_STORE_PAGE_OUT_OF_RANGE);
+    CHECK(pmkb_store_page_build(&view, 320, 480, 0, &page)
+          == PMKB_STORE_PAGE_OK);
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(!surface.has_dirty);
+
+    /* Forged geometry must not dirty the real surface. */
+    uint64_t prior = digest(&surface);
+    page.page_index = page.page_count;
+    CHECK(pmkb_store_screen_paint(&screen, &view, &page, &painter)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!surface.has_dirty && digest(&surface) == prior);
+    CHECK(pmkb_store_screen_paint(NULL, &view, &page, &painter)
+          == PMKB_STORE_PAINT_INVALID);
+    pmkb_store_screen_leave(&screen);
+    pmkb_surface_free(&surface);
+    printf("PMKB STORE SCREEN: lifecycle PASS, cache_limit=%zu bytes\n",
+           sizeof(PMKBStoreScreen));
+}
 int main(void){
     CHECK(pmkb_surface_glyph_supported(0x00e9u));
     check_surface(320,480,0,3,0,3);
@@ -368,6 +458,7 @@ int main(void){
     check_duplicate_draw(1440,1080,64,0);
     check_cache_lifecycle();
     measure_host_cache_cost();
+    check_store_screen_session();
     if(failed)return 1;
     printf("PMKB REAL UI STORE: %d assertions PASS, 0 FAIL\n",checks);
     return 0;
