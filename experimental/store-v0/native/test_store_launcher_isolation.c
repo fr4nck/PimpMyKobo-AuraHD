@@ -361,6 +361,12 @@ static void verify_surface_owner(void) {
     CHECK(pmkb_store_owner_open(&owner, &invalid_host, 320, 480)
           == PMKB_STORE_PAINT_INVALID);
     CHECK(!owner.allocated && owner.surface.gray == NULL);
+    /* D6w: invalid app kind also fails in the pre-allocation path. */
+    invalid_host.instance = NULL;
+    invalid_host.active = PMKB_APP_STORE;
+    CHECK(pmkb_store_owner_open(&owner, &invalid_host, 320, 480)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!owner.allocated && owner.surface.gray == NULL);
     CHECK(owner.guard.host == NULL && owner.guard.preview.target == NULL);
     CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
     CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
