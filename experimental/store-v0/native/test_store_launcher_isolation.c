@@ -951,6 +951,26 @@ static void verify_eink_marker_exhaustion(void) {
     CHECK(!async.markers.pending);
     pmkb_store_router_dismiss(&router);
 }
+/* D7u: diagnostic counters saturate while markers still complete. */
+static void verify_eink_counter_saturation(void) {
+    PMKBStoreEinkPending state={0};
+    unsigned marker=0;
+    state.completions=(unsigned)-2;
+    state.failures=(unsigned)-2;
+    CHECK(pmkb_store_eink_begin(&state,&marker)==PMKB_OK);
+    CHECK(pmkb_store_eink_complete(&state,marker,true)==PMKB_OK);
+    CHECK(state.completions==(unsigned)-1);
+    CHECK(pmkb_store_eink_begin(&state,&marker)==PMKB_OK);
+    CHECK(pmkb_store_eink_complete(&state,marker,true)==PMKB_OK);
+    CHECK(state.completions==(unsigned)-1);
+    CHECK(pmkb_store_eink_begin(&state,&marker)==PMKB_OK);
+    CHECK(pmkb_store_eink_complete(&state,marker,false)==PMKB_INVALID);
+    CHECK(state.failures==(unsigned)-1);
+    CHECK(pmkb_store_eink_begin(&state,&marker)==PMKB_OK);
+    CHECK(pmkb_store_eink_complete(&state,marker,false)==PMKB_INVALID);
+    CHECK(state.failures==(unsigned)-1);
+    CHECK(!state.pending);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -1002,6 +1022,7 @@ int main(void) {
     verify_async_lifecycle_owner();
     verify_async_reset_stale_marker();
     verify_eink_marker_exhaustion();
+    verify_eink_counter_saturation();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
