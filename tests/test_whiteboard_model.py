@@ -61,6 +61,27 @@ class WhiteboardModelC11(unittest.TestCase):
             self.assertRegex(outcome.stdout,
                              r"WHITEBOARD RENDER: \d+ assertions PASS, 0 FAIL")
 
+    def test_synthetic_touch_dispatcher(self):
+        compiler = next((shutil.which(name) for name in ("cc", "gcc", "clang")
+                         if shutil.which(name)), None)
+        with tempfile.TemporaryDirectory(prefix="pmkb-whiteboard-touch-") as d:
+            binary = Path(d) / ("whiteboard-touch.exe" if os.name == "nt"
+                                else "whiteboard-touch")
+            native = ROOT / "experimental" / "native-ui"
+            result = subprocess.run(
+                [compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                 "-pedantic", "-I", str(HEADER), "-I", str(native),
+                 str(native / "pmkb_surface.c"),
+                 str(ROOT / "tests" / "whiteboard_touch_tests.c"),
+                 "-o", str(binary)],
+                capture_output=True, text=True, timeout=45, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            outcome = subprocess.run([str(binary)], capture_output=True,
+                                     text=True, timeout=10, check=False)
+            self.assertEqual(outcome.returncode, 0, outcome.stdout + outcome.stderr)
+            self.assertRegex(outcome.stdout,
+                             r"WHITEBOARD TOUCH: \d+ assertions PASS, 0 FAIL")
+
     def test_bounded_journal_and_undo_redo(self):
         run = subprocess.run([str(self.binary)], capture_output=True,
                              text=True, timeout=10, check=False)
