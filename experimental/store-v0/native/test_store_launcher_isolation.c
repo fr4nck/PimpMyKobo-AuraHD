@@ -7,6 +7,7 @@
 #include "pmkb_store_passive_router.h"
 #include "pmkb_store_eink_sim.h"
 #include "pmkb_store_eink_pending.h"
+#include "pmkb_store_eink_async.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -814,6 +815,32 @@ static void verify_eink_pending_marker(void) {
     CHECK(!state.pending && state.completions==1u);
     CHECK(pmkb_store_eink_complete(&state,second,true)==PMKB_INVALID);
 }
+/* D7p: submission retains dirty; completion clears only unchanged pixels. */
+static void verify_async_dirty_contract(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    PMKBSurface *surface=&router.store.surface;
+    PMKBStoreEinkAsync state={0};
+    unsigned first=0,second=0,third=0;
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&first)==PMKB_OK);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&second)==PMKB_LIMIT);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first+1u,true)==PMKB_INVALID);
+    CHECK(surface->has_dirty && state.markers.pending);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,first,false)==PMKB_INVALID);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&second)==PMKB_OK);
+    pmkb_surface_rect(surface,(PMKBRect){0,0,3,3},127);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,second,true)==PMKB_OK);
+    CHECK(surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&third)==PMKB_OK);
+    CHECK(pmkb_store_eink_async_complete(&state,surface,third,true)==PMKB_OK);
+    CHECK(!surface->has_dirty);
+    CHECK(pmkb_store_eink_async_submit(&state,surface,&third)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -860,6 +887,7 @@ int main(void) {
     verify_full_present_lifecycle();
     verify_eink_sim_transport();
     verify_eink_pending_marker();
+    verify_async_dirty_contract();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
