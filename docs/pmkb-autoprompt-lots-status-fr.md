@@ -581,6 +581,17 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **NON EXÉCUTÉS / invariants** : aucun test ARM, Kobo réelle, EPDC, tactile, ghosting, 16 gris physiques, autonomie ou microSD P3 ; aucune commande sur 5700X, aucun téléchargement firmware/archive/dépôt complet/dépendance, aucune écriture FIRST BOOT scellé/P1/P2/P3/PRE-P1/HWCONFIG/waveform ; P2/recoveryfs, Notes ADR-005 et les huit illustrations manga préservés. PR #30 et #31 toujours ouvertes, brouillons et non fusionnées.
 - **Reprise exacte L06-D6e** : vérifier journal, HEAD PR #30/#31 et CI #40334331944 ; contre-qualifier sur hôte les limites de durée de vie et les transitions successives Store/Notes/Calculatrice, puis choisir un petit contrôle supplémentaire seulement si un défaut concret apparaît. Ne pas intégrer la route Store à la PR #30 ni lancer L07.
 
+## LOT 06 — Store *.pmkb V0, sous-lot L06-D6e — transitions repetees
+
+**L06-D6e : DONE pour la contre-qualification hote; LOT 06 : IN_PROGRESS.**
+
+- **Code publie** : [commit `6f0e495`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/6f0e495d731a364307698bdad6b09c425c9e8efd) sur la branche Store `feat/pmkb-store-v0`, PR #31 toujours DRAFT. Modification unique : +35 lignes dans `experimental/store-v0/native/test_store_launcher_isolation.c`, aucun changement dans le code de production.
+- **Tests nouveaux** : trois transitions repetees depuis l'hote vide vers Notes/Calculatrice, verification du refus d'un dessin perime, detachement du garde, conservation des pixels des deux surfaces, re-entree explicite puis liberation du garde avant fermeture de l'application. Les Notes et Calculatrice sont toujours des doubles de cycle de vie dans ce banc, pas les implementations metier.
+- **CI effectivement executee** : [run #40335467922](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40335467922) au SHA `6f0e495` : **10/10 jobs SUCCESS, 0 FAIL** (8 unittest Linux/Windows Python 3.10–3.13, 2 Qt). Ce resultat ne vaut pas qualification materielle ARM/Kobo.
+- **Limite non resolue** : le garde emprunte des pointeurs de surface et d'hote ; la duree de vie demeure un contrat de l'appelant. Ne pas acceder au garde apres destruction de ses emprunts sans `leave()`. Le code ne detecte pas les buffers partiellement chevauchants ni les mutations concurrentes sans notification.
+- **Invariants** : aucun changement de FIRST BOOT, P1/P2/P3, recoveryfs, HWCONFIG, Notes ADR-005, route Launcher, ni fusion #30/#31. Store toujours `runnable=false`. Aucun test physique, ARM, EPDC, tactile ni autonomie.
+- **Reprise L06-D6f** : etudier une API explicite de detach avant destruction cote routeur hote et son test negatif, sans rajouter de framebuffer ni rendre le Store executable. Si aucun defaut concret n'est reproduit, preparer simplement une matrice d'integration et arreter sans lancer L07.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -591,7 +602,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (L06-D6d DONE hors matériel)** | `main@b03aee6`, PR #31 `23b240f` | Garde C11 frugal au raccord Launcher : refuse la surface active Notes/Calculatrice, ses alias de buffer et les états périmés | **CI #40334331944 : 10/10 SUCCESS, 0 FAIL** ; **97 assertions C11 PASS** Linux/Windows Python 3.11 ; garde **80 octets** hôte ; Kobo NON EXÉCUTÉE | **L06-D6e** |
+| L06 — Store *.pmkb | **IN_PROGRESS (L06-D6e DONE hors matériel)** | `main@25ccd44`, PR #31 `6f0e495` | Garde des surfaces et 3 transitions répétées Store/Notes/Calculatrice en test C11 | **CI #40335467922 : 10/10 SUCCESS, 0 FAIL** ; Kobo NON EXÉCUTÉE | **L06-D6f** |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
