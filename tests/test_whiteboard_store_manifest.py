@@ -1,14 +1,21 @@
 """Store declaration contract: metadata only, no executable or install."""
 import importlib.util
+from io import BytesIO
+from zipfile import ZipFile
+import sys
 import json
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 STORE = ROOT / "experimental" / "store-v0"
+sys.path.insert(0, str(STORE))
 spec = importlib.util.spec_from_file_location("pmkb_store_manifest", STORE / "manifest_contract.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+from archive_contract import ArchiveError, inspect_archive
 
 
 class WhiteboardStoreManifestTests(unittest.TestCase):
@@ -24,6 +31,15 @@ class WhiteboardStoreManifestTests(unittest.TestCase):
         self.assertEqual(manifest["entrypoint"], "bin/pmkb-whiteboard")
         self.assertFalse((STORE / "example" / manifest["entrypoint"]).exists(),
                          "Demo must not claim an installed ARM executable")
+
+    def test_manifest_alone_is_not_a_installable_package(self):
+        manifest = (STORE / "example" / "whiteboard-manifest.json").read_bytes()
+        archive = BytesIO()
+        with ZipFile(archive, "w") as zf:
+            zf.writestr("manifest.json", manifest)
+        with self.assertRaises(ArchiveError) as failure:
+            inspect_archive(archive.getvalue())
+        self.assertEqual(str(failure.exception), "missing_entrypoint")
 
     def test_incompatible_or_network_variants_are_rejected(self):
         source = STORE / "example" / "whiteboard-manifest.json"
