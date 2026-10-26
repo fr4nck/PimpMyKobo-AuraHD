@@ -42,4 +42,28 @@ static inline PMKBWBStatus pmkb_wb_touch(
     default: return PMKB_WB_INVALID;
     }
 }
+/* L07-F opt-in streaming MOVE: at 96 points, commit a chunk and
+ * restart at its terminal point to preserve the connecting segment.
+ * Never split unless room remains for both the committed and active chunks. */
+static inline PMKBWBStatus pmkb_wb_touch_stream_move(
+    PMKBWBModel *board, PMKBSurface *surface, int x, int y) {
+    if (!board || !surface || !surface->gray ||
+        board->width!=surface->width || board->height!=surface->height ||
+        !board->in_stroke || !pmkb_wb_in_bounds(board,x,y))
+        return PMKB_WB_INVALID;
+    PMKBWBStatus result=pmkb_wb_move(board,x,y);
+    if (result!=PMKB_WB_LIMIT) return result;
+    if (board->visible+1u>=PMKB_WB_MAX_STROKES)
+        return PMKB_WB_LIMIT; /* no partial split at journal capacity */
+    PMKBWBStroke *active=&board->working;
+    PMKBWBPoint last=active->points[active->count-1u];
+    const unsigned shade=active->shade, thickness=active->thickness;
+    /* Prevalidated: this UP duplicates the last point and cannot overflow. */
+    if (pmkb_wb_up(board,last.x,last.y)!=PMKB_WB_OK)
+        return PMKB_WB_INVALID;
+    (void)pmkb_wb_render_commit(board,surface);
+    if (pmkb_wb_down(board,last.x,last.y,shade,thickness)!=PMKB_WB_OK)
+        return PMKB_WB_INVALID;
+    return pmkb_wb_move(board,x,y);
+}
 #endif
