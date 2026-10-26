@@ -153,6 +153,25 @@ class WhiteboardModelC11(unittest.TestCase):
             self.assertEqual(pixels[150 * 320 + 100], 136)
             self.assertEqual(pixels[400 * 320 + 300], 255)
 
+    def test_launcher_ready_app_lifecycle(self):
+        compiler = next((shutil.which(name) for name in ("cc", "gcc", "clang")
+                         if shutil.which(name)), None)
+        with tempfile.TemporaryDirectory(prefix="pmkb-whiteboard-app-") as d:
+            binary = Path(d) / ("whiteboard-app.exe" if os.name == "nt" else "whiteboard-app")
+            native = ROOT / "experimental" / "native-ui"
+            built = subprocess.run(
+                [compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                 "-pedantic", "-I", str(HEADER), "-I", str(native),
+                 str(native / "pmkb_surface.c"),
+                 str(ROOT / "tests" / "whiteboard_app_tests.c"),
+                 "-o", str(binary)], capture_output=True, text=True,
+                timeout=45, check=False)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(binary)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertRegex(run.stdout, r"WHITEBOARD APP: \d+ assertions PASS, 0 FAIL")
+
     def test_bounded_journal_and_undo_redo(self):
         run = subprocess.run([str(self.binary)], capture_output=True,
                              text=True, timeout=10, check=False)
