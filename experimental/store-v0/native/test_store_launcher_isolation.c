@@ -679,6 +679,29 @@ static void verify_resize_before_present(void) {
     CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
     CHECK(mock.calls>=1u);
 }
+/* D7j: failed resized present retains dirty and can retry. */
+static void verify_resize_present_retry(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router,320,480,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_router_preview(&router,1080,1440,&catalog,0)
+          == PMKB_STORE_PAINT_OK);
+    D7bBackend mock={0};
+    PMKBBackend backend={&mock,d7b_present};
+    mock.fail=true;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_INVALID);
+    CHECK(mock.calls>=1u);
+    CHECK(router.store.surface.has_dirty);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store)==1555200u);
+    mock.fail=false;
+    unsigned before=mock.calls;
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_OK);
+    CHECK(mock.calls>before);
+    CHECK(!router.store.surface.has_dirty);
+    CHECK(pmkb_store_router_present(&router,&backend)==PMKB_NO_CHANGE);
+    pmkb_store_router_dismiss(&router);
+}
 static void verify_router_shutdown(void) {
     PMKBStorePassiveRouter router;
     pmkb_store_router_init(&router);
@@ -719,6 +742,7 @@ int main(void) {
     verify_stale_host_before_present();
     verify_dismiss_before_present();
     verify_resize_before_present();
+    verify_resize_present_retry();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
