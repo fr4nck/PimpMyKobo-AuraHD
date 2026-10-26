@@ -411,6 +411,18 @@ static void verify_passive_router(void) {
     CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    uint8_t *first_gray = router.store.surface.gray;
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(router.store.surface.gray == first_gray);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    CHECK(pmkb_store_router_preview(&router, 1080, 1440, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 1555200u);
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+
     CHECK(pmkb_store_router_preview(&router, 320, 480, NULL, 0)
           == PMKB_STORE_PAINT_INVALID);
     CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
