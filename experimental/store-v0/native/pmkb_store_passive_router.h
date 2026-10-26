@@ -17,7 +17,11 @@ static inline void pmkb_store_router_init(PMKBStorePassiveRouter *router) {
 static inline PMKBStorePaintStatus pmkb_store_router_preview(
     PMKBStorePassiveRouter *router, int width, int height,
     const PMKBStoreView *catalogue, unsigned page) {
-    if (!router || !catalogue) return PMKB_STORE_PAINT_INVALID;
+    if (!router) return PMKB_STORE_PAINT_INVALID;
+    if (!catalogue) {
+        pmkb_store_owner_close(&router->store);
+        return PMKB_STORE_PAINT_INVALID;
+    }
     if (pmkb_store_owner_open(&router->store, &router->host, width, height)
         != PMKB_STORE_PAINT_OK) return PMKB_STORE_PAINT_INVALID;
     PMKBStorePaintStatus status =
