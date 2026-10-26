@@ -353,6 +353,18 @@ static void verify_surface_owner(void) {
     CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
           == PMKB_STORE_PAINT_OK);
     CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
+    /* D6p: host rejected after framebuffer allocation must free it. */
+    PMKBAppHost invalid_host;
+    pmkb_app_host_init(&invalid_host);
+    invalid_host.instance = (void *)&owner; /* incoherent inactive host */
+    CHECK(pmkb_store_owner_open(&owner, &invalid_host, 320, 480)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(!owner.allocated && owner.surface.gray == NULL);
+    CHECK(owner.guard.host == NULL && owner.guard.preview.target == NULL);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
     /* D6o: reopening with invalid dimensions must detach and free. */
     CHECK(pmkb_store_owner_open(&owner, &host, 319, 480)
           == PMKB_STORE_PAINT_INVALID);
