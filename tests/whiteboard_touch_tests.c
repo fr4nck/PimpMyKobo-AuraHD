@@ -45,6 +45,23 @@ int main(void) {
  CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,50,50,0,1)==PMKB_WB_OK);
  CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
  CHECK(board.visible==2u && !screen.has_dirty);
+ /* L07-E: limit must never truncate the 97th point silently. */
+ CHECK(pmkb_wb_init(&board,320,480)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,0,100,0,1)==PMKB_WB_OK);
+ for(int x=1;x<96;x++)
+     CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_MOVE,x,100,0,1)==PMKB_WB_OK);
+ CHECK(board.working.count==PMKB_WB_MAX_POINTS_PER_STROKE);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_MOVE,96,100,0,1)==PMKB_WB_LIMIT);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,96,100,0,1)==PMKB_WB_LIMIT);
+ CHECK(board.in_stroke && board.visible==0u && board.working.count==96u);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,95,100,0,1)==PMKB_WB_OK);
+ CHECK(board.visible==1u && !board.in_stroke && board.strokes[0].count==96u);
+ CHECK(screen.gray[(size_t)100*320u+95u]==0);
+ CHECK(screen.gray[(size_t)100*320u+96u]==255);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_DOWN,95,100,0,1)==PMKB_WB_OK);
+ CHECK(pmkb_wb_touch(&board,&screen,PMKB_WB_TOUCH_UP,96,100,0,1)==PMKB_WB_OK);
+ CHECK(board.visible==2u && board.strokes[1].count==2u);
+ CHECK(screen.gray[(size_t)100*320u+96u]==0);
  pmkb_surface_free(&screen);
  CHECK(pmkb_wb_touch_interrupt(NULL)==PMKB_WB_INVALID);
  CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_NO_CHANGE);
