@@ -27,8 +27,11 @@ static inline PMKBStatus pmkb_store_eink_complete(
         marker!=state->pending_marker) return PMKB_INVALID;
     state->pending=false;
     state->pending_marker=0;
-    if (success) { ++state->completions; return PMKB_OK; }
-    ++state->failures;
+    if (success) {
+        if (state->completions != (unsigned)-1) ++state->completions;
+        return PMKB_OK;
+    }
+    if (state->failures != (unsigned)-1) ++state->failures;
     return PMKB_INVALID;
 }
 #endif
