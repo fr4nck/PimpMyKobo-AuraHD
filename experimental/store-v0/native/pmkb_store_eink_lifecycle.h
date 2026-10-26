@@ -12,6 +12,17 @@ static inline void pmkb_store_eink_lifecycle_init(PMKBStoreEinkLifecycle *owner)
     pmkb_store_router_init(&owner->router);
     owner->async=(PMKBStoreEinkAsync){0};
 }
+/* Reset an initialized owner without recycling old marker IDs.
+ * Use init only once; this reset preserves the marker sequence. */
+static inline void pmkb_store_eink_lifecycle_reset(
+    PMKBStoreEinkLifecycle *owner) {
+    if (!owner) return;
+    (void)pmkb_store_eink_async_cancel(&owner->async);
+    pmkb_store_router_dismiss(&owner->router);
+    (void)pmkb_app_host_close(&owner->router.host,true);
+    pmkb_app_host_init(&owner->router.host);
+    pmkb_store_owner_init(&owner->router.store);
+}
 static inline void pmkb_store_eink_lifecycle_dismiss(PMKBStoreEinkLifecycle *owner) {
     if (!owner) return;
     (void)pmkb_store_eink_async_cancel(&owner->async);
