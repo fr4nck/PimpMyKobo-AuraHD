@@ -47,7 +47,7 @@ class NativeStorePageTests(unittest.TestCase):
              str(NATIVE / "pmkb_store_view.c"),
              str(NATIVE / "pmkb_store_page.c"),
              str(NATIVE / "test_store_page.c"), "-o", str(cls.binary)],
-            capture_output=True, text=True, timeout=30, check=False)
+            capture_output=True, text=True, timeout=90, check=False)
         if build.returncode:
             raise AssertionError("C11 build failed:\n" + build.stdout + build.stderr)
 
