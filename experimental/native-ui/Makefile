@@ -1,9 +1,11 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic
 
+STORE_DIR = ../store-v0/native
 SOURCES = pmkb_text_keyboard.c pmkb_notebook.c pmkb_surface.c pmkb_backend.c pmkb_app.c
 CALC_SOURCES = pmkb_text_keyboard.c pmkb_surface.c pmkb_calculator.c pmkb_calculator_ui.c
-BRIDGE_SOURCES = $(SOURCES) pmkb_calculator.c pmkb_calculator_ui.c pmkb_launcher_bridge.c
+STORE_SOURCES = pmkb_store_app.c $(STORE_DIR)/pmkb_store_view.c $(STORE_DIR)/pmkb_store_page.c $(STORE_DIR)/pmkb_store_paint.c
+BRIDGE_SOURCES = $(SOURCES) pmkb_calculator.c pmkb_calculator_ui.c $(STORE_SOURCES) pmkb_launcher_bridge.c
 HAL_SOURCES = $(BRIDGE_SOURCES) pmkb_hal.c
 
 TARGET = pmkb-native-tests
@@ -21,14 +23,14 @@ $(TARGET): $(SOURCES) tests/native_ui_tests.c pmkb_ui.h
 $(CALC_TARGET): $(CALC_SOURCES) tests/native_calc_tests.c pmkb_ui.h pmkb_calculator.h pmkb_calculator_ui.h
 	$(CC) $(CFLAGS) -I. $(CALC_SOURCES) tests/native_calc_tests.c -lm -o $@
 
-$(BRIDGE_TARGET): $(BRIDGE_SOURCES) tests/native_bridge_tests.c pmkb_launcher_bridge.h
-	$(CC) $(CFLAGS) -I. $(BRIDGE_SOURCES) tests/native_bridge_tests.c -lm -o $@
+$(BRIDGE_TARGET): $(BRIDGE_SOURCES) tests/native_bridge_tests.c pmkb_launcher_bridge.h pmkb_store_app.h
+	$(CC) $(CFLAGS) -I. -I$(STORE_DIR) $(BRIDGE_SOURCES) tests/native_bridge_tests.c -lm -o $@
 
-$(HAL_TARGET): $(HAL_SOURCES) tests/native_hal_tests.c pmkb_hal.h pmkb_launcher_bridge.h
-	$(CC) $(CFLAGS) -I. $(HAL_SOURCES) tests/native_hal_tests.c -lm -o $@
+$(HAL_TARGET): $(HAL_SOURCES) tests/native_hal_tests.c pmkb_hal.h pmkb_launcher_bridge.h pmkb_store_app.h
+	$(CC) $(CFLAGS) -I. -I$(STORE_DIR) $(HAL_SOURCES) tests/native_hal_tests.c -lm -o $@
 
-$(PREVIEW_TARGET): $(BRIDGE_SOURCES) tools/pmkb_host_preview.c pmkb_launcher_bridge.h
-	$(CC) $(CFLAGS) -I. $(BRIDGE_SOURCES) tools/pmkb_host_preview.c -lm -o $@
+$(PREVIEW_TARGET): $(BRIDGE_SOURCES) tools/pmkb_host_preview.c pmkb_launcher_bridge.h pmkb_store_app.h
+	$(CC) $(CFLAGS) -I. -I$(STORE_DIR) $(BRIDGE_SOURCES) tools/pmkb_host_preview.c -lm -o $@
 
 test: all
 	./$(TARGET)

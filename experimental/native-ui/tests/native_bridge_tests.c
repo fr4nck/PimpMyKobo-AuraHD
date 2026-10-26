@@ -22,7 +22,7 @@ static int catalog(void){
     const PMKBAppInfo *calc=pmkb_app_info(PMKB_APP_CALCULATOR);
     const PMKBAppInfo *store=pmkb_app_info(PMKB_APP_STORE);
     CHECK(notes&&calc&&store);
-    CHECK(notes->runnable&&calc->runnable&&!store->runnable);
+    CHECK(notes->runnable&&calc->runnable&&store->runnable);
     CHECK(strcmp(notes->id,"notes")==0);
     CHECK(strcmp(calc->id,"calculator")==0);
     CHECK(strcmp(store->id,"store")==0);
@@ -33,7 +33,8 @@ static int catalog(void){
 static int safe_lifecycle(void){
     PMKBAppHost host;pmkb_app_host_init(&host);
     CHECK(host.generation==0u);
-    CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_NOT_FOUND);
+    CHECK(pmkb_app_host_store_load(&host,(const uint8_t*)"{}",2u)
+          ==PMKB_NOT_FOUND);
     CHECK(host.instance==NULL && host.active==PMKB_APP_NONE);
     CHECK(host.generation==0u);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
@@ -87,6 +88,60 @@ static int calculator_via_launcher(void){
     CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
     groups++;return 0;
 }
+static int store_via_launcher(void){
+    static const uint8_t one[] =
+        "{\"cleanup_pending_count\":1,\"items\":["
+        "{\"id\":\"org.pmkb.demo\",\"label\":\"Demo\",\"launchable\":false,"
+        "\"network_declared\":false,\"state\":\"installed_unverified\","
+        "\"version\":\"1.2.3\"}],\"schema\":\"pmkb-store-view-v1\","
+        "\"scope\":\"synthetic_read_only\"}";
+    static const uint8_t many[] =
+        "{\"cleanup_pending_count\":0,\"items\":["
+        "{\"id\":\"org.pmkb.app0\",\"label\":\"App 0\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"},"
+        "{\"id\":\"org.pmkb.app1\",\"label\":\"App 1\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"},"
+        "{\"id\":\"org.pmkb.app2\",\"label\":\"App 2\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"},"
+        "{\"id\":\"org.pmkb.app3\",\"label\":\"App 3\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"},"
+        "{\"id\":\"org.pmkb.app4\",\"label\":\"App 4\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"},"
+        "{\"id\":\"org.pmkb.app5\",\"label\":\"App 5\",\"launchable\":false,\"network_declared\":false,\"state\":\"installed_unverified\",\"version\":\"1.0.0\"}],"
+        "\"schema\":\"pmkb-store-view-v1\",\"scope\":\"synthetic_read_only\"}";
+    PMKBAppHost host;pmkb_app_host_init(&host);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_STORE,320,480)==PMKB_OK);
+    CHECK(host.active==PMKB_APP_STORE&&host.instance&&host.generation==1u);
+    PMKBStoreApp *store=(PMKBStoreApp*)host.instance;
+    CHECK(store->catalogue.count==0u&&store->page_index==0u);
+    CHECK(store->render_calls==1u&&pmkb_app_host_screen(&host)==&store->screen);
+    const unsigned renders=store->render_calls;
+    CHECK(pmkb_app_host_store_load(&host,(const uint8_t*)"{}",2u)==PMKB_INVALID);
+    CHECK(store->catalogue.count==0u&&store->render_calls==renders);
+    CHECK(pmkb_app_host_store_load(&host,one,sizeof(one)-1u)==PMKB_OK);
+    CHECK(store->catalogue.count==1u&&store->catalogue.cleanup_pending_count==1u);
+    CHECK(strcmp(store->catalogue.items[0].label,"Demo")==0);
+    FakeBackend mock={0};PMKBBackend adapter={.context=&mock,.present=present};
+    CHECK(pmkb_app_host_present(&host,&adapter)==PMKB_OK);
+    CHECK(mock.calls>=1&&!store->screen.has_dirty);
+    CHECK(pmkb_app_host_store_load(&host,many,sizeof(many)-1u)==PMKB_OK);
+    CHECK(store->catalogue.count==6u&&store->page_index==0u);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_RIGHT},NULL)
+          ==PMKB_OK);
+    CHECK(store->page_index==1u);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_RIGHT},NULL)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_LEFT},NULL)
+          ==PMKB_OK);
+    CHECK(store->page_index==0u);
+    CHECK(pmkb_app_host_event(&host,
+          (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=300,.y=470},NULL)==PMKB_OK);
+    CHECK(store->page_index==1u);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_SHOW_LIST},NULL)
+          ==PMKB_OK);
+    CHECK(store->page_index==0u);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_SHOW_LIST},NULL)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
+    CHECK(host.active==PMKB_APP_NONE&&host.instance==NULL&&host.generation==2u);
+    CHECK(pmkb_app_host_store_load(&host,one,sizeof(one)-1u)==PMKB_NOT_FOUND);
+    groups++;return 0;
+}
 static int font_and_clipping(void){
     PMKBSurface a={0},b={0}; PMKBRect dirty={0};
     CHECK(pmkb_surface_glyph_supported(0xe9));
@@ -125,7 +180,7 @@ static int font_and_clipping(void){
 }
 int main(void){
     if(catalog()||safe_lifecycle()||calculator_via_launcher()||
-       font_and_clipping())return 1;
+       store_via_launcher()||font_and_clipping())return 1;
     printf("PMKB LAUNCHER/RENDER: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            passed,groups);
     return 0;
