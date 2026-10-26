@@ -9,8 +9,7 @@ static void pmkb_app_host_advance_generation(PMKBAppHost *host){
 static const PMKBAppInfo catalog[]={
     {PMKB_APP_NOTES,"notes","Mes notes",true},
     {PMKB_APP_CALCULATOR,"calculator","Calculatrice",true},
-    {PMKB_APP_STORE,"store","Store",true},
-    {PMKB_APP_WHITEBOARD,"whiteboard","Tableau blanc",true}
+    {PMKB_APP_STORE,"store","Store",false}
 };
 const PMKBAppInfo *pmkb_app_info(PMKBAppId kind){
     for(size_t i=0;i<sizeof(catalog)/sizeof(catalog[0]);i++)
@@ -40,40 +39,10 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
         PMKBStatus rc=pmkb_calc_ui_init(calc,width,height);
         if(rc!=PMKB_OK){free(calc);return rc;}
         host->instance=calc;
-    }else if(kind==PMKB_APP_STORE){
-        PMKBStoreApp *store=(PMKBStoreApp*)calloc(1,sizeof(*store));
-        if(!store)return PMKB_MEMORY;
-        PMKBStatus rc=pmkb_store_app_init(store,width,height);
-        if(rc!=PMKB_OK){free(store);return rc;}
-        host->instance=store;
-    }else if(kind==PMKB_APP_WHITEBOARD){
-        PMKBWhiteboardSession *wb=(PMKBWhiteboardSession*)calloc(1,sizeof(*wb));
-        if(!wb)return PMKB_MEMORY;
-        PMKBStatus rc=pmkb_wb_session_open(wb,width,height);
-        if(rc!=PMKB_OK){free(wb);return rc;}
-        host->instance=wb;
     }else return PMKB_NOT_FOUND;
     host->active=kind;
     pmkb_app_host_advance_generation(host);
     return PMKB_OK;
-}
-PMKBStatus pmkb_app_host_store_load(PMKBAppHost *host,
-                                    const uint8_t *json,size_t length){
-    if(!host||host->active!=PMKB_APP_STORE||!host->instance)
-        return PMKB_NOT_FOUND;
-    return pmkb_store_app_load_snapshot((PMKBStoreApp*)host->instance,
-                                        json,length);
-}
-PMKBWBStatus pmkb_app_host_whiteboard_touch(PMKBAppHost *host,
-        PMKBWBTouchKind kind,int x,int y){
-    if(!host||host->active!=PMKB_APP_WHITEBOARD||!host->instance)
-        return PMKB_WB_INVALID;
-    return pmkb_wb_session_touch((PMKBWhiteboardSession*)host->instance,kind,x,y);
-}
-PMKBWBStatus pmkb_app_host_whiteboard_undo(PMKBAppHost *host){
-    if(!host||host->active!=PMKB_APP_WHITEBOARD||!host->instance)
-        return PMKB_WB_INVALID;
-    return pmkb_wb_app_undo(&((PMKBWhiteboardSession*)host->instance)->app);
 }
 PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard){
     if(!host)return PMKB_INVALID;
@@ -84,12 +53,6 @@ PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard){
         pmkb_ui_free(notes);
     }else if(host->active==PMKB_APP_CALCULATOR){
         pmkb_calc_ui_free((PMKBCalcUI*)host->instance);
-    }else if(host->active==PMKB_APP_STORE){
-        pmkb_store_app_free((PMKBStoreApp*)host->instance);
-    }else if(host->active==PMKB_APP_WHITEBOARD){
-        PMKBStatus rc=pmkb_wb_session_close(
-            (PMKBWhiteboardSession*)host->instance,discard);
-        if(rc!=PMKB_OK)return rc;
     }else return PMKB_INVALID;
     free(host->instance);
     host->instance=NULL;
@@ -103,10 +66,6 @@ PMKBSurface *pmkb_app_host_screen(PMKBAppHost *host){
         return &((PMKBUI*)host->instance)->screen;
     if(host->active==PMKB_APP_CALCULATOR)
         return &((PMKBCalcUI*)host->instance)->screen;
-    if(host->active==PMKB_APP_STORE)
-        return &((PMKBStoreApp*)host->instance)->screen;
-    if(host->active==PMKB_APP_WHITEBOARD)
-        return pmkb_wb_session_screen((PMKBWhiteboardSession*)host->instance);
     return NULL;
 }
 PMKBStatus pmkb_app_host_event(PMKBAppHost *host,
@@ -116,8 +75,6 @@ PMKBStatus pmkb_app_host_event(PMKBAppHost *host,
         return pmkb_ui_event((PMKBUI*)host->instance,event,utc);
     if(host->active==PMKB_APP_CALCULATOR)
         return pmkb_calc_ui_event((PMKBCalcUI*)host->instance,event);
-    if(host->active==PMKB_APP_STORE)
-        return pmkb_store_app_event((PMKBStoreApp*)host->instance,event);
     return PMKB_NOT_FOUND;
 }
 PMKBStatus pmkb_app_host_present(PMKBAppHost *host,
