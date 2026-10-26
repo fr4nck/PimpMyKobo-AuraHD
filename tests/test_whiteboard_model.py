@@ -172,6 +172,26 @@ class WhiteboardModelC11(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertRegex(run.stdout, r"WHITEBOARD APP: \d+ assertions PASS, 0 FAIL")
 
+    def test_launcher_seam_preserves_unsaved_drawing(self):
+        compiler = next((shutil.which(name) for name in ("cc", "gcc", "clang")
+                         if shutil.which(name)), None)
+        with tempfile.TemporaryDirectory(prefix="pmkb-whiteboard-launch-") as d:
+            binary = Path(d) / ("wb-launch.exe" if os.name == "nt" else "wb-launch")
+            native = ROOT / "experimental" / "native-ui"
+            result = subprocess.run(
+                [compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                 "-pedantic", "-I", str(HEADER), "-I", str(native),
+                 str(native / "pmkb_surface.c"),
+                 str(ROOT / "tests" / "whiteboard_launch_seam_tests.c"),
+                 "-o", str(binary)], capture_output=True, text=True,
+                timeout=45, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            run = subprocess.run([str(binary)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertRegex(run.stdout,
+                             r"WHITEBOARD LAUNCH SEAM: \d+ assertions PASS, 0 FAIL")
+
     def test_bounded_journal_and_undo_redo(self):
         run = subprocess.run([str(self.binary)], capture_output=True,
                              text=True, timeout=10, check=False)
