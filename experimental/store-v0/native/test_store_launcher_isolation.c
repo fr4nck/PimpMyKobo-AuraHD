@@ -4,6 +4,7 @@
 #include "pmkb_store_ui_preview.h"
 #include "pmkb_store_launcher_guard.h"
 #include "pmkb_store_surface_owner.h"
+#include "pmkb_store_passive_router.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -398,6 +399,32 @@ static void verify_surface_owner(void) {
         CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
     }
 }
+static void verify_passive_router(void) {
+    PMKBStorePassiveRouter router;
+    pmkb_store_router_init(&router);
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 153600u);
+    CHECK(pmkb_store_router_launch_app(&router, PMKB_APP_STORE, 320, 480)
+          == PMKB_NOT_FOUND);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    CHECK(pmkb_store_router_launch_app(&router, PMKB_APP_NOTES, 320, 480)
+          == PMKB_OK);
+    PMKBUI *notes = (PMKBUI *)router.host.instance;
+    CHECK(notes != NULL);
+    if (notes) notes->notebook.count = 1;
+    CHECK(pmkb_store_router_preview(&router, 320, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_router_close_app(&router, false) == PMKB_UNSAVED);
+    CHECK(router.host.active == PMKB_APP_NOTES);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    CHECK(pmkb_store_router_close_app(&router, true) == PMKB_OK);
+    CHECK(router.host.active == PMKB_APP_NONE);
+    CHECK(pmkb_store_router_preview(&router, 319, 480, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_owner_pixel_bytes(&router.store) == 0u);
+    pmkb_store_router_dismiss(&router);
+}
 int main(void) {
     memset(&catalog,0,sizeof(catalog));
     catalog.count=1;
@@ -409,6 +436,7 @@ int main(void) {
     verify_calculator_isolation();
     verify_guarded_surface_ownership();
     verify_surface_owner();
+    verify_passive_router();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
