@@ -53,15 +53,41 @@ static inline PMKBStorePaintStatus pmkb_store_eink_lifecycle_preview(
     (void)pmkb_store_eink_async_cancel(&owner->async);
     return pmkb_store_router_preview(&owner->router,width,height,view,page);
 }
+/* The Launcher may be called directly, bypassing this wrapper.
+ * Fail closed unless this Store surface is still owned and guarded under
+ * the exact host identity captured at preview entry. */
+static inline bool pmkb_store_eink_lifecycle_surface_valid(
+    PMKBStoreEinkLifecycle *owner) {
+    if (!owner || !owner->router.store.allocated)
+        return false;
+    PMKBStorePassiveRouter *router=&owner->router;
+    PMKBStoreLauncherGuard *guard=&router->store.guard;
+    return router->store.surface.gray != NULL &&
+           guard->host == &router->host &&
+           guard->preview.screen.visible &&
+           guard->preview.target == &router->store.surface &&
+           guard->active_on_enter == router->host.active &&
+           guard->instance_on_enter == router->host.instance &&
+           pmkb_store_launcher_surface_separate(
+               &router->host,&router->store.surface);
+}
 static inline PMKBStatus pmkb_store_eink_lifecycle_submit(
     PMKBStoreEinkLifecycle *owner,unsigned *marker) {
-    if (!owner || !owner->router.store.allocated) return PMKB_INVALID;
+    if (!owner) return PMKB_INVALID;
+    if (!pmkb_store_eink_lifecycle_surface_valid(owner)) {
+        pmkb_store_eink_lifecycle_dismiss(owner);
+        return PMKB_INVALID;
+    }
     return pmkb_store_eink_async_submit(
         &owner->async,&owner->router.store.surface,marker);
 }
 static inline PMKBStatus pmkb_store_eink_lifecycle_complete(
     PMKBStoreEinkLifecycle *owner,unsigned marker,bool success) {
-    if (!owner || !owner->router.store.allocated) return PMKB_INVALID;
+    if (!owner) return PMKB_INVALID;
+    if (!pmkb_store_eink_lifecycle_surface_valid(owner)) {
+        pmkb_store_eink_lifecycle_dismiss(owner);
+        return PMKB_INVALID;
+    }
     return pmkb_store_eink_async_complete(
         &owner->async,&owner->router.store.surface,marker,success);
 }
