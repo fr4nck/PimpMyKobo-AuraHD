@@ -3,6 +3,7 @@
 #include "pmkb_launcher_bridge.h"
 #include "pmkb_store_ui_preview.h"
 #include "pmkb_store_launcher_guard.h"
+#include "pmkb_store_surface_owner.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -332,6 +333,36 @@ static void verify_guarded_surface_ownership(void) {
     printf("PMKB STORE LAUNCHER GUARD: %zu bytes, isolation PASS\n",
            sizeof(PMKBStoreLauncherGuard));
 }
+static void verify_surface_owner(void) {
+    PMKBAppHost host;
+    pmkb_app_host_init(&host);
+    PMKBStoreSurfaceOwner owner;
+    pmkb_store_owner_init(&owner);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    CHECK(pmkb_store_owner_open(&owner, &host, 1, 1)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
+    CHECK(pmkb_store_launcher_guard_draw(&owner.guard, &catalog, 0)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_app_host_launch(&host, PMKB_APP_NOTES, 320, 480) == PMKB_OK);
+    CHECK(pmkb_store_launcher_guard_draw(&owner.guard, &catalog, 0)
+          == PMKB_STORE_PAINT_INVALID);
+    CHECK(pmkb_store_owner_open(&owner, &host, 320, 480)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 153600u);
+    pmkb_store_owner_close(&owner);
+    pmkb_store_owner_close(&owner);
+    CHECK(owner.surface.gray == NULL);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 0u);
+    CHECK(pmkb_app_host_close(&host, true) == PMKB_OK);
+    CHECK(pmkb_store_owner_open(&owner, &host, 1080, 1440)
+          == PMKB_STORE_PAINT_OK);
+    CHECK(pmkb_store_owner_pixel_bytes(&owner) == 1555200u);
+    pmkb_store_owner_close(&owner);
+}
 int main(void) {
     memset(&catalog,0,sizeof(catalog));
     catalog.count=1;
@@ -342,6 +373,7 @@ int main(void) {
     verify_notes_isolation();
     verify_calculator_isolation();
     verify_guarded_surface_ownership();
+    verify_surface_owner();
     CHECK(note_inits==note_frees && calc_inits==calc_frees);
     if(fails)return 1;
     printf("PMKB REAL LAUNCHER ISOLATION: %u assertions PASS, 0 FAIL\n",checks);
