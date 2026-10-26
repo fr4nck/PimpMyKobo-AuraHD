@@ -194,6 +194,11 @@ static void verify_guarded_surface_ownership(void) {
     overlap.gray = notes->gray + 1;
     CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &overlap)
           == PMKB_STORE_PAINT_INVALID);
+    /* D6l: an interior offset near the end is still overlapping. */
+    overlap.gray = notes->gray + (size_t)notes->width *
+                                  (size_t)notes->height - 1u;
+    CHECK(pmkb_store_launcher_guard_enter(&guard, &host, &overlap)
+          == PMKB_STORE_PAINT_INVALID);
     CHECK(guard.host == NULL && guard.preview.target == NULL);
     CHECK(hash_frame(notes) == note_hash);
 
