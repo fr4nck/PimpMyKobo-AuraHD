@@ -28,6 +28,23 @@ static inline void pmkb_store_eink_lifecycle_dismiss(PMKBStoreEinkLifecycle *own
     (void)pmkb_store_eink_async_cancel(&owner->async);
     pmkb_store_router_dismiss(&owner->router);
 }
+/* App changes must invalidate the pending Store marker BEFORE
+ * the underlying router frees the Store surface. An abandoned completion
+ * must not affect the newly active application's pixels. */
+static inline PMKBStatus pmkb_store_eink_lifecycle_launch_app(
+    PMKBStoreEinkLifecycle *owner, PMKBAppId kind, int width, int height) {
+    if (!owner) return PMKB_INVALID;
+    pmkb_store_eink_lifecycle_dismiss(owner);
+    return pmkb_store_router_launch_app(&owner->router,kind,width,height);
+}
+/* Keep the Launcher contract: non-discarded Notes may refuse to close.
+ * The transient Store is still detached, even when Notes is preserved. */
+static inline PMKBStatus pmkb_store_eink_lifecycle_close_app(
+    PMKBStoreEinkLifecycle *owner, bool discard) {
+    if (!owner) return PMKB_INVALID;
+    pmkb_store_eink_lifecycle_dismiss(owner);
+    return pmkb_store_router_close_app(&owner->router,discard);
+}
 static inline PMKBStorePaintStatus pmkb_store_eink_lifecycle_preview(
     PMKBStoreEinkLifecycle *owner,int width,int height,
     const PMKBStoreView *view,unsigned page) {
