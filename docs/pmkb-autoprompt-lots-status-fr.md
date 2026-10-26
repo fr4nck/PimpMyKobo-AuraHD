@@ -396,6 +396,18 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 - **Invariants préservés** : aucun téléchargement firmware/archives/dépendances, aucune écriture ni montage Kobo/microSD, aucun changement FIRST BOOT/P2/recoveryfs/PRE-P1/HWCONFIG/waveform, Notes ADR-005, Launcher ou huit illustrations manga. PR #31 non fusionnée.
 - **Reprise exacte : L06-C2** — contrôler la conclusion de la CI `40275103618` et ses logs ; en cas d'échec corriger uniquement la cause vérifiée, sinon finaliser la qualification de L06-C et préparer **L06-D** (consommation du catalogue côté PMKB-UI/Launcher, sans remanier l'interface). **Ne pas démarrer L06-D dans L06-C.**
 
+## LOT 06 — Store *.pmkb V0, sous-lot L06-C2 — contre-qualification du catalogue
+
+**L06-C2 : DONE (qualification CI + documentation). LOT 06 : IN_PROGRESS.** Aucun code n'a été modifié dans ce sous-lot ; catalogue encore non connecté au Launcher et non qualifié sur Kobo.
+
+- **Départ vérifié le 26 octobre 2026** : journal `main@9651209894612ac06bc8973fa2004a9acb1723d0` ; PR [#31](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/31) **OPEN / DRAFT / non fusionnée**, branche `feat/pmkb-store-v0@8f0bb3811f87e51fbce94b568143ac82bc2fe7ac`. Aucun HEAD concurrent nouveau observé.
+- **CI au SHA exact** : [Tests #40275103618](https://github.com/fr4nck/PimpMyKobo-AuraHD/actions/runs/40275103618), **COMPLETED/SUCCESS** : **10 jobs PASS / 0 FAIL** (8 `unittest` Linux/Windows Python 3.10–3.13, 2 Qt), huit étapes `Run unit tests` SUCCESS. Aucun relancement manuel.
+- **Logs réellement lus** : Python 3.11 Linux **361 tests, OK (skipped=7)** ; Windows **361 tests, OK (skipped=49)**. Dans `test_store_catalog.py` : **16/16 PASS Linux** ; **13 PASS et 3 SKIP Windows** (création de symlinks non disponible avec les droits du runner). Ces SKIP ne sont pas transformés en PASS ; aucun défaut observé.
+- **Documentation corrigée** : [`docs/pmkb-store-v0-qualification-fr.md`](https://github.com/fr4nck/PimpMyKobo-AuraHD/blob/main/docs/pmkb-store-v0-qualification-fr.md) actualisé sur `main` au commit [`62da2ac`](https://github.com/fr4nck/PimpMyKobo-AuraHD/commit/62da2ac4d9cb4f66d3ca88ff4043211f33c38bd0) pour distinguer **catalogue hôte PASS** de **Store graphique et lancement NON IMPLÉMENTÉS** ; rapport et journal seuls modifiés, chacun avec `[skip ci]`.
+- **Tests L06-C2** : PASS = CI et consultation des logs ; FAIL = 0 ; **nouveaux tests locaux NON EXÉCUTÉS** ; **Kobo, microSD P3, ARM, vrai réseau, signatures, concurrence et coupure réelle NON QUALIFIÉS/NON EXÉCUTÉS**. Aucun binaire lancé et aucune installation sur périphérique.
+- **Invariants** : FIRST BOOT, P2/recoveryfs, PRE-P1, HWCONFIG, waveform, huit illustrations manga, Notes ADR-005, Launcher et PR existantes inchangés. Aucun téléchargement firmware/dépôt/dépendance, aucune fusion PR.
+- **Reprise exacte L06-D** : examiner les interfaces natives PMKB-UI/Launcher et relier **uniquement un contrat de consultation** au catalogue Store sans téléchargement ni installation réelle ; conserver les huit visuels et les deux lignes Notes. Si l'intégration se révèle trop large, traiter seulement L06-D1 et journaliser. Ne pas exécuter L06-D dans L06-C2.
+
 ## Tableau de pilotage
 
 | Lot | Statut | Branche / SHA de départ | Travail livré / prévu | Qualification | Prochain sous-lot |
@@ -406,7 +418,7 @@ Date d'initialisation : **2026-10-25**. Dépôt : `fr4nck/PimpMyKobo-AuraHD`. Br
 | L03 — Moteur e-ink | **DONE (logiciel hors matériel)** | `main@b1fc321`, PR #30 `b2a3548` | 2 rectangles bornés, repli conservateur, régressions et mesure 2 vs 1 555 200 pixels | Hôte L03-C 19/19 PASS x2 ; **3/3 CI SUCCESS** au HEAD ; EPDC NON EXÉCUTÉ | **L04-A** |
 | L04 — Énergie / Wi-Fi / reprise | **DONE (logiciel synthétique seulement)** | `main@70d6cda`, PR #28 `bb8db24` | Contrats réseau/veille, MMC→SDIO, RTC et tests de cohérence L04-A/B/C, clôture CI L04-D | **10/10 jobs CI SUCCESS** au HEAD ; 8 tests transversaux inclus dans unittest ; matériel/énergie NON EXÉCUTÉS | **L05-A** |
 | L05 — Launcher / widgets / Notes | **DONE (logiciel hors matériel)** | `main@beee41b`, PR #30 `e2907a1` | Notes ADR-005 : titres à la perte de focus ; clavier commun, 2 rangées, 3 géométries hôtes testées | **3/3 workflows SUCCESS au HEAD ; CI générale 10/10 jobs PASS ; 0 FAIL**, Kobo / ergonomie physique NON EXÉCUTÉES | **L06-A** |
-| L06 — Store *.pmkb | **IN_PROGRESS (L06-C publié, qualification CI en attente)** | `main@5bc5602`, PR #31 `8f0bb38` | Nouveau catalogue local synthétique en lecture seule, apps installées / quarantaines séparées, manifestes et entrées contrôlés | **16 tests locaux PASS / 0 FAIL** sur reproductions des APIs antérieures ; CI #40275103618 EN ATTENTE ; Kobo NON EXÉCUTÉE | **L06-C2** |
+| L06 — Store *.pmkb | **IN_PROGRESS (L06-C2 DONE hors matériel)** | `main@62da2ac`, PR #31 `8f0bb38` | Catalogue local synthétique validé sur CI avec les contrats Store ; aucune intégration Launcher | **10/10 jobs GitHub PASS, 0 FAIL** ; 361 tests/plateforme Python 3.11 (7 SKIP Linux, 49 SKIP Windows) ; Kobo NON EXÉCUTÉE | **L06-D** |
 | L07 — Tableau blanc | TODO | À déterminer | Démo hors ligne à traits persistants | NON EXÉCUTÉ | L07-A |
 | L08 — Maison | TODO | À déterminer | Interface locale sur JSON synthétique, sans serveur | NON EXÉCUTÉ | L08-A |
 | L09 — Lecture / partitions | TODO | À déterminer | Grille / Thème ; visionneuse testable | NON EXÉCUTÉ | L09-A |
