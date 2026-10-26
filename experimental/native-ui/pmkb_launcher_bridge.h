@@ -5,13 +5,15 @@
 #include "pmkb_ui.h"
 #include "pmkb_calculator_ui.h"
 #include "pmkb_store_app.h"
+#include "../whiteboard-v0/pmkb_whiteboard_launch_seam.h"
 #include <stdint.h>
 
 typedef enum {
     PMKB_APP_NONE=0,
     PMKB_APP_NOTES,
     PMKB_APP_CALCULATOR,
-    PMKB_APP_STORE
+    PMKB_APP_STORE,
+    PMKB_APP_WHITEBOARD
 } PMKBAppId;
 
 typedef struct {
@@ -40,6 +42,9 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
 /* Load a bounded read-only Store snapshot. Only valid while Store is active. */
 PMKBStatus pmkb_app_host_store_load(PMKBAppHost *host,
                                     const uint8_t *json,size_t length);
+PMKBWBStatus pmkb_app_host_whiteboard_touch(PMKBAppHost *host,
+        PMKBWBTouchKind kind,int x,int y);
+PMKBWBStatus pmkb_app_host_whiteboard_undo(PMKBAppHost *host);
 PMKBStatus pmkb_app_host_close(PMKBAppHost *host,bool discard);
 PMKBSurface *pmkb_app_host_screen(PMKBAppHost *host);
 PMKBStatus pmkb_app_host_event(PMKBAppHost *host,
