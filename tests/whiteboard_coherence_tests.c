@@ -24,9 +24,9 @@ int main(void) {
     if (!actual.gray)return 1;
     CHECK(pmkb_surface_take_dirty(&actual,&dirty));
     CHECK(pmkb_wb_down(&board,2,25,0,1)==PMKB_WB_OK);
-    for (int i=3;i<96;i++)
+    for (int i=3;i<=97;i++)
         CHECK(pmkb_wb_touch_stream_move(&board,&actual,i,25)==PMKB_WB_OK);
-    CHECK(pmkb_wb_touch_stream_move(&board,&actual,96,25)==PMKB_WB_OK);
+    CHECK(pmkb_wb_touch_stream_move(&board,&actual,98,25)==PMKB_WB_OK);
     CHECK(board.visible==1u && board.in_stroke);
     CHECK(pmkb_wb_touch_interrupt(&board)==PMKB_WB_OK);
     CHECK(board.visible==1u && !board.in_stroke);
