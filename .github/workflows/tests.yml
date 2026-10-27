@@ -35,7 +35,10 @@ jobs:
           lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
       - name: Check illustrated launcher simulator model (one Linux matrix job)
         if: runner.os == 'Linux' && matrix.python-version == '3.10'
-        run: node --test tests/test_launcher_simulator.cjs
+        run: |
+          node --check experimental/notes-v01/notes-core.js
+          node --check experimental/notes-v01/notes-app.js
+          node --test tests/test_launcher_simulator.cjs tests/test_notes_core.cjs
   qt:
     strategy:
       fail-fast: false

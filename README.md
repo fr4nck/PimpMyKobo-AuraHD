@@ -234,6 +234,14 @@ Un prototype Lua isolé sur PC fournit la navigation et un aperçu SVG ; la comp
 
 **Aucun launcher graphique embarqué n'est encore qualifié sur la Kobo** ; les valeurs d'énergie et réseau restent fictives. KOReader reçoit seulement une intention `open_reader`, sans lancement effectif. Le dock et la barre système n'activent aucun périphérique. Les illustrations validées, P1/P2/P3 et FIRST BOOT restent inchangés.
 
+## PMKB Notes V0.1 — premier outil PDA (prototype PC)
+
+[**Ouvrir le bloc-notes et sa palette de croquis**](experimental/notes-v01/index.html) · [Guide Notes en français](experimental/notes-v01/README.md) · [English guide](experimental/notes-v01/README.en.md).
+
+Notes est un prototype autonome et hors ligne : textes UTF-8, recherche, sauvegarde locale dans le navigateur, export/import JSON, export TXT, et onglet **Croquis facultatif** avec crayon, gomme, trois épaisseurs, annuler/rétablir et export PNG. Le fichier JSON versionné conserve les tracés éditables. L'Aura HD ne possède pas de stylet actif : le dessin au doigt et le clavier e-ink demandent encore qualification.
+
+**Pas de lien fonctionnel avec le launcher, pas de Wi-Fi, aucune écriture sur les partitions Kobo.** Le launcher V0.6 est une [PR séparée en cours de validation](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25). Les dessins manga validés et FIRST BOOT restent protégés.
+
 ## Documentation
 
 - [Démonter l'Aura HD et accéder à la microSD interne](docs/disassembly-fr.md) — avec photos originales, sources iFixit/MobileRead et version texte pour Lynx.

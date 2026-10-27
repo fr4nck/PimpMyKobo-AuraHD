@@ -48,6 +48,12 @@ Before any inspection on Windows: [protect the microSD](windows-preservation-en.
 - [Approved V0.2 graphics in Git](../experimental/launcher-v0/assets/v02/): original RGB, 16-gray, 4-gray, 1-bit, comparison and manifest.
 - [V0.2 image qualification (French)](launcher-v02-asset-qualification-2026-10-13-fr.md): file sizes, SHA-256 and hardware limits.
 
+## PDA Notes (standalone prototype)
+
+- [Notes V0.1 English guide](../experimental/notes-v01/README.en.md) · [Français](../experimental/notes-v01/README.md).
+- [Open the Notes host-only simulator](../experimental/notes-v01/index.html): offline text, search, optional monochrome sketch, JSON/TXT/PNG exports.
+- Browser autosave is not a guaranteed backup: export JSON regularly. [Launcher V0.6 PR #25](https://github.com/fr4nck/PimpMyKobo-AuraHD/pull/25) is still unmerged, and its Notes tile does not launch this app.
+
 ## Data intentionally not published
 
 The repository intentionally excludes complete microSD dumps, `fs.tgz`, `db.tgz`, P1/P2 images, prebuilt U-Boot images, prebuilt kernels and future waveform extractions originating from a reader.
