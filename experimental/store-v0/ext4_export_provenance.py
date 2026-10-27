@@ -72,7 +72,9 @@ class _Ext4View:
         if not (_u16(image, sb + 0x3A) & 1):
             raise Ext4ExportError("unclean_ext4_image")
         self.groups = (self.inodes + self.inodes_per_group - 1) // self.inodes_per_group
-        if self.groups > 8192:
+        block_groups = (self.blocks - self.first_block +
+                        self.blocks_per_group - 1) // self.blocks_per_group
+        if not 1 <= self.groups <= 8192 or self.groups != block_groups:
             raise Ext4ExportError("invalid_ext4_geometry")
 
     def _inode(self, number):
@@ -84,7 +86,10 @@ class _Ext4View:
             raise Ext4ExportError("invalid_ext4_group_descriptor")
         table_block = _u32(self.image, gd + 8)
         pos = table_block * self.block_size + index * self.inode_size
+        table_blocks = (self.inodes_per_group * self.inode_size +
+                        self.block_size - 1) // self.block_size
         if (table_block == 0 or table_block >= self.blocks or
+                table_blocks > self.blocks - table_block or
                 pos + self.inode_size > self.blocks * self.block_size):
             raise Ext4ExportError("invalid_ext4_inode_table")
         mode = _u16(self.image, pos)
@@ -115,6 +120,7 @@ class _Ext4View:
         logical_blocks = (length + self.block_size - 1) // self.block_size
         data = bytearray(logical_blocks * self.block_size)
         previous_end = 0
+        physical_ranges = []
         for i in range(entries):
             logical, count, high, low = struct.unpack_from("<IHHI", pointers, 12 + i * 12)
             physical = (high << 32) | low
@@ -123,6 +129,10 @@ class _Ext4View:
                     count > logical_blocks - logical or
                     physical == 0 or physical + count > self.blocks):
                 raise Ext4ExportError("invalid_ext4_extent")
+            if any(physical < stop and physical + count > start_block
+                   for start_block, stop in physical_ranges):
+                raise Ext4ExportError("overlapping_ext4_physical_extents")
+            physical_ranges.append((physical, physical + count))
             start = physical * self.block_size
             dest = logical * self.block_size
             n = count * self.block_size
@@ -138,6 +148,8 @@ class _Ext4View:
         for base in range(0, len(data), self.block_size):
             cursor = base
             while cursor < base + self.block_size:
+                if cursor + 8 > base + self.block_size:
+                    raise Ext4ExportError("invalid_ext4_dirent")
                 inode, record_length, name_length, _type = struct.unpack_from(
                     "<IHBB", data, cursor)
                 if (record_length < 8 or record_length % 4 or
@@ -146,12 +158,17 @@ class _Ext4View:
                     raise Ext4ExportError("invalid_ext4_dirent")
                 name = data[cursor + 8:cursor + 8 + name_length]
                 if inode:
-                    if not name or b"\x00" in name or b"/" in name or name in entries:
+                    if (not 1 <= inode <= self.inodes or _type > 7 or
+                            not name or b"\x00" in name or b"/" in name or
+                            name in entries or
+                            (name in (b".", b"..") and _type != 2)):
                         raise Ext4ExportError("invalid_ext4_dirent")
                     entries[name] = inode
                     if len(entries) > MAX_ENTRIES_PER_DIRECTORY:
                         raise Ext4ExportError("ext4_directory_entry_limit")
                 cursor += record_length
+        if entries.get(b".") != number or b".." not in entries:
+            raise Ext4ExportError("invalid_ext4_dot_entries")
         return entries
 
     def _folder(self, path):
@@ -268,6 +285,7 @@ def compare_ext4_image_to_snapshot(image_bytes, snapshot, *,
         "missing_from_image": tuple(missing_image),
         "missing_from_export": tuple(missing_export),
         "image_to_export_link_verified_for_scanned_scope": verdict == "scoped_image_export_match",
+        "filesystem_metadata_integrity_verified": False,
         "image_authenticated_as_kobo_p1": False,
         "source_provenance_authenticated": False,
         "whole_rootfs_verified": False,

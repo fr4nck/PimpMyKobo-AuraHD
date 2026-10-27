@@ -51,3 +51,15 @@ Ce lot est uniquement une qualification hôte. P1 physique, P2/recoveryfs,
 PRE-P1, P3, FIRST BOOT et les images scellées restent inchangés.
 L'essai d'une vraie sauvegarde conservée se fera ultérieurement,
 avec preuve de provenance indépendante et accord explicite.
+
+## Revue complémentaire (27 octobre 2026)
+
+Les géométries bloc/groupe d'inodes incohérentes, tables d'inodes sortant
+de l'image, entrées de répertoire invalides (y compris "."/"..") et
+extents physiques se recouvrant sont refusés. Les tests négatifs sont
+inclus dans la suite hôte. La vérification par lecture des octets n'est
+**pas** équivalente à un fsck ni à l'authentification de toutes les
+métadonnées : filesystem_metadata_integrity_verified reste toujours
+False. Même avec un résultat scoped_image_export_match, un contrôle
+indépendant de l'image d'origine et de l'intégrité du système ext4 sera
+nécessaire avant une décision d'installation.

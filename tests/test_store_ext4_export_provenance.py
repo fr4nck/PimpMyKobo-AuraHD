@@ -116,6 +116,7 @@ class Ext4ExportTests(unittest.TestCase):
         self.assertEqual(out["verdict"], "scoped_image_export_match")
         self.assertEqual(out["matched"], ("lib/libc.so.6",))
         self.assertTrue(out["image_to_export_link_verified_for_scanned_scope"])
+        self.assertFalse(out["filesystem_metadata_integrity_verified"])
         self.assertEqual(out["image_block_size"], 1024)
         for key in ("image_authenticated_as_kobo_p1", "source_provenance_authenticated",
                     "whole_rootfs_verified", "hardware_verified",
@@ -196,6 +197,45 @@ class Ext4ExportTests(unittest.TestCase):
         bad = bytes(image)
         with self.assertRaisesRegex(Ext4ExportError, "invalid_ext4_extent"):
             compare(bad, snapshot(bad))
+
+
+    def test_inconsistent_block_and_inode_group_geometry_is_rejected(self):
+        image = bytearray(fake_ext4())
+        struct.pack_into("<I", image, 1024 + 40, 8)
+        altered = bytes(image)
+        with self.assertRaisesRegex(Ext4ExportError, "invalid_ext4_geometry"):
+            compare(altered, snapshot(altered))
+
+    def test_inode_table_must_fit_within_declared_image(self):
+        image = bytearray(fake_ext4())
+        struct.pack_into("<I", image, 2 * BLOCK + 8, 127)
+        altered = bytes(image)
+        with self.assertRaisesRegex(Ext4ExportError, "invalid_ext4_inode_table"):
+            compare(altered, snapshot(altered))
+
+    def test_malformed_directory_entries_and_dot_inode_are_rejected(self):
+        for pos, fmt, value, reason in (
+            (20 * BLOCK + 4, "<H", 4, "invalid_ext4_dirent"),
+            (20 * BLOCK + 24, "<I", 1000, "invalid_ext4_dirent"),
+            (20 * BLOCK, "<I", 11, "invalid_ext4_dot_entries"),
+        ):
+            with self.subTest(reason=reason, pos=pos):
+                image = bytearray(fake_ext4())
+                struct.pack_into(fmt, image, pos, value)
+                altered = bytes(image)
+                with self.assertRaisesRegex(Ext4ExportError, reason):
+                    compare(altered, snapshot(altered))
+
+    def test_overlapping_physical_extents_are_rejected(self):
+        image = bytearray(fake_ext4())
+        inode = 3 * BLOCK + (14 - 1) * 128
+        struct.pack_into("<I", image, inode + 4, 2 * BLOCK)
+        struct.pack_into("<H", image, inode + 42, 2)
+        struct.pack_into("<IHHI", image, inode + 64, 1, 1, 0, 24)
+        altered = bytes(image)
+        with self.assertRaisesRegex(
+                Ext4ExportError, "overlapping_ext4_physical_extents"):
+            compare(altered, snapshot(altered))
 
     def test_comparator_never_reads_host_disk(self):
         image = fake_ext4()
