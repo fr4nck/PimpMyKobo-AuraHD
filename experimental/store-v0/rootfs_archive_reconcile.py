@@ -35,6 +35,8 @@ def _member_path(raw):
     """Canonicalize a TAR entry name; never resolve it on the host."""
     if type(raw) is not str or len(raw) > MAX_PATH_LENGTH or "\x00" in raw:
         raise RootfsArchiveError("unsafe_archive_member")
+    if raw in (".", "./"):
+        return "."  # conventional TAR root-directory record
     name = raw[2:] if raw.startswith("./") else raw
     name = name[:-1] if name.endswith("/") else name
     if not name or name.startswith("/") or "\\" in name:
