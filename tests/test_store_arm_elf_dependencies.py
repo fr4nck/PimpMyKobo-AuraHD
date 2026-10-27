@@ -39,6 +39,16 @@ class ArmDependencyTests(unittest.TestCase):
     def test_static_has_no_dynamic_dependencies(self):
         self.assertEqual(inspect_arm_dependencies(elf(needed=False))["needed"], ())
 
+    def test_reject_missing_dynamic_strings_and_bad_segment(self):
+        missing = bytearray(elf())
+        struct.pack_into("<II", missing, 168, 10, 0)
+        with self.assertRaisesRegex(ArmPreflightError, "invalid_dynamic_strings"):
+            inspect_arm_dependencies(bytes(missing))
+        bad = bytearray(elf())
+        struct.pack_into("<I", bad, 56, 250)
+        with self.assertRaisesRegex(ArmPreflightError, "invalid_segment_bounds"):
+            inspect_arm_dependencies(bytes(bad))
+
     def test_invalid_name_offset_rejected(self):
         with self.assertRaisesRegex(ArmPreflightError, "invalid_needed_name"):
             inspect_arm_dependencies(elf(corrupt=True))
