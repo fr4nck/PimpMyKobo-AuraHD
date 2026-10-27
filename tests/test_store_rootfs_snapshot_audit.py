@@ -48,8 +48,9 @@ class SnapshotAuditTests(unittest.TestCase):
         self.assertFalse(r["launchable"])
         self.assertEqual(r["bytes_inspected"], 0)
         self.assertEqual(len(r["libraries"]), 0)
-        self.assertTrue(all(row["state"] == "not_present_in_export"
-                            for row in r["directories"]))
+        self.assertEqual({row["path"]: row["state"] for row in r["directories"]},
+                         {"lib": "not_present_in_export",
+                          "usr/lib": "not_scanned_missing_parent"})
 
     def test_real_bytes_are_hashed_and_stable(self):
         with TemporaryDirectory() as td:
