@@ -1,6 +1,7 @@
 """L08-G regression tests: evidence consistency is not source authentication."""
 import copy
 import hashlib
+import os
 from pathlib import Path
 import struct
 import sys
@@ -94,6 +95,38 @@ class RootfsEvidenceContractTests(unittest.TestCase):
             modify(sample)
             with self.assertRaises(RootfsEvidenceError):
                 verify_snapshot_evidence(sample)
+
+    def test_source_id_change_is_not_authenticated_by_observation_digest(self):
+        with TemporaryDirectory() as td:
+            original = make_report(td)
+        rewritten = copy.deepcopy(original)
+        rewritten["provenance"]["source_id"] = "other-claimed-source"
+        check = verify_snapshot_evidence(rewritten)
+        self.assertTrue(check["observation_digest_consistent"])
+        self.assertFalse(check["source_provenance_authenticated"])
+        with self.assertRaisesRegex(RootfsEvidenceError,
+                                    "expected_source_mismatch"):
+            verify_snapshot_evidence(rewritten,
+                                     expected_source_id="fixture-source")
+
+    def test_mutated_symlink_target_is_detected_as_report_change(self):
+        with TemporaryDirectory() as td:
+            report = make_report(td)
+            linkpath = Path(td) / "lib" / "libalias.so"
+            try:
+                os.symlink("libc.so.6", linkpath)
+            except (OSError, NotImplementedError):
+                self.skipTest("No symlink permission on host")
+            report = scan_rootfs_snapshot(td, source_id="fixture-alias")
+        self.assertTrue(verify_snapshot_evidence(report)[
+            "observation_digest_consistent"])
+        modified = copy.deepcopy(report)
+        symlink = next(row for row in modified["libraries"]
+                       if row["state"] == "symlink_unresolved")
+        symlink["link_target"] = "libzbroken.so"
+        with self.assertRaisesRegex(RootfsEvidenceError,
+                                    "audit_digest_mismatch"):
+            verify_snapshot_evidence(modified)
 
     def test_strict_record_and_directory_shapes(self):
         with TemporaryDirectory() as td:
