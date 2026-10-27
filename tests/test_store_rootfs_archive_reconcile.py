@@ -84,6 +84,15 @@ class TarReconciliationTests(unittest.TestCase):
                     "runtime_compatible", "launchable"):
             self.assertIs(report[key], False, key)
 
+    def test_conventional_tar_dot_root_is_accepted(self):
+        with TemporaryDirectory() as temp:
+            snapshot = sample(Path(temp))
+            data = build_archive([
+                ("file", "./lib/libc.so.6", arm_shared())])
+            # tarfile commonly prefixes archive paths with "./".
+            r = compare_tar_archive_to_snapshot(data, snapshot)
+        self.assertEqual(r["verdict"], "scoped_content_match")
+
     def test_file_bytes_differ_without_mutating_snapshot(self):
         with TemporaryDirectory() as temp:
             snapshot = sample(Path(temp))
