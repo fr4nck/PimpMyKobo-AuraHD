@@ -134,7 +134,24 @@ def scan_rootfs_snapshot(root, *, source_id, declared_source_sha256=None):
     base = _safe_root(root)
     records, directories, total = [], [], [0]
     for relative in SEARCH_DIRECTORIES:
-        folder = base.joinpath(*relative.split("/"))
+        parts = relative.split("/")
+        blocked_parent = None
+        for depth in range(1, len(parts)):
+            ancestor = base.joinpath(*parts[:depth])
+            try:
+                parent_info = ancestor.lstat()
+            except FileNotFoundError:
+                blocked_parent = "not_scanned_missing_parent"
+                break
+            except OSError as exc:
+                raise RootfsSnapshotError("snapshot_read_failed") from exc
+            if not stat.S_ISDIR(parent_info.st_mode):
+                blocked_parent = "not_scanned_parent_non_directory"
+                break
+        if blocked_parent is not None:
+            directories.append({"path": relative, "state": blocked_parent})
+            continue
+        folder = base.joinpath(*parts)
         try:
             info = folder.lstat()
         except FileNotFoundError:
