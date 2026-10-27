@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import re
 import tarfile
+import zlib
 
 from rootfs_evidence_contract import (
     RootfsEvidenceError, verify_snapshot_evidence,
@@ -73,7 +74,7 @@ def _validate_gzip_stream(raw):
                 total += len(block)
                 if total > MAX_GZIP_UNCOMPRESSED_BYTES:
                     raise RootfsArchiveError("gzip_uncompressed_size_limit")
-    except (OSError, EOFError, ValueError) as exc:
+    except (OSError, EOFError, ValueError, zlib.error) as exc:
         if isinstance(exc, RootfsArchiveError):
             raise
         raise RootfsArchiveError("unreadable_rootfs_archive") from exc
