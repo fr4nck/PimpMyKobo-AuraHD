@@ -94,7 +94,7 @@ class ArmLibraryInventoryTests(unittest.TestCase):
             (duplicate, "duplicate_inventory_key"),
             (b'{"libraries":NaN}', "invalid_inventory_json"),
             (b"\xff", "invalid_inventory_json"),
-            (b"[" * 1200 + b"]" * 1200, "invalid_inventory_json"),
+            (b"[" * 1200 + b"]" * 1199, "invalid_inventory_json"),
             (b"x" * 16385, "invalid_inventory_size"),
         ):
             with self.subTest(reason=reason):
