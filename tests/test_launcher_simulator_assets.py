@@ -1,4 +1,4 @@
-"""Host-only V0.4 visual provenance tests; Python stdlib only."""
+"""Host-only V0.6 visual provenance tests; Python stdlib only."""
 import hashlib
 import json
 import struct
@@ -50,13 +50,25 @@ class ArtIntegrity(unittest.TestCase):
         self.assertIn('src="assets/v02/optimise/PMKB-V0.2-16gris.png"', html)
         self.assertIn('src="simulator.js"', html)
         self.assertIn('id="dynamic-status"', html)
-        self.assertIn('id="dock-shortcuts"', html)
-        self.assertIn('id="system-controls"', html)
-        self.assertIn('id="dock-picks"', html)
-        self.assertIn('art.className = "tile-skin"', script)
-        self.assertIn('function needsInversion(', script)
-        self.assertIn('function renderDock()', script)
-        self.assertIn('function dockChoice(', script)
+        self.assertIn('id="status-readouts"', html)
+        self.assertIn('class="artwork"', html)
+        self.assertIn('system-target.requested { outline:4px solid #111;', html)
+        self.assertIn('tile-target:focus-visible { outline:4px dashed #111;', html)
+        self.assertIn('touch-action:manipulation;', html)
+        self.assertIn('function systemHitRects()', script)
+        self.assertIn('function tileKeyAction(', script)
+        self.assertIn('className="label-band"', script)
+        self.assertIn('function applyBandCrop(', script)
+        self.assertIn('function tapSelection(', script)
+        self.assertIn('function tileAt(', script)
+        self.assertIn('label-band.inverted { display:block; filter:invert(1); }', html)
+        self.assertNotIn('tone-inverse', html + script)
+        self.assertNotIn('tile-skin', html + script)
+        self.assertNotIn('dock-shortcuts', html + script)
+        self.assertNotIn('dock-picks', html + script)
+        self.assertNotIn('filter:invert(1); }\\n    .artwork', html)
+        self.assertNotIn('DEFAULT_DOCK', script)
+        self.assertIn('["wifi","battery","frontlight","contrast","refresh","sleep"]', script)
         self.assertIn("SIMULATION PC", html)
         self.assertNotIn("http://", html)
         self.assertNotIn("https://", html)
