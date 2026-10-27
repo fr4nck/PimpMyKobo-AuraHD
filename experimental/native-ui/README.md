@@ -250,3 +250,22 @@ pmkb-host-native-previews-* et portent un manifeste checksums.sha256.
 L'artefact expire après 30 jours et ne contient pas de données privées.
 Il ne s'agit PAS de captures de la Kobo, ni d'une acceptation visuelle.
 Voir docs/native-ui-host-visual-review-fr.md pour la recette de revue.
+
+
+## Conservation de secours en dossier temporaire (qualification hôte)
+
+Un adaptateur Python de preuve est désormais situé dans
+experimental/native-ui/tools/notes_checkpoint_host.py. Sans CLI et
+limité aux sous-répertoires existants du répertoire temporaire du
+système, il accepte la copie pmkb-notes-v1 du moteur C11, puis
+effectue une écriture préparée, une vérification SHA-256, une
+rotation current/previous et une relecture contrôlée. Un ancien
+checkpoint validé est conservé lorsqu'un nouveau devient courant.
+La modification d'un checkpoint corrompu est refusée et le repli
+vers previous ne déclare jamais la restauration dans l'éditeur.
+
+La CI native enchaîne export réel C11 -> checkpoint sur hôte ->
+relecture des mêmes octets. Une sauvegarde réelle sur P3 n'existe
+toujours pas et pmkb_app_host_close(...,false) reste protecteur.
+Voir docs/native-notes-checkpoint-host-v0-fr.md pour le protocole
+et ses limites (accès concurrent, pannes électriques, import C11).
