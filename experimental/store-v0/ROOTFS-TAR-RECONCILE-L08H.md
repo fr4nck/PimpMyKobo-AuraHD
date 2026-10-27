@@ -12,6 +12,7 @@ L08-H ajoute une **confrontation indépendante des octets d'une archive `tar.gz`
 
 - Valide le rapport L08-E via `verify_snapshot_evidence` (L08-G), avant de lire le TAR.
 - Calcule le SHA-256 des octets compressés de l'archive en mémoire ; compare éventuellement à une empreinte fournie explicitement, **non authentifiée** par le module.
+- Valide **un unique membre gzip** jusqu'au footer/CRC, avec un plafond de 896 Mio de données décompressées. Refuse les membres gzip concaténés et tout octet ajouté après le footer, afin qu'un second flux ne puisse pas être ignoré par la lecture du TAR. La vérification est en mémoire bornée mais nécessite un second passage pour inventorier le TAR.
 - Parcourt l'archive en lecture séquentielle, sans `extract` ni `extractall`. Accepte les entrées racine `./` et les chemins de fichiers `./lib/...` habituels.
 - Contrôle uniquement les fichiers `*.so*` immédiatement sous `lib/` et `usr/lib/`, comme le scanner L08-E. Les chemins qui sortent de l'archive et les noms ambigus sont refusés.
 - Compare taille et SHA-256 des fichiers réguliers ; compare le texte des cibles des liens symboliques sans les suivre. Les liens matériels (`hardlink`) et fichiers spéciaux sous ces chemins sont refusés.

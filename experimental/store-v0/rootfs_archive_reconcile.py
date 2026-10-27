@@ -9,6 +9,7 @@ from io import BytesIO
 import hashlib
 import re
 import tarfile
+import zlib
 
 from rootfs_evidence_contract import (
     RootfsEvidenceError, verify_snapshot_evidence,
@@ -20,6 +21,7 @@ from rootfs_snapshot_audit import (
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_TAR_MEMBERS = 40000
 MAX_TOTAL_DECLARED_BYTES = 768 * 1024 * 1024
+MAX_GZIP_UNCOMPRESSED_BYTES = 896 * 1024 * 1024
 MAX_PATH_LENGTH = 256
 MAX_LINK_LENGTH = 512
 CHUNK = 65536
@@ -57,6 +59,35 @@ def _library_path(name):
                     raise RootfsArchiveError("invalid_archive_library_name")
                 return name
     return None
+
+
+def _validate_gzip_stream(raw):
+    """Validate exactly one complete gzip member, footer/CRC included.
+
+    Never retain decompressed TAR bytes. Concatenated gzip members or trailing
+    bytes are ambiguous: tarfile may ignore data after the first TAR EOF.
+    """
+    total, index = 0, 0
+    decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+    pending = b""
+    try:
+        while True:
+            if not pending and index < len(raw):
+                pending = raw[index:index + CHUNK]
+                index += len(pending)
+            block = decoder.decompress(pending, CHUNK)
+            total += len(block)
+            if total > MAX_GZIP_UNCOMPRESSED_BYTES:
+                raise RootfsArchiveError("gzip_uncompressed_size_limit")
+            pending = decoder.unconsumed_tail
+            if decoder.eof:
+                if decoder.unused_data or pending or index < len(raw):
+                    raise RootfsArchiveError("gzip_trailing_data")
+                return total
+            if not block and not pending and index == len(raw):
+                raise RootfsArchiveError("unreadable_rootfs_archive")
+    except zlib.error as exc:
+        raise RootfsArchiveError("unreadable_rootfs_archive") from exc
 
 
 def _archive_inventory(raw):
@@ -143,6 +174,7 @@ def compare_tar_archive_to_snapshot(archive_bytes, snapshot, *,
     if (expected_archive_sha256 is not None and
             archive_sha != expected_archive_sha256):
         raise RootfsArchiveError("expected_archive_digest_mismatch")
+    gzip_bytes = _validate_gzip_stream(archive_bytes)
     source, members_seen, bytes_read = _archive_inventory(archive_bytes)
     export = {r["path"]: r for r in snapshot["libraries"]}
     matched, mismatched, missing_export, missing_archive = [], [], [], []
@@ -182,6 +214,7 @@ def compare_tar_archive_to_snapshot(archive_bytes, snapshot, *,
         "expected_archive_digest_matched": expected_archive_sha256 is not None,
         "snapshot_audit_sha256": evidence["observation_digest"],
         "tar_members_seen": members_seen,
+        "archive_decompressed_bytes_checked": gzip_bytes,
         "library_bytes_inspected": bytes_read,
         "matched": tuple(matched),
         "content_mismatch": tuple(mismatched),
