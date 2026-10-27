@@ -94,6 +94,7 @@ class ArmLibraryInventoryTests(unittest.TestCase):
             (duplicate, "duplicate_inventory_key"),
             (b'{"libraries":NaN}', "invalid_inventory_json"),
             (b"\xff", "invalid_inventory_json"),
+            (b"[" * 1200 + b"]" * 1200, "invalid_inventory_json"),
             (b"x" * 16385, "invalid_inventory_size"),
         ):
             with self.subTest(reason=reason):
@@ -111,6 +112,9 @@ class ArmLibraryInventoryTests(unittest.TestCase):
                 with self.assertRaisesRegex(LibraryInventoryError, reason):
                     read_library_inventory(library_json(names))
         inventory = read_library_inventory(library_json(("libc.so.6",)))
+        forged = dict(inventory, libraries=("libc.so.6", "LIBC.SO.6"))
+        with self.assertRaisesRegex(LibraryInventoryError, "invalid_inventory_source"):
+            assess_needed_libraries(("libc.so.6",), forged)
         for required in (["libc.so.6"], ("libc.so.6", "libc.so.6"),
                          ("../libc.so.6",), ()):
             if required == ():
