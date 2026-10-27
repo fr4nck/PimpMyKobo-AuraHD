@@ -6,7 +6,6 @@ two shallow folders. It does NOT prove image origin, ext4 extraction,
 authenticity, or executable ABI compatibility on a real Kobo.
 """
 from io import BytesIO
-import gzip
 import hashlib
 import re
 import tarfile
@@ -63,22 +62,32 @@ def _library_path(name):
 
 
 def _validate_gzip_stream(raw):
-    """Read to gzip EOF to check footer/CRC; keep decompression bounded."""
-    total = 0
+    """Validate exactly one complete gzip member, footer/CRC included.
+
+    Never retain decompressed TAR bytes. Concatenated gzip members or trailing
+    bytes are ambiguous: tarfile may ignore data after the first TAR EOF.
+    """
+    total, index = 0, 0
+    decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+    pending = b""
     try:
-        with gzip.GzipFile(fileobj=BytesIO(raw), mode="rb") as decoder:
-            while True:
-                block = decoder.read(CHUNK)
-                if not block:
-                    break
-                total += len(block)
-                if total > MAX_GZIP_UNCOMPRESSED_BYTES:
-                    raise RootfsArchiveError("gzip_uncompressed_size_limit")
-    except (OSError, EOFError, ValueError, zlib.error) as exc:
-        if isinstance(exc, RootfsArchiveError):
-            raise
+        while True:
+            if not pending and index < len(raw):
+                pending = raw[index:index + CHUNK]
+                index += len(pending)
+            block = decoder.decompress(pending, CHUNK)
+            total += len(block)
+            if total > MAX_GZIP_UNCOMPRESSED_BYTES:
+                raise RootfsArchiveError("gzip_uncompressed_size_limit")
+            pending = decoder.unconsumed_tail
+            if decoder.eof:
+                if decoder.unused_data or pending or index < len(raw):
+                    raise RootfsArchiveError("gzip_trailing_data")
+                return total
+            if not block and not pending and index == len(raw):
+                raise RootfsArchiveError("unreadable_rootfs_archive")
+    except zlib.error as exc:
         raise RootfsArchiveError("unreadable_rootfs_archive") from exc
-    return total
 
 
 def _archive_inventory(raw):

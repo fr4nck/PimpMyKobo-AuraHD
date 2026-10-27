@@ -201,6 +201,34 @@ class TarReconciliationTests(unittest.TestCase):
                         RootfsArchiveError, "unreadable_rootfs_archive"):
                     compare_tar_archive_to_snapshot(raw, snapshot)
 
+    def test_reject_concatenated_gzip_and_trailing_bytes(self):
+        with TemporaryDirectory() as temp:
+            snapshot = sample(Path(temp))
+        valid = original()
+        for suffix in (valid, b"extra bytes", b"\\x00"):
+            raw = valid + suffix
+            with self.subTest(suffix_length=len(suffix)):
+                with self.assertRaisesRegex(
+                        RootfsArchiveError, "gzip_trailing_data"):
+                    compare_tar_archive_to_snapshot(raw, snapshot)
+
+    def test_validation_crosses_compressed_chunk_boundary(self):
+        # An unrelated TAR entry must still be decompressed and CRC-checked,
+        # even though it is outside lib/ and usr/lib/.
+        noise = b"".join(
+            hashlib.sha256(i.to_bytes(4, "little")).digest()
+            for i in range(4096))
+        raw = build_archive([
+            ("file", "lib/libc.so.6", arm_shared()),
+            ("file", "share/opaque-data.bin", noise)])
+        self.assertGreater(len(raw), 65536)
+        with TemporaryDirectory() as temp:
+            snapshot = sample(Path(temp))
+            result = compare_tar_archive_to_snapshot(raw, snapshot)
+        self.assertEqual(result["verdict"], "scoped_content_match")
+        self.assertGreater(result["archive_decompressed_bytes_checked"],
+                           len(noise))
+
     def test_bounded_decompressed_stream(self):
         with TemporaryDirectory() as temp:
             snapshot = sample(Path(temp))
