@@ -29,6 +29,22 @@ jobs:
         run: |
           cd experimental/native-ui
           make test
+      - name: Produce C11 host-only PNGs for visual review
+        run: |
+          cd experimental/native-ui
+          make preview OUT="$RUNNER_TEMP/pmkb-native-previews"
+          test "$(find "$RUNNER_TEMP/pmkb-native-previews" -name '*.png' -type f | wc -l)" -eq 12
+          cd "$RUNNER_TEMP/pmkb-native-previews"
+          sha256sum *.png > checksums.sha256
+      - name: Publish native host simulation PNGs (not Kobo captures)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmkb-host-native-previews-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/pmkb-native-previews/*.png
+            ${{ runner.temp }}/pmkb-native-previews/checksums.sha256
+          if-no-files-found: error
+          retention-days: 30
       - name: Sanitizer builds with preinstalled compiler
         run: |
           cd experimental/native-ui
