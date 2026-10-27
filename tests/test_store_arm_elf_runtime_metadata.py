@@ -96,6 +96,8 @@ def build_elf(*, kind=2, needed=None, soname=None, rpath=None, runpath=None,
     dynamic_size = len(tags) * 8
     struct.pack_into("<IIIIIIII", data, dynamic_phdr, 2, 256, 0x1100, 0x1100,
                      dynamic_size, dynamic_size, 6, 4)
+    if malformed == "dynamic_mapping":
+        struct.pack_into("<I", data, dynamic_phdr + 8, 0x90000000)
     for i, pair in enumerate(tags):
         struct.pack_into("<II", data, 256 + i * 8, *pair)
     if verneed is not None:
@@ -132,6 +134,17 @@ class ArmRuntimeMetadataTests(unittest.TestCase):
         self.assertIn("empty_rpath_component", report["warnings"])
         self.assertIn("absolute_runpath_component", report["warnings"])
         self.assertFalse(report["launchable"])
+
+    def test_empty_rpath_and_paths_with_spaces_are_preserved(self):
+        empty = inspect_arm_runtime_metadata(build_elf(
+            needed="libc.so.6", rpath=""))
+        self.assertEqual(empty["rpath"]["raw"], "")
+        self.assertEqual(empty["rpath"]["empty_entry_indexes"], (0,))
+        self.assertIn("empty_rpath_component", empty["warnings"])
+        spaced = inspect_arm_runtime_metadata(build_elf(
+            needed="libc.so.6", rpath="/opt/library path"))
+        self.assertEqual(spaced["rpath"]["absolute_entries"],
+                         ("/opt/library path",))
 
     def test_reports_textrel_and_bind_now_flags(self):
         report = inspect_arm_runtime_metadata(build_elf(
@@ -170,6 +183,10 @@ class ArmRuntimeMetadataTests(unittest.TestCase):
         self.assertEqual(missing["binary_version_requirements"][0]["state"],
                          "library_metadata_not_supplied")
         self.assertEqual(missing["libraries_not_supplied"], ("libc.so.6",))
+        rejected = compare_required_version_nodes(exe, {"libc.so.6": b"not an ELF"})
+        self.assertEqual(rejected["binary_version_requirements"][0]["state"],
+                         "library_metadata_rejected")
+        self.assertEqual(rejected["libraries_rejected"], ("libc.so.6",))
         lib = build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.17")
         absent = compare_required_version_nodes(exe, {"libc.so.6": lib})
         self.assertEqual(absent["binary_version_requirements"][0]["state"],
@@ -201,6 +218,7 @@ class ArmRuntimeMetadataTests(unittest.TestCase):
             ("duplicate_runpath", "duplicate_dynamic_tag"),
             ("missing_strtab", "invalid_dynamic_strings"),
             ("unterminated_dynamic", "unterminated_dynamic_table"),
+            ("dynamic_mapping", "invalid_dynamic_mapping"),
             ("version_need_next", "invalid_version_need_chain"),
         ):
             with self.subTest(malformed=malformed):

@@ -56,3 +56,13 @@ Une CI verte qualifie seulement le parseur sur l'hôte. Pour aller plus loin,
 il faudra des ELF et bibliothèques issus d'une sauvegarde P1 de provenance
 connue, puis analyser leurs versions et symboles sans conclure à la
 compatibilité matérielle avant un essai séparé.
+
+
+## Revue complémentaire
+
+Le segment PT_DYNAMIC doit correspondre à un emplacement unique et cohérent
+dans PT_LOAD ; sinon le parseur refuse le binaire. Les chaînes RPATH/RUNPATH
+peuvent contenir des espaces et être vides : elles sont conservées comme
+données et les composants vides sont signalés, jamais résolus sur l'hôte.
+Le rapport distingue aussi les bibliothèques non fournies de celles dont
+les métadonnées ELF sont rejetées.

@@ -106,6 +106,17 @@ class _ELF:
                 self.dynamics.append((p_offset, p_vaddr, p_filesz))
         if len(self.dynamics) > 1:
             raise ArmRuntimeMetadataError("multiple_dynamic_tables")
+        if self.dynamics:
+            dyn_offset, dyn_vaddr, dyn_size = self.dynamics[0]
+            mapped_dynamic = []
+            for load_vaddr, load_offset, load_size in self.loads:
+                if load_vaddr <= dyn_vaddr and dyn_vaddr - load_vaddr <= load_size:
+                    delta = dyn_vaddr - load_vaddr
+                    if (dyn_size <= load_size - delta and
+                            load_offset + delta == dyn_offset):
+                        mapped_dynamic.append(dyn_offset)
+            if len(mapped_dynamic) != 1:
+                raise ArmRuntimeMetadataError("invalid_dynamic_mapping")
         self.entries = []
         if self.dynamics:
             off, _va, size = self.dynamics[0]
@@ -156,7 +167,7 @@ class _ELF:
             raise ArmRuntimeMetadataError(reason)
         return found[0]
 
-    def string(self, offset, reason):
+    def string(self, offset, reason, *, allow_empty=False, allow_space=False):
         if type(offset) is not int or offset < 0 or offset >= len(self.strings):
             raise ArmRuntimeMetadataError(reason)
         end = self.strings.find(b"\x00", offset)
@@ -166,13 +177,16 @@ class _ELF:
             value = self.strings[offset:end].decode("ascii")
         except UnicodeDecodeError as exc:
             raise ArmRuntimeMetadataError(reason) from exc
-        if not value or any(ord(ch) < 33 or ord(ch) > 126 for ch in value):
+        if (not value and not allow_empty) or any(
+                ord(ch) < 32 or ord(ch) > 126 or
+                (ord(ch) == 32 and not allow_space) for ch in value):
             raise ArmRuntimeMetadataError(reason)
         return value
 
-    def optional_string(self, tag, reason):
+    def optional_string(self, tag, reason, *, allow_empty=False, allow_space=False):
         values = self.by_tag.get(tag, [])
-        return self.string(values[0], reason) if values else None
+        return (self.string(values[0], reason, allow_empty=allow_empty,
+                            allow_space=allow_space) if values else None)
 
     def parse_verneed(self):
         addr = self.by_tag.get(DT_VERNEED, [])
@@ -300,8 +314,10 @@ def inspect_arm_runtime_metadata(data):
                               "bind_now_flag_1": False},
             "warnings": (), "launchable": False, "symbol_versions_verified": False,
         }
-    rpath_raw = elf.optional_string(DT_RPATH, "invalid_rpath")
-    runpath_raw = elf.optional_string(DT_RUNPATH, "invalid_runpath")
+    rpath_raw = elf.optional_string(DT_RPATH, "invalid_rpath",
+                                    allow_empty=True, allow_space=True)
+    runpath_raw = elf.optional_string(DT_RUNPATH, "invalid_runpath",
+                                      allow_empty=True, allow_space=True)
     rpath = _search_path(rpath_raw) if rpath_raw is not None else None
     runpath = _search_path(runpath_raw) if runpath_raw is not None else None
     flags = elf.by_tag.get(DT_FLAGS, [])
@@ -392,6 +408,8 @@ def compare_required_version_nodes(candidate, libraries_by_needed_name):
                  all(x["state"] == "all_required_version_nodes_observed"
                      for x in findings))
     needed_missing = tuple(x for x in binary["needed"] if x not in parsed)
+    rejected_libraries = tuple(sorted(
+        name for name, item in parsed.items() if "rejected" in item))
     return {
         "schema": "pmkb-arm-version-node-comparison-v1",
         "scope": "version_node_names_only_not_symbol_resolution",
@@ -399,6 +417,7 @@ def compare_required_version_nodes(candidate, libraries_by_needed_name):
         "binary_version_requirements": tuple(findings),
         "all_required_version_nodes_observed": all_nodes,
         "libraries_not_supplied": needed_missing,
+        "libraries_rejected": rejected_libraries,
         "symbol_versions_verified": False,
         "transitive_dependencies_verified": False,
         "runtime_compatible": False, "hardware_verified": False,
