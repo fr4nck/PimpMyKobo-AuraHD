@@ -195,7 +195,7 @@ def _symbol_report_from_matched_archive(payload, metadata, library_map):
         }
 
 
-def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *
+def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
                                          expected_candidate_sha256=None,
                                          expected_archive_sha256=None,
                                          expected_audit_sha256=None,
