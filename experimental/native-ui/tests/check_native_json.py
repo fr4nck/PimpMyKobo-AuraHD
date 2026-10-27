@@ -1,7 +1,12 @@
 """Interop contract: C JSON export must pass exact JS Notes core shape, no I/O to Kobo."""
 import json
 import sys
+import tempfile
+from pathlib import Path
 from datetime import datetime
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from notes_checkpoint_host import load_checkpoint, save_checkpoint
 
 def check():
     payload = sys.stdin.read()
@@ -18,8 +23,22 @@ def check():
     assert n["typography"] == {"font":"mono","size":17,"lineHeight":1.6}
     assert n["created"] == n["updated"] == "2026-10-19T01:04:00.000Z"
     assert datetime.fromisoformat(n["created"].replace("Z","+00:00"))
-    assert len(payload.encode("utf-8")) <= 3000000
+    data = payload.encode("utf-8")
+    assert len(data) <= 3000000
+    # Actual C11-generated JSON -> host-only staged checkpoint -> exact bytes.
+    with tempfile.TemporaryDirectory(prefix="pmkb-native-json-") as tmp:
+        destination = Path(tmp) / "notes"
+        destination.mkdir()
+        receipt = save_checkpoint(destination, data)
+        recovered = load_checkpoint(destination)
+        assert receipt["status"] == "host_snapshot_verified"
+        assert recovered["payload"] == data
+        assert recovered["sha256"] == receipt["sha256"]
+        assert not receipt["notes_ui_saved"]
+        assert not recovered["native_import_verified"]
+        assert not recovered["physical_p3_verified"]
     print("PMKB JSON: 1/1 compatible fixture PASS")
+    print("PMKB NOTES CHECKPOINT HOST: C11 JSON roundtrip PASS, P3 UNKNOWN")
 
 if __name__ == "__main__":
     check()
