@@ -223,3 +223,18 @@ rafraîchissement du panneau réel.
 
 Voir \`docs/native-hal-v0-offline-qualification-fr.md\` pour les
 hypothèses matérielles archivées et les portes de vérification.
+
+
+## Transfert JSON des Notes vers le futur Launcher natif (V0)
+
+Le pont fournit maintenant pmkb_app_host_notes_export_snapshot(),
+qui copie le carnet pmkb-notes-v1 **en mémoire uniquement**, sous
+condition de l'identifiant de génération de la session. Une réponse
+différée d'une ancienne session n'accède donc pas aux notes suivantes.
+
+**Export en RAM n'est pas sauvegarde** : quitter une session contenant
+des notes sans discard explicite reste refusé. L'adaptateur de stockage
+P3 et son accusé de persistance atomique ne sont pas implémentés.
+Voir docs/native-notes-session-export-v0-fr.md pour les limites et
+le protocole. Le rendu approuvé et les PR #25/#26/#27/#29 ne sont pas
+modifiés ; les trois premières restent soumises à validation visuelle.
