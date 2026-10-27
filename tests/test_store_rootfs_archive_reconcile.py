@@ -79,6 +79,7 @@ class TarReconciliationTests(unittest.TestCase):
         self.assertEqual(report["matched"], ("lib/libc.so.6",))
         self.assertEqual(report["content_mismatch"], ())
         self.assertTrue(report["expected_archive_digest_matched"])
+        self.assertGreater(report["archive_decompressed_bytes_checked"], 0)
         self.assertEqual(report["library_bytes_inspected"], len(arm_shared()))
         for key in ("archive_is_original_ext4_image",
                     "original_image_hash_verified",
@@ -187,6 +188,27 @@ class TarReconciliationTests(unittest.TestCase):
                 with self.assertRaisesRegex(RootfsArchiveError, reason):
                     compare_tar_archive_to_snapshot(
                         raw, snapshot, expected_archive_sha256=expected)
+
+    def test_gzip_crc_and_truncated_footer_are_rejected(self):
+        with TemporaryDirectory() as temp:
+            snapshot = sample(Path(temp))
+        valid = original()
+        corrupted = bytearray(valid)
+        corrupted[-8] ^= 0xFF  # gzip CRC32 footer
+        for raw in (valid[:-6], bytes(corrupted)):
+            with self.subTest(length=len(raw)):
+                with self.assertRaisesRegex(
+                        RootfsArchiveError, "unreadable_rootfs_archive"):
+                    compare_tar_archive_to_snapshot(raw, snapshot)
+
+    def test_bounded_decompressed_stream(self):
+        with TemporaryDirectory() as temp:
+            snapshot = sample(Path(temp))
+        import rootfs_archive_reconcile as module
+        with patch.object(module, "MAX_GZIP_UNCOMPRESSED_BYTES", 80):
+            with self.assertRaisesRegex(RootfsArchiveError,
+                                        "gzip_uncompressed_size_limit"):
+                compare_tar_archive_to_snapshot(original(), snapshot)
 
     def test_tampered_snapshot_rejected_before_comparison(self):
         with TemporaryDirectory() as temp:
