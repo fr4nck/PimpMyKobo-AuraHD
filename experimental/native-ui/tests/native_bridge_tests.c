@@ -2,6 +2,7 @@
 #include "../pmkb_launcher_bridge.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define UTC "2026-10-19T18:00:00.000Z"
@@ -66,6 +67,70 @@ static int safe_lifecycle(void){
           (PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)==PMKB_NOT_FOUND);
     CHECK(pmkb_app_host_close(&host,false)==PMKB_NO_CHANGE);
     CHECK(host.generation==2u);
+    groups++;return 0;
+}
+static int notes_snapshot_handoff(void){
+    PMKBAppHost host;pmkb_app_host_init(&host);
+    char *json=NULL;size_t length=0;
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,1,&json,&length)==PMKB_NOT_FOUND);
+    CHECK(json==NULL&&length==0);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
+    const uint64_t generation=host.generation;
+    CHECK(generation>0&&generation<UINT64_MAX);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,0,&json,&length)==PMKB_INVALID);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,UINT64_MAX,&json,&length)==PMKB_INVALID);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation+1,&json,&length)==PMKB_INVALID);
+    CHECK(json==NULL&&length==0);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation,&json,&length)==PMKB_OK);
+    CHECK(json!=NULL&&length==strlen(json));
+    CHECK(strstr(json,"\"format\":\"pmkb-notes-v1\"")!=NULL);
+    CHECK(strstr(json,"\"notes\":[]")!=NULL);
+    free(json);json=NULL;length=0;
+
+    CHECK(pmkb_app_host_event(&host,
+          (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=14,.y=14},UTC)==PMKB_OK);
+    PMKBUI *notes=(PMKBUI*)host.instance;
+    CHECK(notes->notebook.count==1);
+    /* ADR-005: an empty title is legal while editing, but not in JSON. */
+    CHECK(pmkb_text_set(&notes->notebook.items[0]->title,"")==PMKB_OK);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation,&json,&length)
+          ==PMKB_INVALID);
+    CHECK(json==NULL&&length==0);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_ENTER},UTC)
+          ==PMKB_OK);
+    CHECK(pmkb_app_host_event(&host,(PMKBEvent){.kind=PMKB_EVENT_TEXT,
+          .text="Rendez-vous \xc3\xa0 15h"},UTC)==PMKB_OK);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation,&json,&length)
+          ==PMKB_OK);
+    CHECK(json&&length==strlen(json));
+    CHECK(strstr(json,"Sans titre 1")!=NULL);
+    CHECK(strstr(json,"Rendez-vous \xc3\xa0 15h")!=NULL);
+    free(json);json=NULL;length=0;
+    CHECK(host.generation==generation);
+    /* Exporting a RAM snapshot does not confirm durable persistence. */
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_UNSAVED);
+    CHECK(host.active==PMKB_APP_NOTES&&host.instance==notes);
+    CHECK(host.generation==generation);
+    CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
+    CHECK(host.instance==NULL&&host.generation==generation+1);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation,&json,&length)
+          ==PMKB_NOT_FOUND);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
+    CHECK(host.generation==generation+2);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,generation,&json,&length)
+          ==PMKB_INVALID);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,host.generation,&json,&length)
+          ==PMKB_OK);
+    CHECK(json&&strstr(json,"\"notes\":[]")!=NULL);
+    free(json);json=NULL;length=0;
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_CALCULATOR,320,480)==PMKB_OK);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,host.generation,&json,&length)
+          ==PMKB_NOT_FOUND);
+    CHECK(pmkb_app_host_notes_export_snapshot(&host,host.generation,NULL,&length)
+          ==PMKB_INVALID);
+    CHECK(pmkb_app_host_notes_export_snapshot(NULL,1,&json,&length)==PMKB_INVALID);
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
     groups++;return 0;
 }
 static int calculator_via_launcher(void){
@@ -207,7 +272,8 @@ static int whiteboard_via_launcher(void){
     groups++;return 0;
 }
 int main(void){
-    if(catalog()||safe_lifecycle()||calculator_via_launcher()||
+    if(catalog()||safe_lifecycle()||notes_snapshot_handoff()||
+       calculator_via_launcher()||
        store_via_launcher()||whiteboard_via_launcher()||font_and_clipping())return 1;
     printf("PMKB LAUNCHER/RENDER: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            passed,groups);

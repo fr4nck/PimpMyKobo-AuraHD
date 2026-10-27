@@ -57,6 +57,15 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
     pmkb_app_host_advance_generation(host);
     return PMKB_OK;
 }
+PMKBStatus pmkb_app_host_notes_export_snapshot(const PMKBAppHost *host,
+        uint64_t expected_generation,char **json,size_t *length){
+    if(!host||!json||!length)return PMKB_INVALID;
+    if(host->active!=PMKB_APP_NOTES||!host->instance)return PMKB_NOT_FOUND;
+    if(expected_generation==0||expected_generation==UINT64_MAX||
+       host->generation!=expected_generation)return PMKB_INVALID;
+    const PMKBUI *notes=(const PMKBUI*)host->instance;
+    return pmkb_notebook_export_json(&notes->notebook,json,length);
+}
 PMKBStatus pmkb_app_host_store_load(PMKBAppHost *host,
                                     const uint8_t *json,size_t length){
     if(!host||host->active!=PMKB_APP_STORE||!host->instance)

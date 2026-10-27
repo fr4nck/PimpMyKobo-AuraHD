@@ -37,6 +37,13 @@ const PMKBAppInfo *pmkb_app_info(PMKBAppId kind);
 void pmkb_app_host_init(PMKBAppHost *host);
 PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
                                 int width,int height);
+/* Copy a native Notes snapshot to caller-owned pmkb-notes-v1 JSON (free it).
+ * The caller must supply the current, nonzero session generation to reject
+ * delayed exports after an app transition. No persistence is acknowledged.
+ * A successful snapshot DOES NOT authorize closing Notes without discard.
+ * On invalid session, output parameters are not changed. */
+PMKBStatus pmkb_app_host_notes_export_snapshot(const PMKBAppHost *host,
+        uint64_t expected_generation,char **json,size_t *length);
 /* Notes RAM is unsaved by definition: unless discard=true, leaving a
  * populated notebook must be refused to prevent silent data loss. */
 /* Load a bounded read-only Store snapshot. Only valid while Store is active. */
