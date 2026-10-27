@@ -317,10 +317,12 @@ def compare_required_symbols(candidate, libraries_by_needed_name):
         "reason": item.get("reason"),
     } for name, item in sorted(parsed.items()))
     unresolved = sum(x["state"] not in success_states for x in findings)
+    verdict = ("no_undefined_symbols" if not findings else
+               ("symbol_pairs_observed" if unresolved == 0 else "symbol_pairs_incomplete"))
     return {
         "schema": "pmkb-elf-symbol-version-audit-v1",
         "scope": "dynamic_symbol_name_and_version_node_metadata_only",
-        "verdict": "symbol_pairs_observed" if unresolved == 0 else "symbol_pairs_incomplete",
+        "verdict": verdict,
         "candidate_symbol_table_state": executable["state"],
         "candidate_symbol_count": executable["symbol_count"],
         "candidate_undefined_symbol_count": len(executable["undefined"]),
