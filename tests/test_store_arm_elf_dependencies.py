@@ -44,7 +44,7 @@ class ArmDependencyTests(unittest.TestCase):
                 # the tag, followed by DT_NULL at the next slot. The fixture
                 # needs an extended table and string table.
                 struct.pack_into("<I", data, 84 + 16, 40)
-                struct.pack_into("<I", data, 84 + 16 + 16, 1)
+                struct.pack_into("<I", data, 84 + 20, 40)
                 struct.pack_into("<I", data, 172, 28)
                 struct.pack_into("<II", data, 184, tag, 11)
                 struct.pack_into("<II", data, 192, 0, 0)
@@ -58,6 +58,7 @@ class ArmDependencyTests(unittest.TestCase):
         struct.pack_into("<II", data, 184, 29, 100)
         struct.pack_into("<II", data, 192, 0, 0)
         struct.pack_into("<I", data, 84 + 16, 40)
+        struct.pack_into("<I", data, 84 + 20, 40)
         with self.assertRaises(ArmPreflightError):
             inspect_arm_dependencies(bytes(data))
 
