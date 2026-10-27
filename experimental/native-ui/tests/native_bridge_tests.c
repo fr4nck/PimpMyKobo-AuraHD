@@ -133,6 +133,66 @@ static int notes_snapshot_handoff(void){
     CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
     groups++;return 0;
 }
+static int notes_import_from_verified_memory(void){
+    PMKBAppHost host;pmkb_app_host_init(&host);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
+    uint64_t source_generation=host.generation;
+    CHECK(pmkb_app_host_event(&host,
+          (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=14,.y=14},UTC)==PMKB_OK);
+    PMKBUI *notes=(PMKBUI*)host.instance;
+    CHECK(notes->notebook.count==1u);
+    CHECK(pmkb_text_set(&notes->notebook.items[0]->title,
+                        "Carnet restaur\xc3\xa9")==PMKB_OK);
+    CHECK(pmkb_text_set(&notes->notebook.items[0]->body,
+                        "Bonjour \xce\xa9\nSuite")==PMKB_OK);
+    char *snapshot=NULL,*copy=NULL;size_t length=0,copy_len=0;
+    CHECK(pmkb_app_host_notes_export_snapshot(
+          &host,source_generation,&snapshot,&length)==PMKB_OK);
+    CHECK(snapshot!=NULL&&length==strlen(snapshot));
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_UNSAVED);
+    CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_NOTES,320,480)==PMKB_OK);
+    const uint64_t new_generation=host.generation;
+    CHECK(new_generation>source_generation);
+    CHECK(pmkb_app_host_notes_import_snapshot(&host,source_generation,
+          (const uint8_t*)snapshot,length,true)==PMKB_INVALID);
+    CHECK(((PMKBUI*)host.instance)->notebook.count==0u);
+    CHECK(pmkb_app_host_event(&host,
+          (PMKBEvent){.kind=PMKB_EVENT_TAP,.x=14,.y=14},UTC)==PMKB_OK);
+    PMKBUI *current=(PMKBUI*)host.instance;
+    PMKBNote *before=current->notebook.items[0];
+    CHECK(pmkb_app_host_notes_import_snapshot(&host,new_generation,
+          (const uint8_t*)snapshot,length,false)==PMKB_UNSAVED);
+    CHECK(current->notebook.items[0]==before&&host.generation==new_generation);
+    static const uint8_t malformed[]="{\"format\":\"broken\"}";
+    CHECK(pmkb_app_host_notes_import_snapshot(&host,new_generation,
+          malformed,sizeof(malformed)-1u,true)==PMKB_INVALID);
+    CHECK(current->notebook.items[0]==before&&host.generation==new_generation);
+    CHECK(pmkb_app_host_notes_import_snapshot(&host,new_generation,
+          (const uint8_t*)snapshot,length,true)==PMKB_OK);
+    CHECK(host.generation==new_generation+1u);
+    CHECK(current->notebook.count==1u);
+    CHECK(current->view==PMKB_VIEW_LIST);
+    CHECK(!current->keyboard.visible);
+    CHECK(strcmp(current->notebook.items[0]->title.data,
+                 "Carnet restaur\xc3\xa9")==0);
+    CHECK(strcmp(current->notebook.items[0]->body.data,
+                 "Bonjour \xce\xa9\nSuite")==0);
+    CHECK(pmkb_app_host_notes_export_snapshot(
+          &host,new_generation,&copy,&copy_len)==PMKB_INVALID);
+    CHECK(copy==NULL&&copy_len==0u);
+    CHECK(pmkb_app_host_notes_export_snapshot(
+          &host,host.generation,&copy,&copy_len)==PMKB_OK);
+    CHECK(copy_len==length&&memcmp(copy,snapshot,length)==0);
+    free(copy);free(snapshot);
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_UNSAVED);
+    CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
+    CHECK(pmkb_app_host_launch(&host,PMKB_APP_CALCULATOR,320,480)==PMKB_OK);
+    CHECK(pmkb_app_host_notes_import_snapshot(&host,host.generation,
+          malformed,sizeof(malformed)-1u,true)==PMKB_NOT_FOUND);
+    CHECK(pmkb_app_host_close(&host,false)==PMKB_OK);
+    groups++;return 0;
+}
 static int calculator_via_launcher(void){
     PMKBAppHost host;pmkb_app_host_init(&host);
     CHECK(pmkb_app_host_launch(&host,PMKB_APP_CALCULATOR,320,480)==PMKB_OK);
@@ -273,6 +333,7 @@ static int whiteboard_via_launcher(void){
 }
 int main(void){
     if(catalog()||safe_lifecycle()||notes_snapshot_handoff()||
+       notes_import_from_verified_memory()||
        calculator_via_launcher()||
        store_via_launcher()||whiteboard_via_launcher()||font_and_clipping())return 1;
     printf("PMKB LAUNCHER/RENDER: %u assertions PASS, %u groups PASS, 0 FAIL\n",

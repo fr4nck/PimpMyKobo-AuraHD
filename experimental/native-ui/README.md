@@ -35,8 +35,10 @@ sont pas fusionnées ni modifiées par ce travail.
 - **Notes RAM** : 100 notes au maximum allouées à la demande, création,
   sélection, édition, liste récente, réouverture et export **en mémoire**
   au format \`pmkb-notes-v1\`. Champ \`strokes\` présent mais vide,
-  typographie par défaut. Aucune importation JSON, sauvegarde disque,
-  historique d'annulation, croquis ou police externe dans ce lot.
+  typographie par défaut. Import transactionnel du JSON canonique C11
+  en RAM, sans perte de l'ancien carnet si l'import est invalide.
+  Aucune sauvegarde disque, historique d'annulation, croquis ou
+  police externe n'est encore fourni.
   **Toute note sera perdue en quittant le prototype.**
 - **Interface native de simulation** : deux lignes en tête, menus sobres,
   labels persistants, focus visible, zone texte prioritaire, clavier
@@ -269,3 +271,18 @@ relecture des mêmes octets. Une sauvegarde réelle sur P3 n'existe
 toujours pas et pmkb_app_host_close(...,false) reste protecteur.
 Voir docs/native-notes-checkpoint-host-v0-fr.md pour le protocole
 et ses limites (accès concurrent, pannes électriques, import C11).
+
+
+## Import transactionnel des Notes natives (L09-B)
+
+Le moteur C11 peut désormais réimporter en mémoire le format exact
+pmkb-notes-v1 qu'il sait produire. Les notes existantes sont conservées
+si le JSON est invalide, incomplet ou non représentable. Les croquis et
+les polices non pris en charge dans le natif ne sont pas supprimés :
+l'import refuse ces variantes des prototypes navigateur.
+
+Le pont Launcher exige le jeton exact de session et une confirmation
+explicite pour remplacer un carnet non vide. Un import réussi avance
+la génération afin de rejeter les appels tardifs. Le carnet reste RAM,
+et PMKB_UNSAVED reste donc en vigueur même après une récupération.
+Voir docs/native-notes-import-transaction-v0-fr.md.
