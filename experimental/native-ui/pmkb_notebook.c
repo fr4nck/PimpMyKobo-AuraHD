@@ -180,3 +180,173 @@ PMKBStatus pmkb_notebook_export_json(const PMKBNotebook *book,
     if(rc!=PMKB_OK){free(j.data);return rc;}
     *json=j.data;*length=j.len;return PMKB_OK;
 }
+
+
+/* L09-B: narrow, canonical C11-generated pmkb-notes-v1 importer.
+ * A general browser JSON parser is NOT implied. All allocations and
+ * validation happen in a temporary notebook before replacing the caller.
+ * No filesystem, clock, network, mount, or physical device access. */
+typedef struct {const uint8_t *bytes;size_t length,pos;} NotesReader;
+
+static bool notes_take(NotesReader *r,unsigned char ch){
+    if(r->pos>=r->length||r->bytes[r->pos]!=ch)return false;
+    r->pos++;return true;
+}
+static bool notes_literal(NotesReader *r,const char *literal){
+    size_t n=strlen(literal);
+    if(n>r->length-r->pos||memcmp(r->bytes+r->pos,literal,n)!=0)
+        return false;
+    r->pos+=n;return true;
+}
+static int notes_hex(unsigned char c){
+    if(c>='0'&&c<='9')return c-'0';
+    if(c>='a'&&c<='f')return c-'a'+10;
+    if(c>='A'&&c<='F')return c-'A'+10;
+    return -1;
+}
+static PMKBStatus notes_quoted(NotesReader *r,size_t units_limit,char **value){
+    if(!value||!notes_take(r,'"'))return PMKB_INVALID;
+    *value=NULL;
+    size_t cap=64u,used=0u;
+    char *buffer=(char*)malloc(cap);
+    if(!buffer)return PMKB_MEMORY;
+    const size_t max_bytes=units_limit*4u;
+    PMKBStatus rc=PMKB_INVALID;
+    while(r->pos<r->length){
+        unsigned char ch=r->bytes[r->pos++];
+        if(ch=='"'){
+            buffer[used]=0;
+            size_t units=0;
+            rc=pmkb_utf8_measure(buffer,used,&units);
+            if(rc!=PMKB_OK||units>units_limit){rc=PMKB_INVALID;break;}
+            *value=buffer;
+            return PMKB_OK;
+        }
+        if(ch=='\\'){
+            if(r->pos>=r->length)break;
+            unsigned char escaped=r->bytes[r->pos++];
+            switch(escaped){
+            case '"':ch='"';break;
+            case '\\':ch='\\';break;
+            case 'n':ch='\n';break;
+            case 'r':ch='\r';break;
+            case 't':ch='\t';break;
+            case 'b':ch='\b';break;
+            case 'f':ch='\f';break;
+            case 'u':{
+                /* C11 exports control bytes only as \u00XX.
+                 * Reject browser-style unicode escape forms for now. */
+                if(r->length-r->pos<4u||
+                   r->bytes[r->pos]!='0'||
+                   r->bytes[r->pos+1u]!='0')goto fail;
+                int high=notes_hex(r->bytes[r->pos+2u]);
+                int low=notes_hex(r->bytes[r->pos+3u]);
+                if(high<0||low<0)goto fail;
+                int cp=high*16+low;
+                if(cp<1||cp>31)goto fail;
+                ch=(unsigned char)cp;
+                r->pos+=4u;
+                break;
+            }
+            default:goto fail;
+            }
+        }else if(ch<32u)goto fail;
+        if(ch==0u)goto fail;
+        if(used>=max_bytes){rc=PMKB_LIMIT;break;}
+        if(used+1u>=cap){
+            size_t target=cap*2u;
+            if(target>max_bytes+1u)target=max_bytes+1u;
+            if(target<=cap){rc=PMKB_LIMIT;break;}
+            char *grown=(char*)realloc(buffer,target);
+            if(!grown){rc=PMKB_MEMORY;break;}
+            buffer=grown;cap=target;
+        }
+        buffer[used++]=(char)ch;
+    }
+fail:
+    free(buffer);
+    return rc;
+}
+static PMKBStatus notes_import_one(NotesReader *r,PMKBNotebook *staged){
+    char *id=NULL,*title=NULL,*body=NULL,*created=NULL,*updated=NULL;
+    PMKBNote *note=NULL;
+    PMKBStatus rc=PMKB_INVALID;
+    if(!notes_literal(r,"{\"id\":"))goto done;
+    rc=notes_quoted(r,24u,&id);if(rc!=PMKB_OK)goto done;
+    if(strlen(id)!=11u||memcmp(id,"pmkb_",5u)!=0){rc=PMKB_INVALID;goto done;}
+    unsigned number=0;
+    for(size_t i=5u;i<11u;i++){
+        if(id[i]<'0'||id[i]>'9'){rc=PMKB_INVALID;goto done;}
+        number=number*10u+(unsigned)(id[i]-'0');
+    }
+    if(number==0u){rc=PMKB_INVALID;goto done;}
+    for(size_t i=0;i<staged->count;i++){
+        if(strcmp(staged->items[i]->id,id)==0){rc=PMKB_INVALID;goto done;}
+    }
+    if(!notes_literal(r,",\"title\":")){rc=PMKB_INVALID;goto done;}
+    rc=notes_quoted(r,PMKB_TITLE_LIMIT,&title);if(rc!=PMKB_OK)goto done;
+    if(!pmkb_notes_meaningful_title(title)){rc=PMKB_INVALID;goto done;}
+    if(!notes_literal(r,",\"text\":")){rc=PMKB_INVALID;goto done;}
+    rc=notes_quoted(r,PMKB_BODY_LIMIT,&body);if(rc!=PMKB_OK)goto done;
+    if(!notes_literal(r,
+      ",\"strokes\":[],\"typography\":{\"font\":\"mono\",\"size\":17,\"lineHeight\":1.6},\"created\":")){
+        rc=PMKB_INVALID;goto done;
+    }
+    rc=notes_quoted(r,24u,&created);if(rc!=PMKB_OK)goto done;
+    if(!pmkb_notes_valid_utc(created)){rc=PMKB_INVALID;goto done;}
+    if(!notes_literal(r,",\"updated\":")){rc=PMKB_INVALID;goto done;}
+    rc=notes_quoted(r,24u,&updated);if(rc!=PMKB_OK)goto done;
+    if(!pmkb_notes_valid_utc(updated)||!notes_take(r,'}')){
+        rc=PMKB_INVALID;goto done;
+    }
+    note=(PMKBNote*)calloc(1,sizeof(*note));
+    if(!note){rc=PMKB_MEMORY;goto done;}
+    rc=pmkb_text_init(&note->title,PMKB_TITLE_LIMIT,title);
+    if(rc!=PMKB_OK)goto done;
+    rc=pmkb_text_init(&note->body,PMKB_BODY_LIMIT,body);
+    if(rc!=PMKB_OK)goto done;
+    memcpy(note->id,id,12u);
+    memcpy(note->created,created,strlen(created)+1u);
+    memcpy(note->updated,updated,strlen(updated)+1u);
+    staged->items[staged->count++]=note;
+    if(number>staged->next_id)staged->next_id=number;
+    note=NULL;
+    rc=PMKB_OK;
+done:
+    if(note){
+        pmkb_text_free(&note->title);
+        pmkb_text_free(&note->body);
+        free(note);
+    }
+    free(id);free(title);free(body);free(created);free(updated);
+    return rc;
+}
+PMKBStatus pmkb_notebook_import_native_json(PMKBNotebook *book,
+                                              const uint8_t *json,size_t length){
+    if(!book||!json||length==0u)return PMKB_INVALID;
+    if(length>PMKB_JSON_LIMIT)return PMKB_LIMIT;
+    NotesReader reader={json,length,0};
+    PMKBNotebook staged;
+    pmkb_notebook_init(&staged);
+    PMKBStatus rc=PMKB_INVALID;
+    if(!notes_literal(&reader,"{\"format\":\"pmkb-notes-v1\",\"notes\":["))
+        goto done;
+    if(!notes_take(&reader,']')){
+        do{
+            if(staged.count>=PMKB_NOTE_LIMIT){rc=PMKB_LIMIT;goto done;}
+            rc=notes_import_one(&reader,&staged);
+            if(rc!=PMKB_OK)goto done;
+            if(notes_take(&reader,']'))break;
+            if(!notes_take(&reader,',')){rc=PMKB_INVALID;goto done;}
+        }while(1);
+    }
+    if(!notes_take(&reader,'}')||reader.pos!=reader.length){
+        rc=PMKB_INVALID;goto done;
+    }
+    pmkb_notebook_free(book);
+    *book=staged;
+    return PMKB_OK;
+done:
+    pmkb_notebook_free(&staged);
+    return rc;
+}

@@ -272,6 +272,66 @@ static int notebook_memory(void){
     pmkb_notebook_free(&book);
     groups++;return 0;
 }
+static int notebook_import_transaction(void){
+    PMKBNotebook source,target;
+    pmkb_notebook_init(&source);pmkb_notebook_init(&target);
+    size_t index=0;char *json=NULL,*copy=NULL;size_t length=0;
+    CHECK(pmkb_notebook_new(&source,UTC,&index)==PMKB_OK);
+    CHECK(pmkb_text_set(&source.items[index]->title,
+          "Journal \xc3\xa9t\xc3\xa9")==PMKB_OK);
+    CHECK(pmkb_text_set(&source.items[index]->body,
+          "Bonjour\n\xce\xa9 \"test\"")==PMKB_OK);
+    CHECK(pmkb_notebook_new(&source,UTC,&index)==PMKB_OK);
+    CHECK(pmkb_text_set(&source.items[index]->title,"Deux") == PMKB_OK);
+    CHECK(pmkb_text_set(&source.items[index]->body,"Ligne 2")==PMKB_OK);
+    CHECK(pmkb_notebook_export_json(&source,&json,&length)==PMKB_OK);
+    CHECK(json!=NULL&&length==strlen(json));
+    CHECK(pmkb_notebook_new(&target,UTC,&index)==PMKB_OK);
+    CHECK(pmkb_text_set(&target.items[index]->title,"Intact")==PMKB_OK);
+    CHECK(pmkb_notebook_import_native_json(&target,
+          (const uint8_t*)json,length-1u)==PMKB_INVALID);
+    CHECK(target.count==1u);
+    CHECK(strcmp(target.items[0]->title.data,"Intact")==0);
+    CHECK(pmkb_notebook_import_native_json(&target,
+          (const uint8_t*)json,PMKB_JSON_LIMIT+1u)==PMKB_LIMIT);
+    CHECK(target.count==1u);
+    CHECK(pmkb_notebook_import_native_json(&target,
+          (const uint8_t*)json,length)==PMKB_OK);
+    CHECK(target.count==2u&&target.next_id==2u);
+    CHECK(strcmp(target.items[0]->body.data,
+          "Bonjour\n\xce\xa9 \"test\"")==0);
+    CHECK(strcmp(target.items[1]->title.data,"Deux")==0);
+    CHECK(pmkb_notebook_export_json(&target,&copy,&length)==PMKB_OK);
+    CHECK(strcmp(copy,json)==0);
+    free(copy);copy=NULL;
+    /* A malformed update must leave restored bytes and pointers intact. */
+    size_t first_len=strlen(json);
+    char *mutated=(char*)malloc(first_len+1u);
+    CHECK(mutated!=NULL);
+    memcpy(mutated,json,first_len+1u);
+    char *bad=strstr(mutated,"pmkb-notes-v1");
+    CHECK(bad!=NULL);
+    bad[0]='X';
+    PMKBNote *prior=target.items[0];
+    CHECK(pmkb_notebook_import_native_json(&target,
+          (const uint8_t*)mutated,first_len)==PMKB_INVALID);
+    CHECK(target.items[0]==prior&&target.count==2u);
+    CHECK(strcmp(target.items[0]->title.data,
+          "Journal \xc3\xa9t\xc3\xa9")==0);
+    free(mutated);
+    /* Newly created notes cannot reuse an ID from a recovered book. */
+    CHECK(pmkb_notebook_new(&target,UTC,&index)==PMKB_OK);
+    CHECK(index==2u&&strcmp(target.items[index]->id,"pmkb_000003")==0);
+    free(json);pmkb_notebook_free(&source);pmkb_notebook_free(&target);
+    /* Also accept an empty canonical notebook without stale pointers. */
+    PMKBNotebook empty;pmkb_notebook_init(&empty);
+    static const char canonical[]="{\"format\":\"pmkb-notes-v1\",\"notes\":[]}";
+    CHECK(pmkb_notebook_import_native_json(&empty,
+          (const uint8_t*)canonical,strlen(canonical))==PMKB_OK);
+    CHECK(empty.count==0u&&empty.next_id==0u);
+    pmkb_notebook_free(&empty);
+    groups++;return 0;
+}
 static int dirty_canvas(void){
     PMKBSurface s={0};PMKBRect r;
     CHECK(pmkb_surface_init(&s,320,480)==PMKB_OK);
@@ -629,6 +689,7 @@ int main(int argc,char **argv){
     if(argc!=1)return 2;
     if(utf8_edit()||keyboard_actions()||scientific_keyboard()||
        empty_title_blur()||title_blur_navigation()||notebook_memory()||
+       notebook_import_transaction()||
        dirty_canvas()||gray16_invalidation_budget()||
        ui_flow()||keyboard_touch_geometry()||high_resolution_budget()||
        backend_retry()||backend_edits_during_present()||

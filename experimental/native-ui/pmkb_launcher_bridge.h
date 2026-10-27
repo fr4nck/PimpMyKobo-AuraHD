@@ -44,6 +44,13 @@ PMKBStatus pmkb_app_host_launch(PMKBAppHost *host,PMKBAppId kind,
  * On invalid session, output parameters are not changed. */
 PMKBStatus pmkb_app_host_notes_export_snapshot(const PMKBAppHost *host,
         uint64_t expected_generation,char **json,size_t *length);
+/* Import a verified JSON snapshot into the active Notes session only.
+ * Explicit replace_existing=true is mandatory if current notes exist.
+ * Transactional C11 import; on success advances session generation and
+ * resets view to the list. Never claims persistent storage on Kobo. */
+PMKBStatus pmkb_app_host_notes_import_snapshot(PMKBAppHost *host,
+        uint64_t expected_generation,const uint8_t *json,size_t length,
+        bool replace_existing);
 /* Notes RAM is unsaved by definition: unless discard=true, leaving a
  * populated notebook must be refused to prevent silent data loss. */
 /* Load a bounded read-only Store snapshot. Only valid while Store is active. */

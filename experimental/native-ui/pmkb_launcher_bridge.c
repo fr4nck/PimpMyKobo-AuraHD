@@ -66,6 +66,30 @@ PMKBStatus pmkb_app_host_notes_export_snapshot(const PMKBAppHost *host,
     const PMKBUI *notes=(const PMKBUI*)host->instance;
     return pmkb_notebook_export_json(&notes->notebook,json,length);
 }
+PMKBStatus pmkb_app_host_notes_import_snapshot(PMKBAppHost *host,
+        uint64_t expected_generation,const uint8_t *json,size_t length,
+        bool replace_existing){
+    if(!host||!json||length==0u)return PMKB_INVALID;
+    if(host->active!=PMKB_APP_NOTES||!host->instance)return PMKB_NOT_FOUND;
+    if(expected_generation==0u||expected_generation>=UINT64_MAX-1u||
+       host->generation!=expected_generation)return PMKB_INVALID;
+    PMKBUI *notes=(PMKBUI*)host->instance;
+    if(notes->notebook.count>0u&&!replace_existing)return PMKB_UNSAVED;
+    PMKBStatus rc=pmkb_notebook_import_native_json(
+        &notes->notebook,json,length);
+    if(rc!=PMKB_OK)return rc;
+    pmkb_keyboard_close(&notes->keyboard);
+    notes->view=PMKB_VIEW_LIST;
+    notes->focus=PMKB_FOCUS_BODY;
+    notes->selected=0u;
+    /* Repaint only after successful import; never show a partial parse. */
+    pmkb_surface_rect(&notes->screen,(PMKBRect){
+        0,0,notes->screen.width,notes->screen.height},255);
+    notes->initial_drawn=false;
+    pmkb_ui_draw(notes);
+    pmkb_app_host_advance_generation(host);
+    return PMKB_OK;
+}
 PMKBStatus pmkb_app_host_store_load(PMKBAppHost *host,
                                     const uint8_t *json,size_t length){
     if(!host||host->active!=PMKB_APP_STORE||!host->instance)

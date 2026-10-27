@@ -82,6 +82,12 @@ PMKBStatus pmkb_notebook_find(const PMKBNotebook *book,
                                const char *id, size_t *index);
 PMKBStatus pmkb_notebook_export_json(const PMKBNotebook *book,
                                      char **json, size_t *length);
+/* Strictly import JSON emitted by the current native C11 exporter.
+ * Transactional: all validation/allocation before replacing *book.
+ * Browser-only sketches/typography and noncanonical JSON are refused.
+ * No disk access. book must already be initialized. */
+PMKBStatus pmkb_notebook_import_native_json(PMKBNotebook *book,
+                                              const uint8_t *json,size_t length);
 
 typedef struct { int x,y,w,h; } PMKBRect;
 typedef struct {
