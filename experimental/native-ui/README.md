@@ -163,8 +163,9 @@ make
 make preview OUT=./host-previews
 ~~~
 
-Les images générées sont : Notes, Calculatrice et planche de glyphes,
-chacune en 320×480 et 1080×1440. Le programme natif
+Les douze images générées sont : Notes, Calculatrice, Store (liste et
+détail), planche de glyphes et Tableau blanc, chacune en 320×480 et
+1080×1440. Le programme natif
 \`pmkb-host-preview\` produit un PGM P5 ; le script Python
 \`tools/render_host_previews.py\` valide dimensions/contraste/données,
 puis le convertit en PNG via la bibliothèque standard.
@@ -238,3 +239,14 @@ P3 et son accusé de persistance atomique ne sont pas implémentés.
 Voir docs/native-notes-session-export-v0-fr.md pour les limites et
 le protocole. Le rendu approuvé et les PR #25/#26/#27/#29 ne sont pas
 modifiés ; les trois premières restent soumises à validation visuelle.
+
+
+## Artefacts visuels de simulation native
+
+Le workflow Native PMKB UI publie les douze captures PNG du raster C11 :
+Notes, Calculatrice, Store (liste et détail), Tableau blanc et glyphes,
+en deux résolutions. Les fichiers sont dans l'artefact GitHub Actions
+pmkb-host-native-previews-* et portent un manifeste checksums.sha256.
+L'artefact expire après 30 jours et ne contient pas de données privées.
+Il ne s'agit PAS de captures de la Kobo, ni d'une acceptation visuelle.
+Voir docs/native-ui-host-visual-review-fr.md pour la recette de revue.
