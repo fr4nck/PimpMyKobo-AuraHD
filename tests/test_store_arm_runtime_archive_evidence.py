@@ -2,6 +2,7 @@
 from io import BytesIO
 import hashlib
 import os
+import struct
 from pathlib import Path
 import sys
 import tarfile
