@@ -17,6 +17,7 @@ from arm_runtime_archive_evidence import (
 )
 from rootfs_snapshot_audit import scan_rootfs_snapshot
 from test_store_arm_elf_runtime_metadata import build_elf
+from test_store_arm_elf_symbol_resolution import add_symbol_table
 
 
 def make_archive(files, links=None):
@@ -146,6 +147,72 @@ class ArmArchiveDependencyGraphTests(unittest.TestCase):
         self.assertEqual(comparison["binary_version_requirements"][0]["state"],
                          "required_version_nodes_missing")
         self.assertFalse(result["symbol_versions_verified"])
+
+    def test_archive_backed_symbol_and_version_pair_is_observed_only(self):
+        candidate = add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4"))
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        result = run_graph(candidate, {"lib/libc.so.6": libc})
+        symbols = result["candidate_symbol_report"]
+        self.assertEqual(result["archive_verdict"], "scoped_content_match")
+        self.assertEqual(symbols["verdict"], "symbol_pairs_observed")
+        self.assertEqual(symbols["symbol_findings"][0]["state"],
+                         "symbol_and_version_node_observed_in_library")
+        self.assertTrue(symbols["all_versioned_symbol_pairs_observed"])
+        self.assertFalse(result["symbol_versions_verified"])
+        self.assertFalse(result["runtime_compatible"])
+        self.assertFalse(result["launchable"])
+
+    def test_symbol_mismatch_does_not_block_graph_but_never_becomes_a_pass(self):
+        candidate = add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4"))
+        wrong = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            symbol_name="close", defined=True)
+        result = run_graph(candidate, {"lib/libc.so.6": wrong})
+        self.assertTrue(result["dependency_graph_complete_in_scanned_scope"])
+        symbols = result["candidate_symbol_report"]
+        self.assertEqual(symbols["verdict"], "symbol_pairs_incomplete")
+        self.assertEqual(symbols["symbol_findings"][0]["state"],
+                         "required_symbol_not_exported")
+        self.assertFalse(symbols["all_versioned_symbol_pairs_observed"])
+
+    def test_archive_mismatch_never_attempts_symbol_resolution(self):
+        candidate = add_symbol_table(build_elf(needed="libc.so.6"))
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6"), defined=True)
+        changed = libc + b"changed"
+        with patch("arm_runtime_archive_evidence.compare_required_symbols",
+                   side_effect=AssertionError("symbol comparison attempted")):
+            result = run_graph(
+                candidate, {"lib/libc.so.6": libc},
+                archive_files={"lib/libc.so.6": changed})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "not_evaluated_due_to_archive_verdict")
+        self.assertFalse(result["launchable"])
+
+    def test_candidate_without_symbol_table_cannot_claim_symbol_match(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        result = run_graph(candidate, {"lib/libc.so.6": libc})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "candidate_symbol_table_unavailable")
+        self.assertFalse(result["symbol_versions_verified"])
+
+    def test_invalid_symbol_hash_reports_refusal_without_execution(self):
+        candidate = bytearray(add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4")))
+        # SysV DT_HASH nchain outside the supported table bounds.
+        struct.pack_into("<I", candidate, 1454, 0xFFFFFFFF)
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        result = run_graph(bytes(candidate), {"lib/libc.so.6": libc})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "comparison_refused")
+        self.assertFalse(result["launchable"])
 
     def test_dependency_depth_is_bounded(self):
         executable = build_elf(needed="lib0.so")

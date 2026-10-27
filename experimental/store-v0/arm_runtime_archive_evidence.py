@@ -14,6 +14,9 @@ from arm_elf_runtime_metadata import (
     ArmRuntimeMetadataError, MAX_ELF_BYTES, MAX_LIBRARY_BYTES_TOTAL,
     compare_required_version_nodes, inspect_arm_runtime_metadata,
 )
+from arm_elf_symbol_resolution import (
+    ArmSymbolResolutionError, compare_required_symbols,
+)
 from rootfs_archive_reconcile import (
     MAX_ARCHIVE_BYTES, MAX_CANDIDATES, MAX_LIBRARY_BYTES,
     RootfsArchiveError, _library_path, _member_path,
@@ -236,6 +239,13 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
                             "state": "not_evaluated_due_to_archive_verdict"},
             "dependency_edges": (), "library_objects": (),
             "version_node_reports": (),
+            "candidate_symbol_report": {
+                "verdict": "not_evaluated_due_to_archive_verdict",
+                "symbol_versions_verified": False,
+                "runtime_compatible": False,
+                "hardware_verified": False,
+                "launchable": False,
+            },
         }
 
     try:
@@ -331,6 +341,24 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
             version_reports.append({"object": label, "state": "comparison_refused",
                                     "reason": str(exc)})
 
+    # L08-N sees only provider bytes already sourced from the TAR that
+    # matched the snapshot. Never use arbitrary caller-supplied provider maps.
+    # This is a static observation, NOT runtime symbol resolution.
+    try:
+        candidate_symbol_report = compare_required_symbols(candidate, library_map)
+    except ArmSymbolResolutionError as exc:
+        candidate_symbol_report = {
+            "schema": "pmkb-elf-symbol-version-audit-v1",
+            "scope": "archive_backed_candidate_symbols_only",
+            "verdict": "comparison_refused",
+            "reason": str(exc),
+            "symbol_versions_verified": False,
+            "dynamic_symbol_resolution_verified": False,
+            "runtime_compatible": False,
+            "hardware_verified": False,
+            "launchable": False,
+        }
+
     interpreter_state_ok = interpreter["state"] in (
         "not_declared", "interpreter_metadata_observed_only")
     edges_ok = all(edge["state"] in _GRAPH_SUCCESS for edge in edges)
@@ -356,6 +384,7 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
         "dependency_edges": tuple(edges),
         "library_objects": tuple(objects),
         "version_node_reports": tuple(version_reports),
+        "candidate_symbol_report": candidate_symbol_report,
         "library_objects_inspected": len(objects),
         "library_bytes_inspected": sum(len(x) for x in object_bytes.values()),
         "unresolved_names": tuple(sorted(
