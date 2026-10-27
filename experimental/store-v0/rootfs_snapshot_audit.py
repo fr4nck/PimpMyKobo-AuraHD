@@ -6,6 +6,7 @@ The export's provenance is DECLARED, not authenticated by this audit.
 Symlinks are recorded but never followed or considered resolved.
 """
 import hashlib
+from itertools import islice
 import json
 import os
 from pathlib import Path
@@ -146,7 +147,7 @@ def scan_rootfs_snapshot(root, *, source_id, declared_source_sha256=None):
             continue
         try:
             with os.scandir(folder) as entries:
-                listed = list(entries)
+                listed = list(islice(entries, MAX_ENTRIES_PER_DIRECTORY + 1))
             if len(listed) > MAX_ENTRIES_PER_DIRECTORY:
                 raise RootfsSnapshotError("directory_entry_limit")
             for entry in sorted(listed, key=lambda x: x.name):
