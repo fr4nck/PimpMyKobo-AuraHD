@@ -50,14 +50,14 @@ def inspect_arm_dependencies(data):
         for offset in offsets:
             if offset >= len(strings):
                 raise ArmPreflightError("invalid_needed_name")
-            end = strings.find(b"\\x00", offset)
+            end = strings.find(b"\x00", offset)
             if end < 0 or end == offset or end - offset > 127:
                 raise ArmPreflightError("invalid_needed_name")
             try:
                 name = strings[offset:end].decode("ascii")
             except UnicodeDecodeError as exc:
                 raise ArmPreflightError("invalid_needed_name") from exc
-            if "/" in name or "\\\\" in name or any(not (33 <= ord(c) <= 126) for c in name):
+            if "/" in name or "\\" in name or any(not (33 <= ord(c) <= 126) for c in name):
                 raise ArmPreflightError("invalid_needed_name")
             needed.append(name)
         if len(needed) > 32 or len(set(needed)) != len(needed):
