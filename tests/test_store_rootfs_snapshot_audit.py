@@ -181,6 +181,21 @@ class SnapshotAuditTests(unittest.TestCase):
             audit.compare_needed_to_snapshot(("libc.so.6",), result)[
                 "findings"][0]["state"], "unresolved_symlink")
 
+    def test_parent_directory_symlink_cannot_escape_scope(self):
+        with TemporaryDirectory() as td:
+            outside = Path(td) / "alternative-root"
+            (outside / "lib").mkdir(parents=True)
+            (outside / "lib" / "libescape.so").write_bytes(shared_object())
+            try:
+                os.symlink(outside, Path(td) / "usr", target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("Directory symlink creation not permitted")
+            result = audit.scan_rootfs_snapshot(td, source_id="fixture-parent")
+        states = {row["path"]: row["state"] for row in result["directories"]}
+        self.assertEqual(states["usr/lib"], "not_scanned_parent_non_directory")
+        self.assertEqual(result["bytes_inspected"], 0)
+        self.assertEqual(result["libraries"], ())
+
     def test_needed_input_rejected_if_not_canonical(self):
         with TemporaryDirectory() as td:
             r = audit.scan_rootfs_snapshot(td, source_id="fixture")
