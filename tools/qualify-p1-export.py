@@ -42,6 +42,12 @@ def _load_backup_verifier():
 
 
 def _fingerprint(st):
+    # Windows os.fstat() and os.lstat() can expose differing inode,
+    # permission and creation-time representations for the same file.
+    # Compare stable regular-file properties there; the complete bytes
+    # are also SHA-256-checked against the previously verified backup.
+    if os.name == "nt":
+        return (stat.S_IFMT(st.st_mode), st.st_size, st.st_mtime_ns)
     return (st.st_dev, st.st_ino, st.st_mode, st.st_size,
             st.st_mtime_ns, st.st_ctime_ns)
 
