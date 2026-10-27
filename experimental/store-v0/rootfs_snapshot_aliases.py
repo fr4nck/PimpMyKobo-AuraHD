@@ -40,7 +40,8 @@ def _index(snapshot):
         if (type(path) is not str or type(name) is not str or
                 _NAME.fullmatch(name) is None or
                 path not in ("lib/" + name, "usr/lib/" + name) or
-                state not in _STATES or path in indexed):
+                type(state) is not str or state not in _STATES or
+                path in indexed):
             raise RootfsAliasError("invalid_snapshot_entry")
         if state == "symlink_unresolved":
             if (type(rec.get("link_target")) is not str or
@@ -58,6 +59,12 @@ def _index(snapshot):
                 raise RootfsAliasError("invalid_snapshot_entry")
         indexed[path] = rec
     return indexed
+
+
+def _scanned_name(path):
+    return (type(path) is str and
+            (path.startswith("lib/") and _NAME.fullmatch(path[4:]) is not None or
+             path.startswith("usr/lib/") and _NAME.fullmatch(path[8:]) is not None))
 
 
 def _link_destination(origin, target):
@@ -111,10 +118,8 @@ def resolve_snapshot_aliases(needed, snapshot):
                 chain.append(current)
                 record = indexed.get(current)
                 if record is None:
-                    state = ("alias_target_not_scanned"
-                             if not (current.startswith("lib/") or
-                                     current.startswith("usr/lib/"))
-                             else "alias_target_not_observed")
+                    state = ("alias_target_not_observed" if _scanned_name(current)
+                             else "alias_target_not_scanned")
                     break
                 if record["state"] != "symlink_unresolved":
                     if record["state"] == "arm_eabi5_shared_header":
