@@ -172,7 +172,30 @@ def _resolve_interpreter(candidate_metadata, snapshot, snapshot_index,
             "target": resolution["target"]}
 
 
-def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
+def _symbol_report_from_matched_archive(payload, metadata, library_map):
+    """Audit direct DT_NEEDED using ONLY providers from the matched archive.
+
+    Report names/version metadata, never hardware or loader compatibility.
+    """
+    providers = {name: library_map[name]
+                 for name in metadata["needed"] if name in library_map}
+    try:
+        return compare_required_symbols(payload, providers)
+    except ArmSymbolResolutionError as exc:
+        return {
+            "schema": "pmkb-elf-symbol-version-audit-v1",
+            "scope": "archive_backed_symbol_metadata_only",
+            "verdict": "comparison_refused",
+            "reason": str(exc),
+            "symbol_versions_verified": False,
+            "dynamic_symbol_resolution_verified": False,
+            "runtime_compatible": False,
+            "hardware_verified": False,
+            "launchable": False,
+        }
+
+
+def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *
                                          expected_candidate_sha256=None,
                                          expected_archive_sha256=None,
                                          expected_audit_sha256=None,
@@ -239,6 +262,11 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
                             "state": "not_evaluated_due_to_archive_verdict"},
             "dependency_edges": (), "library_objects": (),
             "version_node_reports": (),
+            "dependency_symbol_reports": (),
+            "interpreter_symbol_report": {
+                "state": "not_evaluated_due_to_archive_verdict",
+                "comparison": None, "launchable": False,
+            },
             "candidate_symbol_report": {
                 "verdict": "not_evaluated_due_to_archive_verdict",
                 "symbol_versions_verified": False,
@@ -341,23 +369,28 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
             version_reports.append({"object": label, "state": "comparison_refused",
                                     "reason": str(exc)})
 
-    # L08-N sees only provider bytes already sourced from the TAR that
-    # matched the snapshot. Never use arbitrary caller-supplied provider maps.
-    # This is a static observation, NOT runtime symbol resolution.
-    try:
-        candidate_symbol_report = compare_required_symbols(candidate, library_map)
-    except ArmSymbolResolutionError as exc:
-        candidate_symbol_report = {
-            "schema": "pmkb-elf-symbol-version-audit-v1",
-            "scope": "archive_backed_candidate_symbols_only",
-            "verdict": "comparison_refused",
-            "reason": str(exc),
-            "symbol_versions_verified": False,
-            "dynamic_symbol_resolution_verified": False,
-            "runtime_compatible": False,
-            "hardware_verified": False,
+    # Check candidate and all parsed dependent objects independently.
+    # A complete name graph does not imply symbol/ABI compatibility.
+    candidate_symbol_report = _symbol_report_from_matched_archive(
+        candidate, candidate_metadata, library_map)
+    dependency_symbol_reports = []
+    for name, payload in object_bytes.items():
+        dependency_symbol_reports.append({
+            "object": name,
+            "archive_path": processed[name]["target"],
+            "comparison": _symbol_report_from_matched_archive(
+                payload, metadata_by_name[name], library_map),
             "launchable": False,
-        }
+        })
+    interpreter_symbol_report = {
+        "state": interpreter["state"],
+        "comparison": (
+            _symbol_report_from_matched_archive(
+                interpreter["payload"], interpreter["metadata"], library_map)
+            if interpreter["state"] == "interpreter_metadata_observed_only"
+            else None),
+        "launchable": False,
+    }
 
     interpreter_state_ok = interpreter["state"] in (
         "not_declared", "interpreter_metadata_observed_only")
@@ -385,6 +418,9 @@ def inspect_arm_archive_dependency_graph(candidate, archive_bytes, snapshot, *,
         "library_objects": tuple(objects),
         "version_node_reports": tuple(version_reports),
         "candidate_symbol_report": candidate_symbol_report,
+        "dependency_symbol_reports": tuple(dependency_symbol_reports),
+        "interpreter_symbol_report": interpreter_symbol_report,
+        "symbol_audited_dependency_objects": len(dependency_symbol_reports),
         "library_objects_inspected": len(objects),
         "library_bytes_inspected": sum(len(x) for x in object_bytes.values()),
         "unresolved_names": tuple(sorted(
