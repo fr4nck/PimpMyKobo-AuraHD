@@ -27,7 +27,7 @@ def make_report(folder, source_id="fixture-source"):
     lib = Path(folder) / "lib"
     lib.mkdir()
     (lib / "libc.so.6").write_bytes(mock_elf())
-    (lib / "libbroken.so").write_bytes(b"not-an-elf")
+    (lib / "libzbroken.so").write_bytes(b"not-an-elf")
     return scan_rootfs_snapshot(
         folder, source_id=source_id, declared_source_sha256="a" * 64)
 
