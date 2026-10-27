@@ -33,7 +33,10 @@ def build_archive(records):
         for kind, path, data in records:
             info = tarfile.TarInfo(path)
             info.mtime = 0
-            if kind == "file":
+            if kind == "directory":
+                info.type = tarfile.DIRTYPE
+                out.addfile(info)
+            elif kind == "file":
                 info.size = len(data)
                 out.addfile(info, BytesIO(data))
             elif kind == "symlink":
@@ -88,6 +91,8 @@ class TarReconciliationTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             snapshot = sample(Path(temp))
             data = build_archive([
+                ("directory", "./", ""),
+                ("directory", "./lib/", ""),
                 ("file", "./lib/libc.so.6", arm_shared())])
             # tarfile commonly prefixes archive paths with "./".
             r = compare_tar_archive_to_snapshot(data, snapshot)
