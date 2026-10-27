@@ -214,6 +214,96 @@ class ArmArchiveDependencyGraphTests(unittest.TestCase):
                          "comparison_refused")
         self.assertFalse(result["launchable"])
 
+    def test_imports_from_transitive_library_are_observed_not_executed(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertTrue(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(report["symbol_audited_dependency_objects"], 2)
+        self.assertEqual(items["libc.so.6"]["verdict"], "symbol_pairs_observed")
+        self.assertEqual(items["libm.so.6"]["verdict"], "no_undefined_symbols")
+        self.assertFalse(report["symbol_versions_verified"])
+        self.assertFalse(report["launchable"])
+
+    def test_missing_transitive_symbol_is_detected_despite_complete_graph(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"),
+            symbol_name="close", defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertTrue(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(items["libc.so.6"]["symbol_findings"][0]["state"],
+                         "required_symbol_not_exported")
+        self.assertFalse(items["libc.so.6"]["all_versioned_symbol_pairs_observed"])
+
+    def test_unobserved_transitive_provider_does_not_become_available(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        report = run_graph(candidate, {"lib/libc.so.6": libc})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertFalse(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(items["libc.so.6"]["symbol_findings"][0]["state"],
+                         "required_library_not_supplied")
+
+    def test_malformed_transitive_hash_is_reported_as_refusal(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = bytearray(add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4")))
+        struct.pack_into("<I", libc, 1454, 0xFFFFFFFF)
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"), defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": bytes(libc), "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertEqual(items["libc.so.6"]["verdict"], "comparison_refused")
+        self.assertFalse(report["launchable"])
+
+    def test_interpreter_symbol_evidence_is_separate(self):
+        candidate = build_elf(
+            needed="libc.so.6", interpreter="/lib/ld-linux.so.3")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", verdef="GLIBC_2.4"), defined=True)
+        loader = add_symbol_table(build_elf(
+            kind=3, soname="ld-linux.so.3", needed="libc.so.6",
+            verneed="GLIBC_2.4"))
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/ld-linux.so.3": loader})
+        seen = report["interpreter_symbol_report"]
+        self.assertEqual(seen["state"], "interpreter_metadata_observed_only")
+        self.assertEqual(seen["comparison"]["verdict"], "symbol_pairs_observed")
+        self.assertFalse(seen["launchable"])
+
+    def test_archive_mismatch_blocks_all_transitive_symbol_audits(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6"), defined=True)
+        with patch("arm_runtime_archive_evidence.compare_required_symbols",
+                   side_effect=AssertionError("unexpected symbol audit")):
+            report = run_graph(candidate, {"lib/libc.so.6": libc},
+                               archive_files={"lib/libc.so.6": libc + b"changed"})
+        self.assertEqual(report["dependency_symbol_reports"], ())
+        self.assertIsNone(report["interpreter_symbol_report"]["comparison"])
+        self.assertFalse(report["launchable"])
+
     def test_dependency_depth_is_bounded(self):
         executable = build_elf(needed="lib0.so")
         files = {}
