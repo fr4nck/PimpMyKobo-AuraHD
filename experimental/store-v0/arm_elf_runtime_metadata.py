@@ -73,7 +73,11 @@ class _ELF:
             raise ArmRuntimeMetadataError("invalid_elf_size")
         try:
             self.base = inspect_arm_dependencies(data)
-        except (ArmPreflightError, ValueError, struct.error) as exc:
+        except ArmPreflightError as exc:
+            # Preserve the existing stable parser reason for malformed dynamic
+            # tables and dependency names; callers can distinguish the failure.
+            raise ArmRuntimeMetadataError(str(exc)) from exc
+        except (ValueError, struct.error) as exc:
             raise ArmRuntimeMetadataError("invalid_arm_elf") from exc
         self.data = data
         self.identity = self.base["identity"]
