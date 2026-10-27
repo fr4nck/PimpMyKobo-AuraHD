@@ -43,3 +43,11 @@ Le Store V0 reste **hors ligne et non installateur sur la Kobo**. Les archives
 dans des racines temporaires synthétiques par les contrats Python existants.
 Aucun paquet n'est exécuté, aucun réseau n'est activé et aucune écriture P3,
 FIRST BOOT, P1, P2 ou microSD physique n'est ajoutée.
+
+## Contrôles de provenance ARM (L08-A à L08-H)
+
+Le prévol ELF (identité ARM EABI5, `PT_INTERP`, `DT_NEEDED`) et les inventaires bibliothèques de L08 sont des **outils hôte de diagnostic**, séparés du Store embarqué. Ils ne constituent ni une autorisation d'installation, ni une garantie de compatibilité avec un noyau de Kobo Aura HD.
+
+Les composants L08-E/F/G analysent un export rootfs **déjà extrait**, consignent SHA-256 et liens, puis contrôlent la cohérence interne de l'observation : [ROOTFS-SNAPSHOT-L08E.md](ROOTFS-SNAPSHOT-L08E.md), [ROOTFS-ALIASES-L08F.md](ROOTFS-ALIASES-L08F.md), [ROOTFS-EVIDENCE-L08G.md](ROOTFS-EVIDENCE-L08G.md).
+
+Le lot L08-H ajoute une comparaison *archive TAR.GZ fournie en mémoire ↔ fichiers exportés* sans extraction ni écriture : [ROOTFS-TAR-RECONCILE-L08H.md](ROOTFS-TAR-RECONCILE-L08H.md). Cette comparaison ne prouve pas la correspondance avec une image ext4 d'origine, ni l'authenticité de l'archive. Aucun snapshot Kobo réel n'a été qualifié par ce lot ; aucune donnée de la liseuse n'est modifiée.
