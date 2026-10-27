@@ -28,13 +28,18 @@ les métadonnées fournies contiennent un symbole exporté et un nœud de versio
 de même nom. Elle ne prouve pas une relocation réussie, les règles de
 visibilité/interposition, l'ordre de recherche du chargeur, le chargement
 de l'objet attendu ou l'existence de toutes les dépendances transitives.
-Les symboles faibles sont signalés, et une table sans hash exploitable est
-non qualifiée plutôt que considérée vide.
 
-Les champs symbol_versions_verified, dynamic_symbol_resolution_verified,
-transitive_dependencies_verified, runtime_compatible, hardware_verified
-et launchable restent False. Aucun ELF ARM n'est exécuté ; aucun chemin
-hôte n'est ouvert ; aucune bibliothèque Kobo réelle n'est versée au dépôt.
+Le nombre de symboles est borné à partir de DT_HASH ou DT_GNU_HASH. Le module
+vérifie la structure et les limites de ces tables, mais ne prouve pas
+indépendamment que les tables de hachage et la table dynamique de symboles
+correspondent parfaitement à toutes les relocations du binaire. Un ELF sans
+table de hachage exploitable est non qualifié plutôt que considéré vide.
+
+Les symboles faibles sont signalés. Les champs symbol_versions_verified,
+dynamic_symbol_resolution_verified, transitive_dependencies_verified,
+runtime_compatible, hardware_verified et launchable restent False. Aucun
+ELF ARM n'est exécuté ; aucun chemin hôte n'est ouvert ; aucune bibliothèque
+Kobo réelle n'est versée au dépôt.
 
 ## Tests
 
