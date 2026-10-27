@@ -36,6 +36,31 @@ class ArmDependencyTests(unittest.TestCase):
         self.assertFalse(result["launchable"])
         self.assertFalse(result["identity"]["launchable"])
 
+    def test_search_path_tags_are_observations_not_runtime_proof(self):
+        for tag, key in ((15, "rpath_observed"), (29, "runpath_observed")):
+            with self.subTest(tag=tag):
+                data = bytearray(elf())
+                # Use unused dynamic table space by replacing DT_NULL with
+                # the tag, followed by DT_NULL at the next slot. The fixture
+                # needs an extended table and string table.
+                struct.pack_into("<I", data, 84 + 16, 40)
+                struct.pack_into("<I", data, 84 + 16 + 16, 1)
+                struct.pack_into("<I", data, 172, 28)
+                struct.pack_into("<II", data, 184, tag, 11)
+                struct.pack_into("<II", data, 192, 0, 0)
+                data[219:227] = b"/opt/lib\x00"
+                result = inspect_arm_dependencies(bytes(data))
+                self.assertEqual(result[key], "/opt/lib")
+                self.assertFalse(result["loader_search_paths_verified"])
+
+    def test_search_path_outside_strings_is_rejected(self):
+        data = bytearray(elf())
+        struct.pack_into("<II", data, 184, 29, 100)
+        struct.pack_into("<II", data, 192, 0, 0)
+        struct.pack_into("<I", data, 84 + 16, 40)
+        with self.assertRaises(ArmPreflightError):
+            inspect_arm_dependencies(bytes(data))
+
     def test_static_has_no_dynamic_dependencies(self):
         self.assertEqual(inspect_arm_dependencies(elf(needed=False))["needed"], ())
 

@@ -27,6 +27,7 @@ def inspect_arm_dependencies(data):
     if len(dynamics) > 1:
         raise ArmPreflightError("multiple_dynamic_tables")
     needed = []
+    rpath = runpath = None
     if dynamics and not segments:
         raise ArmPreflightError("unmapped_dynamic_strings")
     if dynamics:
@@ -39,6 +40,9 @@ def inspect_arm_dependencies(data):
         tables = [v for t,v in entries if t == 5]  # DT_STRTAB
         sizes = [v for t,v in entries if t == 10]  # DT_STRSZ
         offsets = [v for t,v in entries if t == 1]  # DT_NEEDED
+        path_tags = [(t, v) for t, v in entries if t in (15, 29)]
+        if len(path_tags) > 2 or len({t for t, _ in path_tags}) != len(path_tags):
+            raise ArmPreflightError("invalid_dynamic_search_path")
         if len(offsets) > 32 or len(tables) != 1 or len(sizes) != 1 or not (0 < sizes[0] <= 4096):
             raise ArmPreflightError("invalid_dynamic_strings")
         mapped = [(off + (tables[0] - va), size)
@@ -64,5 +68,26 @@ def inspect_arm_dependencies(data):
             needed.append(name)
         if len(set(needed)) != len(needed):
             raise ArmPreflightError("invalid_needed_count")
+        # DT_RPATH and DT_RUNPATH affect loader lookup. Record raw strings
+        # as evidence only; never expand $ORIGIN or resolve host paths.
+        for tag, offset in path_tags:
+            if offset >= len(strings):
+                raise ArmPreflightError("invalid_dynamic_search_path")
+            end = strings.find(b"\x00", offset)
+            if end <= offset or end - offset > 1024:
+                raise ArmPreflightError("invalid_dynamic_search_path")
+            try:
+                value = strings[offset:end].decode("ascii")
+            except UnicodeDecodeError as exc:
+                raise ArmPreflightError("invalid_dynamic_search_path") from exc
+            if any(ord(ch) < 32 or ord(ch) > 126 for ch in value):
+                raise ArmPreflightError("invalid_dynamic_search_path")
+            if tag == 15:
+                rpath = value
+            else:
+                runpath = value
     return {"identity": identity, "needed": tuple(needed),
+            "rpath_observed": rpath if dynamics else None,
+            "runpath_observed": runpath if dynamics else None,
+            "loader_search_paths_verified": False,
             "scope": "unresolved_metadata_only", "launchable": False}
