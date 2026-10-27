@@ -35,8 +35,7 @@ def build_elf(*, kind=2, needed=None, soname=None, rpath=None, runpath=None,
     size = 2048
     data = bytearray(size)
     data[:7] = b"\x7fELF\x01\x01\x01"
-    data[16:18] = struct.pack("<H", kind)
-    struct.pack_into("<I", data, 20, 1)
+    struct.pack_into("<HHI", data, 16, kind, 40, 1)
     struct.pack_into("<I", data, 28, 52)
     struct.pack_into("<I", data, 36, 5 << 24)
     struct.pack_into("<HHH", data, 40, 52, 32, 3 if interpreter else 2)
