@@ -46,7 +46,10 @@ def read_library_inventory(raw):
         source = json.loads(raw.decode("utf-8"),
                             object_pairs_hook=_unique_pairs,
                             parse_constant=_bad_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except LibraryInventoryError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError,
+            RecursionError) as exc:
         raise LibraryInventoryError("invalid_inventory_json") from exc
     if type(source) is not dict or set(source) != _FIELDS:
         raise LibraryInventoryError("invalid_inventory_fields")
@@ -82,11 +85,13 @@ def assess_needed_libraries(needed, inventory):
     if (type(inventory) is not dict or
             set(inventory) != {"scope", "coverage", "libraries"} or
             inventory["scope"] != INVENTORY_SCOPE or
+            type(inventory["coverage"]) is not str or
             inventory["coverage"] not in ("partial", "complete") or
             type(inventory["libraries"]) is not tuple or
             len(inventory["libraries"]) > MAX_LIBRARIES or
             any(not _valid_name(name) for name in inventory["libraries"]) or
-            len(set(inventory["libraries"])) != len(inventory["libraries"])):
+            len({name.casefold() for name in inventory["libraries"]}) !=
+            len(inventory["libraries"])):
         raise LibraryInventoryError("invalid_inventory_source")
     declared = set(inventory["libraries"])
     matched = tuple(sorted(set(needed) & declared))
