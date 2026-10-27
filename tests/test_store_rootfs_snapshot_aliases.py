@@ -85,6 +85,24 @@ class SnapshotAliasTests(unittest.TestCase):
         self.assertEqual(finding["state"], "alias_to_arm_header_observed_only")
         self.assertEqual(finding["observed_target"], "lib/libfoo-1.so")
 
+    def test_relative_usr_lib_parent_walk_stays_inside_rootfs(self):
+        result = resolve_snapshot_aliases(
+            ("libfoo.so.1",),
+            fixture(link("usr/lib/libfoo.so.1", "../../lib/libfoo-1.so"),
+                    library("lib/libfoo-1.so")))
+        finding, = result["findings"]
+        self.assertEqual(finding["state"], "alias_to_arm_header_observed_only")
+        self.assertEqual(finding["observed_target"], "lib/libfoo-1.so")
+        self.assertFalse(result["source_hash_verified"])
+
+    def test_reject_malformed_needed_input(self):
+        for names in (["libc.so.6"], ("../libc.so.6",),
+                      ("libc.so.6", "libc.so.6")):
+            with self.subTest(names=names):
+                with self.assertRaisesRegex(RootfsAliasError,
+                                            "invalid_snapshot_or_needed"):
+                    resolve_snapshot_aliases(names, fixture())
+
     def test_nested_subdirectory_is_outside_scan(self):
         r = resolve_snapshot_aliases(
             ("libx.so",), fixture(link("lib/libx.so", "/usr/lib/arm/libx.so")))
