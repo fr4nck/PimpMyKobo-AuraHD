@@ -50,6 +50,17 @@ ni signature cryptographique** apportée par L08-K. Le contrôle ne
 prouve pas l'état actuel de la microSD, le démarrage du noyau, les
 versions de symboles, les bibliothèques transitives ni l'ABI réelle.
 
+## Précisions sur les lectures et la compatibilité
+
+Le vérificateur de sauvegarde relit ses composants, **y compris P1**,
+avant de déterminer le statut global. Une sauvegarde invalide bloque la
+lecture supplémentaire du fichier P1 par L08-K, pas les lectures faites
+pendant cette première vérification. Sous Windows, les métadonnées
+comparables entre chemin et descripteur sont type, taille et mtime,
+avec un SHA-256 complet comme ancre de contenu. Sous POSIX, inode,
+périphérique et ctime sont aussi comparés. Cela ne verrouille pas
+une source qu'un autre processus autorisé peut modifier.
+
 ## Tests
 
 tests/test_p1_export_readonly_qualification.py utilise une image ext4
@@ -57,7 +68,9 @@ tests/test_p1_export_readonly_qualification.py utilise une image ext4
 **simulée**. Il couvre l'acceptation limitée, les divergences,
 les sauvegardes incomplètes, les empreintes erronées, liens, tailles,
 répertoires manquants et l'absence d'écriture. Le vérificateur réel
-de sauvegarde possède sa propre suite de tests dans le dépôt.
+de sauvegarde possède sa propre suite de tests dans le dépôt ;
+un test supplémentaire vérifie que le raccordement au véritable
+vérificateur refuse un dossier dépourvu de manifeste.
 
 **Aucun test sur une sauvegarde P1 réelle n'a été réalisé.** Si aucune
 sauvegarde P1 d'origine n'est disponible, conserver UNKNOWN pour
