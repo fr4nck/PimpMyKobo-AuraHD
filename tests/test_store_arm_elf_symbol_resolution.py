@@ -133,6 +133,35 @@ class ElfSymbolResolutionTests(unittest.TestCase):
         self.assertIsNone(result["all_versioned_symbol_pairs_observed"])
         self.assertFalse(result["dynamic_symbol_resolution_verified"])
 
+    def test_unversioned_symbol_ignores_unrelated_caller_library(self):
+        candidate = add_symbol_table(build_elf(needed="libc.so.6"),
+                                     version_index=1)
+        unrelated = add_symbol_table(
+            build_elf(kind=3, soname="libextra.so"),
+            defined=True, version_index=1)
+        result = compare_required_symbols(candidate, {"libextra.so": unrelated})
+        self.assertEqual(result["verdict"], "symbol_pairs_incomplete")
+        self.assertEqual(result["libraries_not_in_candidate_needed"],
+                         ("libextra.so",))
+        self.assertEqual(result["symbol_findings"][0]["state"],
+                         "symbol_name_not_observed_in_supplied_libraries")
+        self.assertFalse(result["all_undefined_symbol_names_observed"])
+
+    def test_unrelated_export_cannot_mask_missing_direct_symbol(self):
+        candidate = add_symbol_table(build_elf(needed="libc.so.6"),
+                                     version_index=1)
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6"),
+            symbol_name="close", defined=True, version_index=1)
+        unrelated = add_symbol_table(
+            build_elf(kind=3, soname="libextra.so"),
+            defined=True, version_index=1)
+        result = compare_required_symbols(
+            candidate, {"libc.so.6": libc, "libextra.so": unrelated})
+        self.assertEqual(result["symbol_findings"][0]["state"],
+                         "symbol_name_not_observed_in_supplied_libraries")
+        self.assertFalse(result["all_undefined_symbol_names_observed"])
+
     def test_missing_candidate_versym_blocks_version_claim(self):
         candidate = add_symbol_table(build_elf(
             needed="libc.so.6", verneed="GLIBC_2.4", include_versym=False))

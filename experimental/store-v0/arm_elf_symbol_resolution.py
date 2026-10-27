@@ -232,6 +232,9 @@ def compare_required_symbols(candidate, libraries_by_needed_name):
             parsed[name] = _parse_dynamic_symbols(data)
         except ArmSymbolResolutionError as exc:
             parsed[name] = {"state": "library_metadata_rejected", "reason": str(exc)}
+    # Extra map entries supplied by the caller are not proof that the
+    # candidate can resolve an undefined symbol through DT_NEEDED.
+    direct_needed = frozenset(executable["metadata"]["needed"])
     findings = []
     for symbol in executable["undefined"]:
         name = symbol["name"]
@@ -275,6 +278,8 @@ def compare_required_symbols(candidate, libraries_by_needed_name):
         else:
             found = False
             for library_name, provider in parsed.items():
+                if library_name not in direct_needed:
+                    continue
                 if provider["state"] != "ok":
                     continue
                 if provider["metadata"]["identity"]["type"] != "ET_DYN":
@@ -327,6 +332,8 @@ def compare_required_symbols(candidate, libraries_by_needed_name):
         "candidate_symbol_count": executable["symbol_count"],
         "candidate_undefined_symbol_count": len(executable["undefined"]),
         "library_symbol_tables": provider_states,
+        "libraries_not_in_candidate_needed": tuple(
+            sorted(name for name in parsed if name not in direct_needed)),
         "symbol_findings": tuple(findings),
         "all_versioned_symbol_pairs_observed": all_versioned,
         "all_undefined_symbol_names_observed": all_names,

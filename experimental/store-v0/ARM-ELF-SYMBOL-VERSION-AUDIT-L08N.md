@@ -48,3 +48,16 @@ synthétiques et vérifie les symboles versionnés, les noms absents, les
 nœuds de versions divergents, les tables SysV/GNU, les hash malformés,
 les métadonnées fournisseur refusées et l'absence d'E/S hôte. Ces tests
 qualifient le parseur seulement, pas le chargeur Linux 2.6.35.3 de l'Aura HD.
+
+## Revue supplémentaire : preuves admises pour les symboles non versionnés
+
+La présence d'une bibliothèque arbitraire dans le dictionnaire fourni
+par l'appelant ne démontre pas qu'elle soit chargée par le binaire.
+Pour les symboles non versionnés, seuls les objets dont le nom figure
+dans le DT_NEEDED **direct du candidat** peuvent satisfaire la
+concordance diagnostique ; les autres figurent dans
+`libraries_not_in_candidate_needed` et sont exclus des succès.
+Les bibliothèques transitives peuvent en pratique fournir des
+symboles, mais **les règles réelles du chargeur ne sont pas simulées**
+par cet analyseur. La conclusion reste un inventaire statique, jamais
+une garantie d'exécution.
