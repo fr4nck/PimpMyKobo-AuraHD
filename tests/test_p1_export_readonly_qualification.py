@@ -178,6 +178,19 @@ class P1ExportReadOnlyTests(unittest.TestCase):
             self.assertEqual(before.st_mtime_ns, after.st_mtime_ns)
             self.assertFalse((backup / "qualification.json").exists())
 
+    def test_real_backup_verifier_rejects_missing_manifest_without_p1_scan(self):
+        # Unlike fixture tests, this invokes the real verifier adapter.
+        with TemporaryDirectory() as td:
+            backup = Path(td) / "empty-backup"
+            export = Path(td) / "export"
+            backup.mkdir()
+            export.mkdir()
+            with patch.object(gate, "_read_regular_image",
+                              side_effect=AssertionError("extra P1 read")):
+                with self.assertRaisesRegex(
+                        gate.P1ExportGateError, "backup_not_valid"):
+                    gate.qualify_p1_export(backup, export)
+
     def test_cli_refusal_is_machine_readable(self):
         with TemporaryDirectory() as td:
             backup, export, sha = fixture(Path(td))
