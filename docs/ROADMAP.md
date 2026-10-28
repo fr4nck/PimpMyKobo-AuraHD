@@ -14,6 +14,21 @@ The registry now also tracks the [Kobo Reader](https://www.mobileread.com/forums
 
 FIRST BOOT without Nickel remains the hardware priority. Research can proceed independently but must not change the sealed candidate, PRE-P1, P2, or the SD cards. **A reviewed upstream source is not integrated code or tested hardware support**. Every candidate needs a scoped diff, license review, E606C0 compatibility checks and distinct qualification.
 
+## 27 October 2026 milestone — magnetic cover / suspend and wake (PLANNED)
+
+**PMKB decision:** automatic suspend/wake commands originating from the magnetic cover must be **ignored by default**, with an explicit opt-in setting to re-enable them. The physical power switch must remain able to suspend and wake the device independently of the cover. The TLE4913 Hall sensor is documented in the E606C0 HWCONFIG; its GPIO, IRQ and actual event path remain to be confirmed.
+
+**Reported symptom, cause unknown:** this Aura HD sometimes required plugging in USB to wake up. **The Hall sensor is not yet established as the cause**; also assess the physical switch, battery/PMIC, MSP430 and suspend/resume path.
+
+Acceptance gates, in order:
+
+1. **Offline audit:** trace cover events (input/GPIO/IRQ), any hardware wake-source role, and power-button interactions in historical sources and PMKB/KOReader contracts. Ignoring a userspace event must not be mistaken for disabling hardware wakeups.
+2. **Frugal implementation:** expose a persistent *magnetic cover enabled* preference (default **no**); filter cover events in the appropriate layer without a resident service. Any kernel IRQ/wakeup changes require separate review and must preserve the physical switch and other wake sources.
+3. **Synthetic tests:** cover open/close, repeated events, on/off preference and restart, suspend and wake by button; check for suspend/wake loops and unrelated input regressions.
+4. **Later Aura HD qualification:** using a test card under separate hardware authorization, repeat sleep/wake cycles with and without cover, extended suspend, wake **without USB**, record wake causes and measure consumption. Compare configurations before attributing a defect to the Hall sensor.
+
+**Status: PLANNED; not implemented or qualified on Kobo hardware.** This roadmap item authorizes no change to sealed FIRST BOOT, P1/P2/P3, images, firmware or the device. See [driver matrix (FR)](kernel-driver-matrix-v1-fr.md) and [power roadmap (FR)](kernel-energy-roadmap-fr.md).
+
 ## 13 October 2026 addendum — experimental launcher (host only)
 
 | Milestone | Verified state | Remaining limit |
