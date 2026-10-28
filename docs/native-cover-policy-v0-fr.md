@@ -25,3 +25,17 @@ Les valeurs COVER_* sont **déjà classifiées par leur source**. Un futur adapt
 ## Vérification hôte
 
 Dans le dépôt : make -C experimental/native-ui test ; le test cover_policy_contract appartient à pmkb-hal-tests. La CI Native PMKB UI (GCC, ASan/UBSan) est requise sur la PR. Le code ne modifie ni FIRST BOOT, ni P1/P2/P3, ni firmware, ni microSD.
+
+
+## Audit du code Hall E606C0 et traducteur evdev — 28 octobre 2026
+
+Sources publiques historiques de la branche pazos/linux-2.6.35.3-kobo, commit 1f43a4a01a727a9b440f2e8830b67734b6373a10 :
+
+- [Pilote TLE4913](https://github.com/pazos/linux-2.6.35.3-kobo/blob/1f43a4a01a727a9b440f2e8830b67734b6373a10/drivers/input/keyboard/tle4913_keypad.c) : GPIO_5_25, pad SD3_D5, IRQ montante/descendante, iWakeup=1, anti-rebond 1 tick ; KEY_F1=59 si interface client, KEY_H=35 sinon. Niveau bas = pressé / housse fermée, niveau haut = relâché / ouverte. Enregistrement conditionnel à bHallSensor==1.
+- [gpiofn.c](https://github.com/pazos/linux-2.6.35.3-kobo/blob/1f43a4a01a727a9b440f2e8830b67734b6373a10/drivers/input/keyboard/gpiofn.c) : gpiofn_register appelle enable_irq_wake sur une IRQ marquée iWakeup=1.
+- [mx50_ntx_io.c](https://github.com/pazos/linux-2.6.35.3-kobo/blob/1f43a4a01a727a9b440f2e8830b67734b6373a10/arch/arm/mach-mx5/mx50_ntx_io.c) : distribution des touches via gpio-keys ou matrice selon bPCB_Flags ; bouton d'alimentation indépendant, KEY_POWER=116.
+- [KOReader v2026.07.1](https://github.com/koreader/koreader/blob/v2026.07.1/frontend/device/kobo/device.lua) mappe 35/59 à SleepCover et 116 à Power. Son filtrage utilisateur ne neutralise pas l'interruption wake du noyau.
+
+Le nouveau PMKBPowerEvdev init/feed décode des trames EV_KEY **seulement si** un adaptateur extérieur a déjà qualifié la source NTX (ce projet ne possède pas encore cet adaptateur réel). Le code Hall est choisi explicitement : KEY_H **ou** KEY_F1, jamais les deux simultanément pour un profil donné. Une entrée clavier externe est refusée ; KEY_POWER reste relayé indépendamment du réglage. Les répétitions de touche value=2 sont ignorées, les doublons de niveau sont filtrés, et SYN_DROPPED entraîne un retour à un niveau connu sans produire de faux réveil. Un bouton Power fonctionnel est relayé après SYN_REPORT, sans attendre le changement d'état du Hall.
+
+**Limites strictes** : ce module reste un décodeur de trames synthétiques ; l'identification de périphérique par nom et capacités, la liaison à un gestionnaire de veille natif, la gestion des IRQ réelles, la persistance P3 et la recette avec/sans USB restent à qualifier. Ne pas désactiver l'IRQ Hall ou retirer le capteur sur la base de cette seule analyse ; aucune preuve de panne matérielle n'a été établie.

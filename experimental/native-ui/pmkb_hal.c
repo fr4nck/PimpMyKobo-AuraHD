@@ -230,3 +230,57 @@ PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event
     return PMKB_INVALID;
 }
 
+
+/* Host-only translation from already classified NTX evdev key events. */
+PMKBStatus pmkb_power_evdev_init(PMKBPowerEvdev *decoder,
+        PMKBPowerPolicy *policy,PMKBPowerInputSource source,int cover_code){
+    if(!decoder)return PMKB_INVALID;
+    memset(decoder,0,sizeof(*decoder));
+    if(!policy||source!=PMKB_POWER_SOURCE_NTX_VERIFIED||
+       (cover_code!=PMKB_KEY_F1&&cover_code!=PMKB_KEY_H))
+        return PMKB_INVALID;
+    decoder->policy=policy;
+    decoder->cover_code=cover_code;
+    decoder->qualified=true;
+    policy->cover_seen=false; /* Never inherit a stale level across sources. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
+        int type,int code,int value,PMKBPowerEvent *event){
+    if(!decoder||!event||!decoder->qualified||!decoder->policy)
+        return PMKB_INVALID;
+    if(type==PMKB_EV_SYN&&code==PMKB_SYN_DROPPED){
+        decoder->discard_frame=true;
+        decoder->await_cover_release=true;
+        return PMKB_NO_CHANGE;
+    }
+    if(decoder->discard_frame){
+        /* Discard through the terminating SYN_REPORT. */
+        if(type==PMKB_EV_SYN&&code==PMKB_SYN_REPORT)
+            decoder->discard_frame=false;
+        return PMKB_NO_CHANGE;
+    }
+    if(type!=PMKB_EV_KEY||(value!=0&&value!=1))
+        return PMKB_NO_CHANGE; /* Ignore repeats (value 2). */
+    PMKBPowerEvent semantic;
+    if(code==PMKB_KEY_POWER){
+        semantic=value?PMKB_POWER_BUTTON_PRESSED:PMKB_POWER_BUTTON_RELEASED;
+    }else if(code==decoder->cover_code){
+        if(decoder->await_cover_release){
+            if(value==0){
+                decoder->await_cover_release=false;
+                decoder->policy->cover_seen=true;
+                decoder->policy->cover_closed=false;
+            }
+            /* Resynchronize without emitting a phantom wake event. */
+            return PMKB_NO_CHANGE;
+        }
+        semantic=value?PMKB_POWER_COVER_CLOSED:PMKB_POWER_COVER_OPENED;
+    }else{
+        return PMKB_NO_CHANGE;
+    }
+    PMKBStatus rc=pmkb_power_policy_filter(decoder->policy,semantic);
+    if(rc==PMKB_OK)*event=semantic;
+    return rc;
+}
+

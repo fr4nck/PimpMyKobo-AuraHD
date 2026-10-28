@@ -17,6 +17,9 @@ _Static_assert(PMKB_ABS_X==ABS_X,"Linux ABS_X mismatch");
 _Static_assert(PMKB_ABS_Y==ABS_Y,"Linux ABS_Y mismatch");
 _Static_assert(PMKB_BTN_TOUCH==BTN_TOUCH,"Linux BTN_TOUCH mismatch");
 _Static_assert(PMKB_BTN_TOOL_DOUBLETAP==BTN_TOOL_DOUBLETAP,"Linux doubletap mismatch");
+_Static_assert(PMKB_KEY_H==KEY_H,"Linux KEY_H mismatch");
+_Static_assert(PMKB_KEY_F1==KEY_F1,"Linux KEY_F1 mismatch");
+_Static_assert(PMKB_KEY_POWER==KEY_POWER,"Linux KEY_POWER mismatch");
 #endif
 
 static unsigned assertions=0,groups=0;
@@ -573,13 +576,90 @@ static int cover_policy_contract(void){
     groups++;return 0;
 }
 
+
+/* Pure evdev decoding. The caller must classify the source; a keyboard's
+ * KEY_F1 is never sufficient evidence that it came from the Hall switch. */
+static int cover_evdev_contract(void){
+    for(int mode=0;mode<2;mode++){
+        int hall=mode?PMKB_KEY_H:PMKB_KEY_F1;
+        PMKBPowerPolicy policy={0};
+        PMKBPowerEvdev decoder={0};
+        PMKBPowerEvent ev=PMKB_POWER_OTHER;
+        pmkb_power_policy_init(&policy);
+        CHECK(sizeof(PMKBPowerEvdev)<=32u);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_INVALID);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_UNQUALIFIED,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_EXTERNAL,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,1000)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,NULL,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,hall)==PMKB_OK);
+        CHECK(!policy.cover_enabled&&!policy.cover_seen);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_PRESSED);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,0,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_RELEASED);
+        CHECK(pmkb_power_policy_set_cover(&policy,true)==PMKB_OK);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_CLOSED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,2,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_ABS,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,
+              mode?PMKB_KEY_F1:PMKB_KEY_H,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_OPENED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_REPORT,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_PRESSED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_CLOSED);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_EXTERNAL,hall)==PMKB_INVALID);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_INVALID);
+        CHECK(ev==PMKB_POWER_OTHER);
+    }
+    PMKBPowerPolicy policy={0};
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_init(NULL,&policy,PMKB_POWER_SOURCE_NTX_VERIFIED,
+          PMKB_KEY_F1)==PMKB_INVALID);
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,PMKB_POWER_SOURCE_NTX_VERIFIED,
+          PMKB_KEY_F1)==PMKB_OK);
+    CHECK(pmkb_power_evdev_feed(NULL,PMKB_EV_KEY,PMKB_KEY_POWER,1,&event)==PMKB_INVALID);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,NULL)==PMKB_INVALID);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch()||cover_policy_contract())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;

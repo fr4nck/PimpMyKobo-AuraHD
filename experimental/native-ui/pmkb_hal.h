@@ -118,4 +118,30 @@ PMKBStatus pmkb_power_policy_import(PMKBPowerPolicy *policy,
  * suppressed. Repeated identical cover levels are coalesced. */
 PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event);
 
+
+/* Historical NTX: TLE4913 yields KEY_F1 (customer UI) or KEY_H;
+ * never infer the source from an event number or a keycode alone. */
+enum { PMKB_KEY_H=35, PMKB_KEY_F1=59, PMKB_KEY_POWER=116 };
+typedef enum {
+    PMKB_POWER_SOURCE_UNQUALIFIED=0,
+    PMKB_POWER_SOURCE_NTX_VERIFIED=1,
+    PMKB_POWER_SOURCE_EXTERNAL=2
+} PMKBPowerInputSource;
+typedef struct {
+    PMKBPowerPolicy *policy; /* Borrowed; caller owns its lifetime. */
+    int cover_code;         /* Exactly one of KEY_F1 and KEY_H. */
+    bool qualified,discard_frame,await_cover_release;
+} PMKBPowerEvdev;
+/* Pure evdev translator. A future adapter must FIRST verify the actual
+ * Netronix input source by identity and key capabilities; passing VERIFIED
+ * is the caller's explicit promise, not verification performed here.
+ * Failed reinitialization clears an earlier trusted binding. */
+PMKBStatus pmkb_power_evdev_init(PMKBPowerEvdev *decoder,
+        PMKBPowerPolicy *policy,PMKBPowerInputSource source,int cover_code);
+/* NO_CHANGE leaves output untouched. OK emits a semantic event for the
+ * existing policy; no physical I/O, kernel wake manipulation or sleep.
+ * SYN_DROPPED quarantines cover edges until a clean release is observed. */
+PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
+        int type,int code,int value,PMKBPowerEvent *event);
+
 #endif
