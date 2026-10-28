@@ -225,7 +225,8 @@ PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event
         return policy->cover_enabled?PMKB_OK:PMKB_NO_CHANGE;
     }
     if(event==PMKB_POWER_BUTTON_PRESSED||
-       event==PMKB_POWER_BUTTON_RELEASED||event==PMKB_POWER_OTHER)
+       event==PMKB_POWER_BUTTON_RELEASED||event==PMKB_POWER_OTHER||
+       event==PMKB_POWER_LIGHT_TOGGLE)
         return PMKB_OK;
     return PMKB_INVALID;
 }
@@ -250,6 +251,7 @@ PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
     if(!decoder||!event||!decoder->qualified||!decoder->policy)
         return PMKB_INVALID;
     if(type==PMKB_EV_SYN&&code==PMKB_SYN_DROPPED){
+        decoder->light_pressed=false; /* A lost frame cannot yield a toggle. */
         decoder->discard_frame=true;
         decoder->await_cover_release=true;
         return PMKB_NO_CHANGE;
@@ -265,6 +267,14 @@ PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
     PMKBPowerEvent semantic;
     if(code==PMKB_KEY_POWER){
         semantic=value?PMKB_POWER_BUTTON_PRESSED:PMKB_POWER_BUTTON_RELEASED;
+    }else if(code==PMKB_KEY_FL){
+        if(value==1){
+            decoder->light_pressed=true;
+            return PMKB_NO_CHANGE; /* Press alone must not toggle. */
+        }
+        if(!decoder->light_pressed)return PMKB_NO_CHANGE;
+        decoder->light_pressed=false;
+        semantic=PMKB_POWER_LIGHT_TOGGLE;
     }else if(code==decoder->cover_code){
         if(decoder->await_cover_release){
             if(value==0){

@@ -84,3 +84,14 @@ Le résultat reste toujours **CANDIDATE**, jamais SOURCE_NTX_VERIFIED ; la fonct
 5. Toute désactivation au niveau IRQ et tout essai sur carte séparée doivent rester explicitement autorisés et réversibles. Le [patch candidat non appliqué](hall-irq-wakeup-candidate-fr.md) n'est pas un firmware prêt à installer.
 
 **État : profil logiciel vérifié uniquement contre sauvegarde/documentation et sources historiques. Démonstration d'événements réels, d'une veille correcte ou d'une panne TLE4913 : NON RÉALISÉE.**
+
+
+## Protection du bouton lumière de l'Aura HD (28 octobre 2026)
+
+**Séparation matérielle attestée dans le BSP historique :** [mx50_rdp.c](https://github.com/pazos/linux-2.6.35.3-kobo/blob/1f43a4a01a727a9b440f2e8830b67734b6373a10/arch/arm/mach-mx5/mx50_rdp.c) déclare GPIO_KEY_FL = GPIO_4_1 et le bouton gpio-keys « front_light » avec le code 90 (KEY_FL). Le Hall TLE4913 est GPIO_5_25 avec KEY_F1=59 ou KEY_H=35 ; Power est GPIO_4_10 avec KEY_POWER=116. Le code 90 est distinct des deux autres mécanismes.
+
+[KOReader v2026.07.1, device.lua](https://github.com/koreader/koreader/blob/v2026.07.1/frontend/device/kobo/device.lua) mappe 90 à LightButton et n'émet le message « Light » **qu'au relâchement**. Son gestionnaire appelle ensuite toggleFrontlight(). Le chemin de commande réelle repose sur /dev/ntx_io et le MSP430, hors de notre patch Hall.
+
+**Contrat C11 ajouté :** PMKBPowerEvdev reconnaît désormais KEY_FL=90 sur une source NTX **préalablement qualifiée** ; il transmet PMKB_POWER_LIGHT_TOGGLE **une seule fois pour une paire pressée/relâchée**. Il ignore un relâchement isolé, les répétitions et les trames perdues. Ce message traverse PMKBPowerPolicy quel que soit l'état d'activation de la housse ; KEY_POWER conserve son comportement séparé. Tests synthétiques dédiés, sans ouvrir de périphérique.
+
+**Limite :** PMKBPowerEvdev n'est toujours pas connecté à un flux matériel ou à un gestionnaire de lumière natif. Le code assure la conservation d'un événement sémantique, **pas l'allumage physique sur Kobo**. Une validation sur Aura HD et le raccordement de PMKB au contrôleur de lumière restent nécessaires avant de déclarer le bouton fonctionnel dans l'environnement PMKB natif. L'utilisation de KOReader via FIRST BOOT suit son chemin propre et n'est pas modifiée par ce lot.

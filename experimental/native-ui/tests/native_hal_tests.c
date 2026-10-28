@@ -820,13 +820,89 @@ static int aura_hd_hwconfig_profile(void){
     groups++;return 0;
 }
 
+
+/* Dedicated Aura HD light switch: GPIO_4_1 -> KEY_FL (90) in the historical
+ * gpio-keys BSP. KOReader interprets the RELEASE as a toggle. This must
+ * remain separate from Hall KEY_F1/KEY_H and Power KEY_POWER. */
+static int frontlight_button_nonregression(void){
+    PMKBPowerPolicy policy={0};
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent event=PMKB_POWER_OTHER;
+    pmkb_power_policy_init(&policy);
+    CHECK(PMKB_KEY_FL==90);
+    CHECK(PMKB_KEY_FL!=PMKB_KEY_F1&&PMKB_KEY_FL!=PMKB_KEY_H);
+    CHECK(PMKB_KEY_FL!=PMKB_KEY_POWER);
+    CHECK(pmkb_power_policy_filter(&policy,PMKB_POWER_LIGHT_TOGGLE)==PMKB_OK);
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,
+          PMKB_POWER_SOURCE_NTX_VERIFIED,PMKB_KEY_F1)==PMKB_OK);
+    /* Cover disabled by default, but the light is still a usable button. */
+    CHECK(!policy.cover_enabled);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_F1,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(decoder.light_pressed);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,2,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    CHECK(!decoder.light_pressed);
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_policy_set_cover(&policy,true)==PMKB_OK);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    CHECK(pmkb_power_policy_set_cover(&policy,false)==PMKB_OK);
+    /* A lost frame during a press must not synthesize a light toggle. */
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(!decoder.light_pressed);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_REPORT,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    /* The Power button is independent and remains always forwarded. */
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_BUTTON_PRESSED);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_BUTTON_RELEASED);
+    /* Invalid source never qualifies the light key or generates a toggle. */
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,
+          PMKB_POWER_SOURCE_EXTERNAL,PMKB_KEY_F1)==PMKB_INVALID);
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_INVALID);
+    CHECK(event==PMKB_POWER_OTHER);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory()||aura_hd_hwconfig_profile())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory()||aura_hd_hwconfig_profile()||frontlight_button_nonregression())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;
