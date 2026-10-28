@@ -42,7 +42,7 @@ class OfflineGuardTests(unittest.TestCase):
 
     def test_boot_sources_parse_without_running_any_mount_or_device_command(self):
         for name in ("etc/init.d/rcS", "usr/bin/pmkb-check-offline", "usr/bin/pmkb-check-onboard",
-                     "usr/bin/pmkb-reader", "bin/kobo_config.sh"):
+                     "usr/bin/pmkb-reader", "usr/bin/pmkb-cover-init", "bin/kobo_config.sh"):
             result = subprocess.run(["sh", "-n", str(ROOT / name)], capture_output=True, text=True)
             self.assertEqual(0, result.returncode, result.stderr)
 
