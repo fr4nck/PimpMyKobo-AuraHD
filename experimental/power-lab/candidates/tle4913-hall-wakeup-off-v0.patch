@@ -1,0 +1,12 @@
+diff --git a/drivers/input/keyboard/tle4913_keypad.c b/drivers/input/keyboard/tle4913_keypad.c
+--- a/drivers/input/keyboard/tle4913_keypad.c
++++ b/drivers/input/keyboard/tle4913_keypad.c
+@@ -39,7 +39,7 @@ static GPIODATA gtTLE4913_GPIO_data = {
+ 	.szName = "TLE4913",
+ 	.tPADCtrl = MX50_PAD_SD3_D5__GPIO_5_25,
+ 	.uiIRQType = IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,
+-	.iWakeup = 1,
++	.iWakeup = -1,
+ 	.dwDebounceTicks = 1,
+ 	.iActive = 0 ,
+ };
