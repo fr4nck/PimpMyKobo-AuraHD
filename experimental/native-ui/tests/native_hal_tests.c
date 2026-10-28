@@ -17,6 +17,9 @@ _Static_assert(PMKB_ABS_X==ABS_X,"Linux ABS_X mismatch");
 _Static_assert(PMKB_ABS_Y==ABS_Y,"Linux ABS_Y mismatch");
 _Static_assert(PMKB_BTN_TOUCH==BTN_TOUCH,"Linux BTN_TOUCH mismatch");
 _Static_assert(PMKB_BTN_TOOL_DOUBLETAP==BTN_TOOL_DOUBLETAP,"Linux doubletap mismatch");
+_Static_assert(PMKB_KEY_H==KEY_H,"Linux KEY_H mismatch");
+_Static_assert(PMKB_KEY_F1==KEY_F1,"Linux KEY_F1 mismatch");
+_Static_assert(PMKB_KEY_POWER==KEY_POWER,"Linux KEY_POWER mismatch");
 #endif
 
 static unsigned assertions=0,groups=0;
@@ -508,13 +511,398 @@ static int end_to_end_legacy_touch(void){
     CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
     groups++;return 0;
 }
+
+/* Semantic cover events only: real evdev device identification is pending.
+ * The power button must remain completely independent from cover opt-in. */
+static int cover_policy_contract(void){
+    PMKBPowerPolicy p={0};
+    pmkb_power_policy_init(&p);
+    CHECK(!p.cover_enabled&&!p.cover_seen&&!p.cover_closed);
+    CHECK(sizeof(PMKBPowerPolicy)<=8u);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_OTHER)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,true)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,true)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,false)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+
+    char data[64];size_t length=0;
+    CHECK(pmkb_power_policy_export(&p,data,sizeof(data),&length)==PMKB_OK);
+    CHECK(length==sizeof("pmkb-cover-v1\nmagnetic_cover=off\n")-1u);
+    CHECK(memcmp(data,"pmkb-cover-v1\nmagnetic_cover=off\n",length)==0);
+    PMKBPowerPolicy other={0};
+    pmkb_power_policy_init(&other);
+    CHECK(pmkb_power_policy_import(&other,data,length)==PMKB_OK);
+    CHECK(!other.cover_enabled);
+    CHECK(pmkb_power_policy_set_cover(&other,true)==PMKB_OK);
+    CHECK(pmkb_power_policy_export(&other,data,sizeof(data),&length)==PMKB_OK);
+    CHECK(length==sizeof("pmkb-cover-v1\nmagnetic_cover=on\n")-1u);
+    CHECK(memcmp(data,"pmkb-cover-v1\nmagnetic_cover=on\n",length)==0);
+    CHECK(pmkb_power_policy_import(&p,data,length)==PMKB_OK);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_export(&p,data,length-1u,&length)==PMKB_LIMIT);
+    CHECK(pmkb_power_policy_import(&p,data,length-1u)==PMKB_INVALID);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_import(&p,
+          "pmkb-cover-v2\nmagnetic_cover=off\n",33u)==PMKB_INVALID);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_filter(&p,(PMKBPowerEvent)111)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_filter(NULL,PMKB_POWER_BUTTON_PRESSED)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_set_cover(NULL,false)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_import(NULL,data,length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_import(&p,NULL,length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(NULL,data,sizeof(data),&length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(&p,NULL,sizeof(data),&length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(&p,data,sizeof(data),NULL)==PMKB_INVALID);
+
+    /* Repeated close signals must never produce repeated sleep requests. */
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    for(int i=0;i<2000;i++)
+        CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==
+              (i==0?PMKB_OK:PMKB_NO_CHANGE));
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    groups++;return 0;
+}
+
+
+/* Pure evdev decoding. The caller must classify the source; a keyboard's
+ * KEY_F1 is never sufficient evidence that it came from the Hall switch. */
+static int cover_evdev_contract(void){
+    for(int mode=0;mode<2;mode++){
+        int hall=mode?PMKB_KEY_H:PMKB_KEY_F1;
+        PMKBPowerPolicy policy={0};
+        PMKBPowerEvdev decoder={0};
+        PMKBPowerEvent ev=PMKB_POWER_OTHER;
+        pmkb_power_policy_init(&policy);
+        CHECK(sizeof(PMKBPowerEvdev)<=32u);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_INVALID);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_UNQUALIFIED,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_EXTERNAL,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,1000)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,NULL,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,hall)==PMKB_INVALID);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_NTX_VERIFIED,hall)==PMKB_OK);
+        CHECK(!policy.cover_enabled&&!policy.cover_seen);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_PRESSED);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,0,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_RELEASED);
+        CHECK(pmkb_power_policy_set_cover(&policy,true)==PMKB_OK);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_CLOSED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,2,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_ABS,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,
+              mode?PMKB_KEY_F1:PMKB_KEY_H,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_BTN_TOUCH,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_OPENED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_REPORT,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_NO_CHANGE);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_BUTTON_PRESSED);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,0,&ev)==PMKB_NO_CHANGE);
+        CHECK(ev==PMKB_POWER_OTHER);
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_OK);
+        CHECK(ev==PMKB_POWER_COVER_CLOSED);
+        CHECK(pmkb_power_evdev_init(&decoder,&policy,
+              PMKB_POWER_SOURCE_EXTERNAL,hall)==PMKB_INVALID);
+        ev=PMKB_POWER_OTHER;
+        CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,hall,1,&ev)==PMKB_INVALID);
+        CHECK(ev==PMKB_POWER_OTHER);
+    }
+    PMKBPowerPolicy policy={0};
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_init(NULL,&policy,PMKB_POWER_SOURCE_NTX_VERIFIED,
+          PMKB_KEY_F1)==PMKB_INVALID);
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,PMKB_POWER_SOURCE_NTX_VERIFIED,
+          PMKB_KEY_F1)==PMKB_OK);
+    CHECK(pmkb_power_evdev_feed(NULL,PMKB_EV_KEY,PMKB_KEY_POWER,1,&event)==PMKB_INVALID);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,NULL)==PMKB_INVALID);
+    groups++;return 0;
+}
+
+
+/* Historical NTX uses "mxckpd" for both gpio_keys and matrix paths.
+ * This is deliberately only a candidate finder, NOT source authentication. */
+static int cover_candidate_inventory(void){
+    PMKBPowerInputInfo devices[]={
+        {.name="zForce-ir-touch",.bustype=PMKB_BUS_HOST,
+         .has_ev_key=true,.has_key_f1=false,.has_key_h=false},
+        {.name="mxckpd",.bustype=PMKB_BUS_HOST,.has_ev_key=true,
+         .has_key_f1=true,.has_key_power=true},
+        {.name="External Keyboard",.bustype=0x03,.has_ev_key=true,
+         .has_key_f1=true,.has_key_h=true,.has_key_power=true},
+    };
+    size_t selected=999;
+    CHECK(PMKB_BUS_HOST==0x19);
+    CHECK(PMKB_POWER_SCAN_MAX==32);
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==1);
+    /* Must not bind the live decoder on the basis of a plausible name. */
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent e=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_F1,1,&e)
+          ==PMKB_INVALID);
+    CHECK(e==PMKB_POWER_OTHER);
+    /* Array order and eventN renumbering do not determine the candidate. */
+    PMKBPowerInputInfo swapped=devices[0];
+    devices[0]=devices[1];devices[1]=swapped;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    /* The matrix path may advertise KEY_F1 but not KEY_POWER or KEY_H. */
+    devices[0].has_key_power=false;
+    devices[0].has_key_h=false;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    devices[0].has_key_f1=false;
+    devices[0].has_key_h=true;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    devices[0].has_key_h=false;
+    selected=999;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    CHECK(selected==999);
+    devices[0].has_key_f1=true;
+    devices[0].name="mxckpd-extra";
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].name="mxckpd";
+    devices[0].bustype=0x03; /* USB keyboard pretending to be mxckpd. */
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].bustype=PMKB_BUS_HOST;
+    devices[0].has_ev_key=false;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].has_ev_key=true;
+    /* A duplicated NTX-like source is ambiguous: reject both. */
+    devices[1]=devices[0];
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_AMBIGUOUS);
+    CHECK(selected==999);
+    devices[1].name=NULL;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    selected=999;
+    CHECK(pmkb_power_probe_inputs(NULL,0,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    CHECK(selected==999);
+    CHECK(pmkb_power_probe_inputs(NULL,1,&selected)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_inputs(devices,PMKB_POWER_SCAN_MAX+1u,&selected)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_inputs(devices,3,NULL)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(selected==999);
+    groups++;return 0;
+}
+
+
+/* E606C0 preserved HWCONFIG v1.7 profile: bPCB=28, PCB_Flags=1,
+ * HallSensor=1. gpio_keys is expected; no source is actually trusted. */
+static int aura_hd_hwconfig_profile(void){
+    PMKBPowerBoardSignature hw={
+        .pcb=PMKB_AURA_HD_PCB,
+        .pcb_flags=PMKB_AURA_HD_NO_KEYMATRIX,
+        .hall_sensor=1u
+    };
+    PMKBPowerInputInfo inputs[]={
+        {.name="USB Keyboard",.bustype=0x03,.has_ev_key=true,
+         .has_key_power=true,.has_key_f1=true,.has_key_h=true},
+        {.name="zForce-ir-touch",.bustype=PMKB_BUS_HOST,.has_ev_key=true},
+        {.name="mxckpd",.bustype=PMKB_BUS_HOST,.has_ev_key=true,
+         .has_key_power=true,.has_key_f1=true,.has_key_h=true}
+    };
+    size_t index=999;
+    CHECK(PMKB_AURA_HD_PCB==28);
+    CHECK(PMKB_AURA_HD_NO_KEYMATRIX==1);
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==2);
+    /* Source classification is not authentication: no decoder is enabled. */
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent output=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&output)
+          ==PMKB_INVALID);
+    CHECK(output==PMKB_POWER_OTHER);
+    /* An index is an inventory slot, not a hardcoded /dev/input/eventN. */
+    PMKBPowerInputInfo moved=inputs[2];
+    inputs[2]=inputs[0];inputs[0]=moved;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    /* No matrix, but all three codes are expected by this gpio_keys BSP. */
+    inputs[0].has_key_h=false;
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    CHECK(pmkb_power_probe_inputs(inputs,3,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    inputs[0].has_key_h=true;
+    inputs[0].has_key_power=false;
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    inputs[0].has_key_power=true;
+    inputs[0].has_key_f1=false;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    inputs[0].has_key_f1=true;
+    inputs[0].has_ev_key=false;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].has_ev_key=true;
+    inputs[0].bustype=0x03;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].bustype=PMKB_BUS_HOST;
+    inputs[0].name="mxckpd0";
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].name="mxckpd";
+    /* Other boards and unknown Hall flags cannot inherit the E606C0 policy. */
+    hw.pcb=27u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.pcb=28u;
+    hw.pcb_flags=0u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.pcb_flags=1u;
+    hw.hall_sensor=0u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.hall_sensor=1u;
+    inputs[1]=inputs[0];
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_AMBIGUOUS);
+    CHECK(index==999);
+    inputs[1].name="zForce-ir-touch";
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(NULL,0,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    CHECK(pmkb_power_probe_aura_hd(NULL,1,hw,&index)==PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_aura_hd(inputs,PMKB_POWER_SCAN_MAX+1u,hw,&index)
+          ==PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,NULL)==PMKB_POWER_PROBE_INVALID);
+    CHECK(index==999);
+    groups++;return 0;
+}
+
+
+/* Dedicated Aura HD light switch: GPIO_4_1 -> KEY_FL (90) in the historical
+ * gpio-keys BSP. KOReader interprets the RELEASE as a toggle. This must
+ * remain separate from Hall KEY_F1/KEY_H and Power KEY_POWER. */
+static int frontlight_button_nonregression(void){
+    PMKBPowerPolicy policy={0};
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent event=PMKB_POWER_OTHER;
+    pmkb_power_policy_init(&policy);
+    CHECK(PMKB_KEY_FL==90);
+    CHECK(PMKB_KEY_FL!=PMKB_KEY_F1&&PMKB_KEY_FL!=PMKB_KEY_H);
+    CHECK(PMKB_KEY_FL!=PMKB_KEY_POWER);
+    CHECK(pmkb_power_policy_filter(&policy,PMKB_POWER_LIGHT_TOGGLE)==PMKB_OK);
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,
+          PMKB_POWER_SOURCE_NTX_VERIFIED,PMKB_KEY_F1)==PMKB_OK);
+    /* Cover disabled by default, but the light is still a usable button. */
+    CHECK(!policy.cover_enabled);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_F1,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(decoder.light_pressed);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,2,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    CHECK(!decoder.light_pressed);
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_policy_set_cover(&policy,true)==PMKB_OK);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    CHECK(pmkb_power_policy_set_cover(&policy,false)==PMKB_OK);
+    /* A lost frame during a press must not synthesize a light toggle. */
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_DROPPED,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(!decoder.light_pressed);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_SYN,PMKB_SYN_REPORT,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(event==PMKB_POWER_OTHER);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_LIGHT_TOGGLE);
+    /* The Power button is independent and remains always forwarded. */
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_BUTTON_PRESSED);
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,0,&event)
+          ==PMKB_OK);
+    CHECK(event==PMKB_POWER_BUTTON_RELEASED);
+    /* Invalid source never qualifies the light key or generates a toggle. */
+    CHECK(pmkb_power_evdev_init(&decoder,&policy,
+          PMKB_POWER_SOURCE_EXTERNAL,PMKB_KEY_F1)==PMKB_INVALID);
+    event=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_FL,1,&event)
+          ==PMKB_INVALID);
+    CHECK(event==PMKB_POWER_OTHER);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory()||aura_hd_hwconfig_profile()||frontlight_button_nonregression())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;

@@ -174,3 +174,175 @@ PMKBStatus pmkb_eink_present(void *context,const uint8_t *gray,
     e->completed++;e->in_flight=false;
     return PMKB_OK;
 }
+
+
+/* Magnetic cover policy: pure C11, no timers, threads, sysfs or device I/O. */
+static const char pmkb_cover_off[]="pmkb-cover-v1\nmagnetic_cover=off\n";
+static const char pmkb_cover_on[] ="pmkb-cover-v1\nmagnetic_cover=on\n";
+
+void pmkb_power_policy_init(PMKBPowerPolicy *policy){
+    if(policy)memset(policy,0,sizeof(*policy));
+}
+PMKBStatus pmkb_power_policy_set_cover(PMKBPowerPolicy *policy,bool enabled){
+    if(!policy)return PMKB_INVALID;
+    if(policy->cover_enabled==enabled)return PMKB_NO_CHANGE;
+    policy->cover_enabled=enabled;
+    /* Do not replay the last observed cover position on opt-in. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_export(const PMKBPowerPolicy *policy,
+                                    char *data,size_t capacity,size_t *length){
+    if(!policy||!data||!length)return PMKB_INVALID;
+    const char *source=policy->cover_enabled?pmkb_cover_on:pmkb_cover_off;
+    size_t bytes=policy->cover_enabled?sizeof(pmkb_cover_on)-1u:
+                                       sizeof(pmkb_cover_off)-1u;
+    if(capacity<bytes)return PMKB_LIMIT;
+    memcpy(data,source,bytes);
+    *length=bytes;
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_import(PMKBPowerPolicy *policy,
+                                    const char *data,size_t length){
+    if(!policy||!data)return PMKB_INVALID;
+    bool enabled;
+    if(length==sizeof(pmkb_cover_off)-1u&&
+       memcmp(data,pmkb_cover_off,length)==0)enabled=false;
+    else if(length==sizeof(pmkb_cover_on)-1u&&
+            memcmp(data,pmkb_cover_on,length)==0)enabled=true;
+    else return PMKB_INVALID;
+    policy->cover_enabled=enabled;
+    /* Retain event history: reconfiguring cannot invent an input edge. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event){
+    if(!policy)return PMKB_INVALID;
+    if(event==PMKB_POWER_COVER_CLOSED||event==PMKB_POWER_COVER_OPENED){
+        bool closed=event==PMKB_POWER_COVER_CLOSED;
+        if(policy->cover_seen&&policy->cover_closed==closed)
+            return PMKB_NO_CHANGE;
+        policy->cover_seen=true;
+        policy->cover_closed=closed;
+        return policy->cover_enabled?PMKB_OK:PMKB_NO_CHANGE;
+    }
+    if(event==PMKB_POWER_BUTTON_PRESSED||
+       event==PMKB_POWER_BUTTON_RELEASED||event==PMKB_POWER_OTHER||
+       event==PMKB_POWER_LIGHT_TOGGLE)
+        return PMKB_OK;
+    return PMKB_INVALID;
+}
+
+
+/* Host-only translation from already classified NTX evdev key events. */
+PMKBStatus pmkb_power_evdev_init(PMKBPowerEvdev *decoder,
+        PMKBPowerPolicy *policy,PMKBPowerInputSource source,int cover_code){
+    if(!decoder)return PMKB_INVALID;
+    memset(decoder,0,sizeof(*decoder));
+    if(!policy||source!=PMKB_POWER_SOURCE_NTX_VERIFIED||
+       (cover_code!=PMKB_KEY_F1&&cover_code!=PMKB_KEY_H))
+        return PMKB_INVALID;
+    decoder->policy=policy;
+    decoder->cover_code=cover_code;
+    decoder->qualified=true;
+    policy->cover_seen=false; /* Never inherit a stale level across sources. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
+        int type,int code,int value,PMKBPowerEvent *event){
+    if(!decoder||!event||!decoder->qualified||!decoder->policy)
+        return PMKB_INVALID;
+    if(type==PMKB_EV_SYN&&code==PMKB_SYN_DROPPED){
+        decoder->light_pressed=false; /* A lost frame cannot yield a toggle. */
+        decoder->discard_frame=true;
+        decoder->await_cover_release=true;
+        return PMKB_NO_CHANGE;
+    }
+    if(decoder->discard_frame){
+        /* Discard through the terminating SYN_REPORT. */
+        if(type==PMKB_EV_SYN&&code==PMKB_SYN_REPORT)
+            decoder->discard_frame=false;
+        return PMKB_NO_CHANGE;
+    }
+    if(type!=PMKB_EV_KEY||(value!=0&&value!=1))
+        return PMKB_NO_CHANGE; /* Ignore repeats (value 2). */
+    PMKBPowerEvent semantic;
+    if(code==PMKB_KEY_POWER){
+        semantic=value?PMKB_POWER_BUTTON_PRESSED:PMKB_POWER_BUTTON_RELEASED;
+    }else if(code==PMKB_KEY_FL){
+        if(value==1){
+            decoder->light_pressed=true;
+            return PMKB_NO_CHANGE; /* Press alone must not toggle. */
+        }
+        if(!decoder->light_pressed)return PMKB_NO_CHANGE;
+        decoder->light_pressed=false;
+        semantic=PMKB_POWER_LIGHT_TOGGLE;
+    }else if(code==decoder->cover_code){
+        if(decoder->await_cover_release){
+            if(value==0){
+                decoder->await_cover_release=false;
+                decoder->policy->cover_seen=true;
+                decoder->policy->cover_closed=false;
+            }
+            /* Resynchronize without emitting a phantom wake event. */
+            return PMKB_NO_CHANGE;
+        }
+        semantic=value?PMKB_POWER_COVER_CLOSED:PMKB_POWER_COVER_OPENED;
+    }else{
+        return PMKB_NO_CHANGE;
+    }
+    PMKBStatus rc=pmkb_power_policy_filter(decoder->policy,semantic);
+    if(rc==PMKB_OK)*event=semantic;
+    return rc;
+}
+
+
+/* Read-only metadata classifier: no evdev device or sysfs is accessed here.
+ * Output means "possible NTX keyboard", never "verified Hall event source". */
+PMKBPowerProbeResult pmkb_power_probe_inputs(
+        const PMKBPowerInputInfo *devices,size_t count,size_t *candidate_index){
+    if(!candidate_index||count>PMKB_POWER_SCAN_MAX||
+       (count!=0&&!devices))return PMKB_POWER_PROBE_INVALID;
+    size_t found=0;
+    bool have_candidate=false;
+    for(size_t i=0;i<count;i++){
+        const PMKBPowerInputInfo *d=&devices[i];
+        /* Key capabilities alone would accept external USB keyboards. */
+        if(!d->name||strcmp(d->name,"mxckpd")!=0||
+           d->bustype!=PMKB_BUS_HOST||!d->has_ev_key||
+           (!d->has_key_f1&&!d->has_key_h))continue;
+        if(have_candidate)return PMKB_POWER_PROBE_AMBIGUOUS;
+        found=i;
+        have_candidate=true;
+    }
+    if(!have_candidate)return PMKB_POWER_PROBE_NONE;
+    *candidate_index=found;
+    return PMKB_POWER_PROBE_CANDIDATE;
+}
+
+
+/* HWCONFIG-correlated but still UNVERIFIED input metadata, host-only. */
+PMKBPowerProbeResult pmkb_power_probe_aura_hd(
+        const PMKBPowerInputInfo *devices,size_t count,
+        PMKBPowerBoardSignature hw,size_t *candidate_index){
+    if(!candidate_index||count>PMKB_POWER_SCAN_MAX||
+       (count!=0&&!devices))return PMKB_POWER_PROBE_INVALID;
+    /* This exact profile comes from the E606C0 backup, not a live probe. */
+    if(hw.pcb!=PMKB_AURA_HD_PCB||
+       hw.pcb_flags!=PMKB_AURA_HD_NO_KEYMATRIX||
+       hw.hall_sensor!=1u)return PMKB_POWER_PROBE_NONE;
+    size_t found=0;
+    bool have_candidate=false;
+    for(size_t i=0;i<count;i++){
+        const PMKBPowerInputInfo *d=&devices[i];
+        if(!d->name||strcmp(d->name,"mxckpd")!=0||
+           d->bustype!=PMKB_BUS_HOST||!d->has_ev_key||
+           !d->has_key_f1||!d->has_key_h||!d->has_key_power)
+            continue;
+        if(have_candidate)return PMKB_POWER_PROBE_AMBIGUOUS;
+        found=i;
+        have_candidate=true;
+    }
+    if(!have_candidate)return PMKB_POWER_PROBE_NONE;
+    *candidate_index=found;
+    return PMKB_POWER_PROBE_CANDIDATE;
+}
+
