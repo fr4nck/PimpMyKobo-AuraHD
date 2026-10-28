@@ -14,6 +14,21 @@ Décision R2 (25 octobre 2026) : l'émulateur QEMU E606C0 de katadelos est reten
 
 Priorité : FIRST BOOT sans Nickel reste bloquant pour le matériel. Recherche, documentation et prototypes hors matériel peuvent avancer en parallèle, sans modifier le candidat scellé, PRE-P1, P2 ou les cartes. **Une source consultée ne vaut ni intégration ni qualification matérielle** ; chaque reprise de code exige diff, licence, compatibilité E606C0, tests et décision distincte.
 
+## Jalon ajouté le 27 octobre 2026 — housse magnétique / veille et réveil (PLANIFIÉ)
+
+**Décision PMKB :** les commandes automatiques de veille et de réveil déclenchées par la housse aimantée doivent être **ignorées par défaut**, avec une option explicite pour les réactiver. Le bouton physique d'alimentation doit rester utilisable pour la veille et le réveil, indépendamment de la housse. Le capteur Hall TLE4913 figure dans le HWCONFIG E606C0 ; son GPIO, son IRQ et sa chaîne réelle d'événements restent à confirmer.
+
+**Symptôme à diagnostiquer :** sur l'exemplaire étudié, le réveil nécessitait parfois de brancher l'USB. **La responsabilité du capteur Hall n'est pas établie** : examiner également bouton, batterie/PMIC, MSP430 et chemin suspend/resume.
+
+Portes d'acceptation, dans l'ordre :
+
+1. **Audit hors matériel** : identifier dans les sources et les contrats PMKB/KOReader les événements de housse (input/GPIO/IRQ), leur éventuel rôle de source de réveil et les interactions avec le bouton physique ; ne pas supposer que filtrer un événement utilisateur supprime un réveil matériel.
+2. **Implémentation légère** : définir un réglage persistant *housse magnétique activée* (par défaut **non**), filtrer uniquement les événements de housse dans la couche appropriée sans service résident ; toute modification des IRQ/wakeup au niveau noyau nécessite un audit distinct et doit préserver le bouton physique et les autres sources de réveil.
+3. **Tests synthétiques** : fermeture/ouverture, événements répétés, réglage on/off et redémarrage, mise en veille et réveil au bouton ; vérifier l'absence de boucles veille/réveil et de perte des autres entrées.
+4. **Qualification Aura HD ultérieure** : sur carte de test et avec autorisation matérielle distincte, reproduire plusieurs cycles avec/sans housse, veille prolongée, réveil **sans USB**, puis recueillir les causes de réveil et la consommation. Comparer les deux modes avant de conclure à une panne du Hall.
+
+**État : PLANIFIÉ, non implémenté et non qualifié sur Kobo.** Aucun changement du FIRST BOOT scellé, de P1/P2/P3, de l'image, du firmware ni du matériel n'est autorisé par cet ajout. Voir [matrice des pilotes](kernel-driver-matrix-v1-fr.md) et [chantier énergie](kernel-energy-roadmap-fr.md).
+
 ## Ajout du 13 octobre 2026 — launcher expérimental (hôte uniquement)
 
 | Jalons | État vérifiable | Limitations |
