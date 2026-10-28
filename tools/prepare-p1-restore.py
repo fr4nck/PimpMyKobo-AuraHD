@@ -15,7 +15,7 @@ spec.loader.exec_module(simulation)
 legacy = simulation.legacy
 
 
-def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
+def prepare(manifest: Path, rootfs_report: Path, rootfs: Path, backup: Path,
             acquisition: Path, simulated: Path, simulation_report: Path,
             output: Path) -> dict:
     result = {"schema_version": 1, "tool": "prepare-p1-restore", "status": "refused",
@@ -27,8 +27,8 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
         legacy.reject_device(output)
         if output.exists() or output.is_symlink():
             raise ValueError("plan output already exists; no overwrite")
-        # Revalidate the legacy evidence and rebuild against the actual full backup.
-        check = simulation.preflight(manifest, rebuild, rootfs, backup, output,
+        # Revalidate the legacy evidence and typed producer report against the actual full backup.
+        check = simulation.preflight(manifest, rootfs_report, rootfs, backup, output,
                                      accept_legacy_import=True, require_copy_space=False)
         if check["status"] != "ready":
             raise ValueError("local evidence refused: " + "; ".join(check["errors"]))
@@ -47,14 +47,18 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
                         "destination_readback", "whole_source_reread"))):
             raise ValueError("complete acquisition report inconsistent with full backup")
         report = simulation.read_json(simulation_report)
+        report_tool = report.get("rootfs_report_tool")
         if (report.get("tool") != "restore-rootfs" or report.get("schema_version") != 1
                 or report.get("mode") != "disk_image_simulation" or report.get("status") != "ok"
                 or report.get("complete") is not True or report.get("errors") != []
                 or report.get("input_provenance") != legacy.PROVENANCE
                 or report.get("physical_restore_eligible") is not False
+                or report.get("write_authorized") is not False
                 or any(report.get(key) != check[key] for key in
-                       ("disk_size", "partitions", "p1_offset", "p1_size", "rootfs_sha256",
-                        "target_sha256", "backup_manifest_sha256", "rebuild_report_sha256"))
+                        ("disk_size", "partitions", "p1_offset", "p1_size", "rootfs_sha256",
+                        "target_sha256", "backup_manifest_sha256", "rootfs_report_sha256",
+                        "rootfs_report_tool"))
+                or report_tool not in ("rebuild-rootfs", "build-koreader-rootfs")
                 or simulated.stat().st_size != check["disk_size"]
                 or report.get("output_sha256") != legacy.digest(simulated)):
             raise ValueError("simulation report inconsistent with local inputs")
@@ -71,8 +75,11 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
                       required_target_full_sha256=sha, disk_size=check["disk_size"],
                       p1_offset=p1["offset"], p1_size=p1["size"],
                       replacement_sha256=check["rootfs_sha256"], preserved_sha256=after,
+                      simulation_sha256=report["output_sha256"],
+                      filesystem_validation=check["filesystem_validation"],
+                      candidate_source={"tool": report_tool, "report_sha256": legacy.digest(rootfs_report)},
                       evidence_sha256={"legacy_manifest": legacy.digest(manifest),
-                                       "rebuild_report": legacy.digest(rebuild),
+                                       "rootfs_report": legacy.digest(rootfs_report),
                                        "acquisition_report": legacy.digest(acquisition),
                                        "simulation_report": legacy.digest(simulation_report)},
                       rollback={"source": "verified_full_backup", "offset": p1["offset"], "size": p1["size"]},
@@ -88,7 +95,7 @@ def prepare(manifest: Path, rebuild: Path, rootfs: Path, backup: Path,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("manifest", "rebuild", "rootfs", "backup", "acquisition",
+    for name in ("manifest", "rootfs_report", "rootfs", "backup", "acquisition",
                  "simulated", "simulation_report", "output"):
         parser.add_argument(name, type=Path)
     result = prepare(**vars(parser.parse_args()))

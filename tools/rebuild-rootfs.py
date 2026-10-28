@@ -186,7 +186,15 @@ def require_linux_backend() -> list[str]:
 
 
 def run_checked(argv: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, input=input_text, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+    try:
+        return subprocess.run(argv, input=input_text, text=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, check=True)
+    except subprocess.CalledProcessError as exc:
+        output = exc.stdout if isinstance(exc.stdout, str) else ""
+        message = f"command failed with exit {exc.returncode}: {shlex.join(argv)}"
+        if output.strip():
+            message += "\n--- command output (stdout+stderr) ---\n" + output.rstrip()
+        raise RuntimeError(message) from exc
 
 
 # Superblock flags that describe a filesystem's state, not its layout: never copied.

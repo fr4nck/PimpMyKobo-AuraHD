@@ -26,9 +26,35 @@ for node in 'null:3' 'zero:5' 'random:8' 'urandom:9'; do
     name=${node%:*}; minor=${node#*:}
     [ -e /dev/$name ] || /bin/busybox mknod /dev/$name c 1 "$minor"
 done
+# PMKB_FRONTEND_GUARD_BEGIN
+# Identify the actual Neonode input event, not guessed event0/event1 numbers.
+# Accept one ZForce input only; a missing or ambiguous path is not proof.
+pmkb_check_frontend_devices() {
+    input_class=$1; dev_root=$2; misc_class=$3
+    [ -c "$dev_root/fb0" ] || return 1
+    [ -c "$dev_root/ntx_io" ] || return 1
+    [ -r "$misc_class/ntx_io/dev" ] || return 1
+    touch_found=
+    for event_dir in "$input_class"/event*; do
+        [ -d "$event_dir" ] || continue
+        event=${event_dir##*/}
+        case "$event" in event|event*[!0-9]*) continue ;; esac
+        [ -r "$event_dir/device/name" ] || continue
+        IFS= read -r input_name < "$event_dir/device/name" || return 1
+        [ "$input_name" = zForce-ir-touch ] || continue
+        [ -c "$dev_root/input/$event" ] || return 1
+        [ -z "$touch_found" ] || return 1
+        touch_found=$event
+    done
+    [ -n "$touch_found" ]
+}
+# PMKB_FRONTEND_GUARD_END
 /usr/bin/pmkb-check-offline
-[ -c /dev/fb0 ] && [ -c /dev/input/event0 ] && [ -c /dev/input/event1 ]
+pmkb_check_frontend_devices /sys/class/input /dev /sys/class/misc
 [ -b /dev/mmcblk0p3 ]
+# The rootfs build guarantees this directory, but rcS must not depend on that
+# alone: create it here too so a differently assembled rootfs still mounts.
+mkdir -p /mnt/onboard
 # No fsck, archive installation, formatting or partition changes.
 mount -t vfat -o ro,noatime,nodiratime,utf8 /dev/mmcblk0p3 /mnt/onboard
 /bin/busybox touch /run/pmkb-ready

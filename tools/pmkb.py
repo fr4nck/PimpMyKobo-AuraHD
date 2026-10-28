@@ -9,6 +9,8 @@ from pathlib import Path
 
 VERSION = "0.2.0"
 COMMANDS = {
+    "preflight-koreader": ("preflight-koreader.py", "Aggregate offline KOReader checks; hardware remains unqualified."),
+    "audit-arm-runtime": ("audit-arm-runtime.py", "Audit ARM ELF dependencies in a local rootfs read-only."),
     "gui": ("pmkb-gui.py", "Open the optional Qt workshop for local files only."),
     "inspect": ("inspect-aura-hd.py", "Inspect an image or device read-only."),
     "verify-recovery": ("verify-recovery.py", "Verify an extracted recovery tree read-only."),
@@ -17,6 +19,7 @@ COMMANDS = {
     "simulate": ("restore-rootfs.py", "Plan or simulate P1 replacement in a new local disk image."),
     "prepare-p1": ("prepare-p1-restore.py", "Prepare a local, reviewable restoration plan."),
     "restore-p1": ("restore-p1-linux.py", "Check local evidence; physical modes require native Linux and explicit options."),
+    "build-koreader-rootfs": ("build-koreader-rootfs.py", "Assemble/build an experimental KOReader-direct P1 rootfs."),
 }
 
 
