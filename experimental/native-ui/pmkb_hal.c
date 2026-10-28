@@ -308,3 +308,31 @@ PMKBPowerProbeResult pmkb_power_probe_inputs(
     return PMKB_POWER_PROBE_CANDIDATE;
 }
 
+
+/* HWCONFIG-correlated but still UNVERIFIED input metadata, host-only. */
+PMKBPowerProbeResult pmkb_power_probe_aura_hd(
+        const PMKBPowerInputInfo *devices,size_t count,
+        PMKBPowerBoardSignature hw,size_t *candidate_index){
+    if(!candidate_index||count>PMKB_POWER_SCAN_MAX||
+       (count!=0&&!devices))return PMKB_POWER_PROBE_INVALID;
+    /* This exact profile comes from the E606C0 backup, not a live probe. */
+    if(hw.pcb!=PMKB_AURA_HD_PCB||
+       hw.pcb_flags!=PMKB_AURA_HD_NO_KEYMATRIX||
+       hw.hall_sensor!=1u)return PMKB_POWER_PROBE_NONE;
+    size_t found=0;
+    bool have_candidate=false;
+    for(size_t i=0;i<count;i++){
+        const PMKBPowerInputInfo *d=&devices[i];
+        if(!d->name||strcmp(d->name,"mxckpd")!=0||
+           d->bustype!=PMKB_BUS_HOST||!d->has_ev_key||
+           !d->has_key_f1||!d->has_key_h||!d->has_key_power)
+            continue;
+        if(have_candidate)return PMKB_POWER_PROBE_AMBIGUOUS;
+        found=i;
+        have_candidate=true;
+    }
+    if(!have_candidate)return PMKB_POWER_PROBE_NONE;
+    *candidate_index=found;
+    return PMKB_POWER_PROBE_CANDIDATE;
+}
+

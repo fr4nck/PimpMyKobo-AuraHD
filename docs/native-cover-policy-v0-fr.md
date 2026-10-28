@@ -61,3 +61,26 @@ Les sources historiques font enregistrer le GPIO 5_25 (Hall) sur les deux fronts
 **Candidate pour une modification de noyau futur, pas pour installation :** ne retirer que la capacité de réveil de l'IRQ déclarée par gtTLE4913_GPIO_data, en préservant son enregistrement/anti-rebond et la publication des événements lorsque la machine est éveillée. Dans cette famille de sources, la variation de .iWakeup dans le pilote Hall est le point de sélection le plus localisé ; vérifier la sémantique exacte de la branche utilisée, les retours enable_irq_wake/disable_irq_wake, et l'état d'activation initial avant de proposer une valeur de remplacement. Ne jamais appliquer un disable_irq, un gpio_free, un unbind de mxckpd ou une modification de GPIO_4_10 pour atteindre cet objectif.
 
 **Gates pour toute recette :** source et binaire du noyau effectivement exécuté correspondants, IRQ/GPIO observés en lecture seule, sauvetage et carte test indépendante, comparaison répétée avec et sans capot aimanté, vérification Power/USB/charge et absence de boucle suspend/resume, preuve que les autres sources wake ne régressent pas. La suppression de wake dans un BSP ne prouve pas la résolution de l'incident original. Aucune modification du firmware, des blobs ou des partitions n'est autorisée ici.
+
+
+## Corrélation avec le HWCONFIG original E606C0 (lot suivant, 28 octobre 2026)
+
+Le document [HWCONFIG réel préservé](hwconfig-fr.md) établit déjà, sur **l'image sauvegardée de cette Aura HD** (pas sur un simple modèle générique), les valeurs v1.7 : bPCB=28, bHallSensor=1 et bPCB_Flags=1 (NO_KeyMatrix). Ce dernier point résout **le choix de branche prévu par le code source historique** : dans mx50_ntx_io.c, le bit 0 de bPCB_Flags sélectionne gpiokeys_report_key, pas mxc_kpp_report_key. Le binaire actuellement exécuté et les noms de périphérique disponibles restent inconnus.
+
+Le chemin [gpio_keys.c du BSP historique](https://github.com/pazos/linux-2.6.35.3-kobo/blob/1f43a4a01a727a9b440f2e8830b67734b6373a10/drivers/input/keyboard/gpio_keys.c) annonce le nom mxckpd via la plateforme, BUS_HOST=0x19, EV_KEY ainsi que **les trois capacités** KEY_POWER=116, KEY_F1=59 et KEY_H=35. Ce sont des **capacités annoncées**, non la preuve que chaque touche génère effectivement des événements.
+
+### Porte de qualification ajoutée en C11
+
+pmkb_power_probe_aura_hd compare un profil HWCONFIG **fourni par l'appelant**, sans lire le matériel, à cette signature précise (28,1,1), puis exige un et un seul candidat mxckpd/BUS_HOST/EV_KEY déclarant **les trois** capacités. Il accepte un numéro d'entrée arbitraire, refuse un champ HWCONFIG différent, une capacité manquante, un bus externe ou plusieurs candidats identiques. La fonction générale pmkb_power_probe_inputs reste disponible pour les autres profils en phase d'étude, sans contourner le filtre.
+
+Le résultat reste toujours **CANDIDATE**, jamais SOURCE_NTX_VERIFIED ; la fonction n'invoque pas pmkb_power_evdev_init, ne choisit pas KEY_H/KEY_F1, n'ouvre aucun eventN et ne réveille/endort pas la Kobo. Cela n'ajoute ni RAM résidente mesurée, ni service, ni accès sysfs/evdev sur l'appareil.
+
+### Preuves restant à acquérir sur une Kobo démarrée, en lecture seule
+
+1. Vérifier que les attributs HWCONFIG en cours et les modules réellement exécutés correspondent aux sources (sinon ne pas appliquer le candidat).
+2. Inventorier /sys/class/input/event*/device/name, EVIOCGID et capacités EV_KEY ; ne jamais supposer event0 ou event1.
+3. Sous contrôle de l'utilisateur et sans changement système, enregistrer les **transitions de housse seule**, puis celles du **bouton physique seul**. Associer les codes F1 ou H à leur source uniquement après comparaison, sans confondre la présence d'un bit de capacité avec l'émission effective d'une touche.
+4. Comparer veille/réveil avec et sans housse puis les sources IRQ de réveil. Le symptôme « USB nécessaire pour réveiller » peut provenir du PMIC, de la batterie ou de suspend/resume et n'est toujours pas attribué au capteur.
+5. Toute désactivation au niveau IRQ et tout essai sur carte séparée doivent rester explicitement autorisés et réversibles. Le [patch candidat non appliqué](hall-irq-wakeup-candidate-fr.md) n'est pas un firmware prêt à installer.
+
+**État : profil logiciel vérifié uniquement contre sauvegarde/documentation et sources historiques. Démonstration d'événements réels, d'une veille correcte ou d'une panne TLE4913 : NON RÉALISÉE.**

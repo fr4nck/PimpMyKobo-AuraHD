@@ -169,4 +169,23 @@ typedef enum {
 PMKBPowerProbeResult pmkb_power_probe_inputs(
         const PMKBPowerInputInfo *devices,size_t count,size_t *candidate_index);
 
+
+/* Board-specific evidence gate for the preserved Aura HD N204 HWCONFIG v1.7:
+ * bPCB=28 (E606C0), bPCB_Flags=1 (NO_KeyMatrix), bHallSensor=1.
+ * The source branch used by this board is gpio_keys ("mxckpd"), which
+ * advertises KEY_POWER, KEY_F1 and KEY_H via its key capability bitmap.
+ * This signature is supplied by a caller; it is NOT measured here. */
+enum { PMKB_AURA_HD_PCB=28, PMKB_AURA_HD_NO_KEYMATRIX=1 };
+typedef struct {
+    unsigned int pcb,pcb_flags,hall_sensor;
+} PMKBPowerBoardSignature;
+/* More selective than pmkb_power_probe_inputs for the *preserved* hardware
+ * profile. CANDIDATE is still not authorization to bind/read evdev events.
+ * A future read-only live qualification must establish the actual event
+ * source, Hall key code and independent physical Power key.
+ * Only writes the output index for one unambiguous candidate. */
+PMKBPowerProbeResult pmkb_power_probe_aura_hd(
+        const PMKBPowerInputInfo *devices,size_t count,
+        PMKBPowerBoardSignature hw,size_t *candidate_index);
+
 #endif

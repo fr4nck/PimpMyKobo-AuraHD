@@ -735,13 +735,98 @@ static int cover_candidate_inventory(void){
     groups++;return 0;
 }
 
+
+/* E606C0 preserved HWCONFIG v1.7 profile: bPCB=28, PCB_Flags=1,
+ * HallSensor=1. gpio_keys is expected; no source is actually trusted. */
+static int aura_hd_hwconfig_profile(void){
+    PMKBPowerBoardSignature hw={
+        .pcb=PMKB_AURA_HD_PCB,
+        .pcb_flags=PMKB_AURA_HD_NO_KEYMATRIX,
+        .hall_sensor=1u
+    };
+    PMKBPowerInputInfo inputs[]={
+        {.name="USB Keyboard",.bustype=0x03,.has_ev_key=true,
+         .has_key_power=true,.has_key_f1=true,.has_key_h=true},
+        {.name="zForce-ir-touch",.bustype=PMKB_BUS_HOST,.has_ev_key=true},
+        {.name="mxckpd",.bustype=PMKB_BUS_HOST,.has_ev_key=true,
+         .has_key_power=true,.has_key_f1=true,.has_key_h=true}
+    };
+    size_t index=999;
+    CHECK(PMKB_AURA_HD_PCB==28);
+    CHECK(PMKB_AURA_HD_NO_KEYMATRIX==1);
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==2);
+    /* Source classification is not authentication: no decoder is enabled. */
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent output=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_POWER,1,&output)
+          ==PMKB_INVALID);
+    CHECK(output==PMKB_POWER_OTHER);
+    /* An index is an inventory slot, not a hardcoded /dev/input/eventN. */
+    PMKBPowerInputInfo moved=inputs[2];
+    inputs[2]=inputs[0];inputs[0]=moved;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    /* No matrix, but all three codes are expected by this gpio_keys BSP. */
+    inputs[0].has_key_h=false;
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    CHECK(pmkb_power_probe_inputs(inputs,3,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    inputs[0].has_key_h=true;
+    inputs[0].has_key_power=false;
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    inputs[0].has_key_power=true;
+    inputs[0].has_key_f1=false;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    inputs[0].has_key_f1=true;
+    inputs[0].has_ev_key=false;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].has_ev_key=true;
+    inputs[0].bustype=0x03;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].bustype=PMKB_BUS_HOST;
+    inputs[0].name="mxckpd0";
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    inputs[0].name="mxckpd";
+    /* Other boards and unknown Hall flags cannot inherit the E606C0 policy. */
+    hw.pcb=27u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.pcb=28u;
+    hw.pcb_flags=0u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.pcb_flags=1u;
+    hw.hall_sensor=0u;
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_NONE);
+    hw.hall_sensor=1u;
+    inputs[1]=inputs[0];
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_AMBIGUOUS);
+    CHECK(index==999);
+    inputs[1].name="zForce-ir-touch";
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,&index)==PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(index==0);
+    index=999;
+    CHECK(pmkb_power_probe_aura_hd(NULL,0,hw,&index)==PMKB_POWER_PROBE_NONE);
+    CHECK(index==999);
+    CHECK(pmkb_power_probe_aura_hd(NULL,1,hw,&index)==PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_aura_hd(inputs,PMKB_POWER_SCAN_MAX+1u,hw,&index)
+          ==PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_aura_hd(inputs,3,hw,NULL)==PMKB_POWER_PROBE_INVALID);
+    CHECK(index==999);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory()||aura_hd_hwconfig_profile())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;
