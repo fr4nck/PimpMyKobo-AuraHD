@@ -49,7 +49,7 @@ SKELETON_DIRS = ("proc", "sys", "dev", "dev/input", "dev/pts", "run", "tmp",
 
 REQUIRED_ENTRYPOINTS = (
     "etc/init.d/rcS", "etc/inittab", "usr/bin/pmkb-check-offline",
-    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
+    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "usr/bin/pmkb-cover-init", "bin/kobo_config.sh",
     "opt/koreader/reader.lua", "opt/koreader/luajit", READER_PROFILE_REL,
 )
 
@@ -67,7 +67,7 @@ MAX_SCAN_BYTES = 2 * 1024 * 1024
 # small contract can be blocking here.
 BOOTSTRAP_TEXT_PATHS = frozenset({
     "etc/inittab", "etc/init.d/rcS", "usr/bin/pmkb-check-offline",
-    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "bin/kobo_config.sh",
+    "usr/bin/pmkb-check-onboard", "usr/bin/pmkb-reader", "usr/bin/pmkb-cover-init", "bin/kobo_config.sh",
     "opt/koreader/reader.lua", READER_PROFILE_REL,
 })
 

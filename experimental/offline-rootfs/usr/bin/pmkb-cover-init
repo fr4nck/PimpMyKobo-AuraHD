@@ -1,0 +1,26 @@
+#!/bin/sh
+# First-run KOReader cover preference, volatile only. No writes to P3.
+set -eu
+[ "$#" -eq 0 ] || exit 2
+[ -n "${XDG_CONFIG_HOME:-}" ] || exit 1
+[ -d "$XDG_CONFIG_HOME" ] && [ ! -L "$XDG_CONFIG_HOME" ] || exit 1
+umask 077
+data_dir=$XDG_CONFIG_HOME/koreader
+[ ! -L "$data_dir" ] || exit 1
+if [ ! -d "$data_dir" ]; then
+    mkdir "$data_dir" || exit 1
+fi
+[ -d "$data_dir" ] && [ ! -L "$data_dir" ] || exit 1
+settings=$data_dir/settings.reader.lua
+[ ! -L "$settings" ] || exit 1
+if [ -e "$settings" ]; then
+    [ -f "$settings" ] || exit 1
+    exit 0
+fi
+# A single fresh Lua table; never replace an existing user setting.
+(
+    set -C
+    printf 'return {\n    ["ignore_power_sleepcover"] = true,\n    ["ignore_open_sleepcover"] = false,\n}\n' > "$settings"
+) || {
+    [ -f "$settings" ] && [ ! -L "$settings" ] || exit 1
+}

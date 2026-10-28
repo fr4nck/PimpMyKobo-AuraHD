@@ -8,6 +8,8 @@ export XDG_CONFIG_HOME=/tmp/pmkb/config XDG_DATA_HOME=/tmp/pmkb/data XDG_CACHE_H
 export LANG=C LD_LIBRARY_PATH=/opt/koreader/libs:/lib
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 cd /opt/koreader
+# Seed an absent temporary KOReader cover preference, then re-check P3.
+/usr/bin/pmkb-cover-init
 # /run/pmkb-ready only proves P3 mounted during rcS; it says nothing about
 # now. /proc/mounts is a live kernel view, not a cached marker, so this
 # re-check immediately before exec closes that gap: nothing below this
