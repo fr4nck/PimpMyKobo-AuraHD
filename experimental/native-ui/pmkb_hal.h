@@ -88,4 +88,34 @@ PMKBStatus pmkb_eink_init(PMKBEink *eink,int width,int height,
 PMKBStatus pmkb_eink_present(void *context,const uint8_t *gray,
                              int width,int height,PMKBRect dirty);
 PMKBStatus pmkb_eink_set_update(PMKBEink *eink,PMKBEinkUpdate mode);
+
+/* Power input policy (host-only, no GPIO/IRQ operations).
+ * The future evdev adapter MUST classify the input source first:
+ * KEY_F1 on an arbitrary keyboard is NOT proof of a Hall event.
+ * PMKB_OK means forward to the existing power manager; it is never
+ * evidence that suspend or wake was completed by the device. */
+typedef enum {
+    PMKB_POWER_COVER_CLOSED=0,
+    PMKB_POWER_COVER_OPENED=1,
+    PMKB_POWER_BUTTON_PRESSED=2,
+    PMKB_POWER_BUTTON_RELEASED=3,
+    PMKB_POWER_OTHER=4
+} PMKBPowerEvent;
+typedef struct {
+    bool cover_enabled; /* false by default, opt-in only */
+    bool cover_seen;
+    bool cover_closed;
+} PMKBPowerPolicy;
+void pmkb_power_policy_init(PMKBPowerPolicy *policy);
+PMKBStatus pmkb_power_policy_set_cover(PMKBPowerPolicy *policy,bool enabled);
+/* Exact versioned configuration bytes; no read/write or settings path here.
+ * length excludes a terminating NUL. Invalid imports do not mutate state. */
+PMKBStatus pmkb_power_policy_export(const PMKBPowerPolicy *policy,
+                                    char *data,size_t capacity,size_t *length);
+PMKBStatus pmkb_power_policy_import(PMKBPowerPolicy *policy,
+                                    const char *data,size_t length);
+/* PMKB_NO_CHANGE = ignore, PMKB_OK = forward. Button events are never
+ * suppressed. Repeated identical cover levels are coalesced. */
+PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event);
+
 #endif

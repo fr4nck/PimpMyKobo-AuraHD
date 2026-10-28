@@ -174,3 +174,59 @@ PMKBStatus pmkb_eink_present(void *context,const uint8_t *gray,
     e->completed++;e->in_flight=false;
     return PMKB_OK;
 }
+
+
+/* Magnetic cover policy: pure C11, no timers, threads, sysfs or device I/O. */
+static const char pmkb_cover_off[]="pmkb-cover-v1\nmagnetic_cover=off\n";
+static const char pmkb_cover_on[] ="pmkb-cover-v1\nmagnetic_cover=on\n";
+
+void pmkb_power_policy_init(PMKBPowerPolicy *policy){
+    if(policy)memset(policy,0,sizeof(*policy));
+}
+PMKBStatus pmkb_power_policy_set_cover(PMKBPowerPolicy *policy,bool enabled){
+    if(!policy)return PMKB_INVALID;
+    if(policy->cover_enabled==enabled)return PMKB_NO_CHANGE;
+    policy->cover_enabled=enabled;
+    /* Do not replay the last observed cover position on opt-in. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_export(const PMKBPowerPolicy *policy,
+                                    char *data,size_t capacity,size_t *length){
+    if(!policy||!data||!length)return PMKB_INVALID;
+    const char *source=policy->cover_enabled?pmkb_cover_on:pmkb_cover_off;
+    size_t bytes=policy->cover_enabled?sizeof(pmkb_cover_on)-1u:
+                                       sizeof(pmkb_cover_off)-1u;
+    if(capacity<bytes)return PMKB_LIMIT;
+    memcpy(data,source,bytes);
+    *length=bytes;
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_import(PMKBPowerPolicy *policy,
+                                    const char *data,size_t length){
+    if(!policy||!data)return PMKB_INVALID;
+    bool enabled;
+    if(length==sizeof(pmkb_cover_off)-1u&&
+       memcmp(data,pmkb_cover_off,length)==0)enabled=false;
+    else if(length==sizeof(pmkb_cover_on)-1u&&
+            memcmp(data,pmkb_cover_on,length)==0)enabled=true;
+    else return PMKB_INVALID;
+    policy->cover_enabled=enabled;
+    /* Retain event history: reconfiguring cannot invent an input edge. */
+    return PMKB_OK;
+}
+PMKBStatus pmkb_power_policy_filter(PMKBPowerPolicy *policy,PMKBPowerEvent event){
+    if(!policy)return PMKB_INVALID;
+    if(event==PMKB_POWER_COVER_CLOSED||event==PMKB_POWER_COVER_OPENED){
+        bool closed=event==PMKB_POWER_COVER_CLOSED;
+        if(policy->cover_seen&&policy->cover_closed==closed)
+            return PMKB_NO_CHANGE;
+        policy->cover_seen=true;
+        policy->cover_closed=closed;
+        return policy->cover_enabled?PMKB_OK:PMKB_NO_CHANGE;
+    }
+    if(event==PMKB_POWER_BUTTON_PRESSED||
+       event==PMKB_POWER_BUTTON_RELEASED||event==PMKB_POWER_OTHER)
+        return PMKB_OK;
+    return PMKB_INVALID;
+}
+

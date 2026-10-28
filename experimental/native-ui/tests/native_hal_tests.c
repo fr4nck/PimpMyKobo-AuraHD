@@ -508,13 +508,78 @@ static int end_to_end_legacy_touch(void){
     CHECK(pmkb_app_host_close(&host,true)==PMKB_OK);
     groups++;return 0;
 }
+
+/* Semantic cover events only: real evdev device identification is pending.
+ * The power button must remain completely independent from cover opt-in. */
+static int cover_policy_contract(void){
+    PMKBPowerPolicy p={0};
+    pmkb_power_policy_init(&p);
+    CHECK(!p.cover_enabled&&!p.cover_seen&&!p.cover_closed);
+    CHECK(sizeof(PMKBPowerPolicy)<=8u);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_OTHER)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,true)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,true)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+    CHECK(pmkb_power_policy_set_cover(&p,false)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==PMKB_NO_CHANGE);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_RELEASED)==PMKB_OK);
+
+    char data[64];size_t length=0;
+    CHECK(pmkb_power_policy_export(&p,data,sizeof(data),&length)==PMKB_OK);
+    CHECK(length==sizeof("pmkb-cover-v1\nmagnetic_cover=off\n")-1u);
+    CHECK(memcmp(data,"pmkb-cover-v1\nmagnetic_cover=off\n",length)==0);
+    PMKBPowerPolicy other={0};
+    pmkb_power_policy_init(&other);
+    CHECK(pmkb_power_policy_import(&other,data,length)==PMKB_OK);
+    CHECK(!other.cover_enabled);
+    CHECK(pmkb_power_policy_set_cover(&other,true)==PMKB_OK);
+    CHECK(pmkb_power_policy_export(&other,data,sizeof(data),&length)==PMKB_OK);
+    CHECK(length==sizeof("pmkb-cover-v1\nmagnetic_cover=on\n")-1u);
+    CHECK(memcmp(data,"pmkb-cover-v1\nmagnetic_cover=on\n",length)==0);
+    CHECK(pmkb_power_policy_import(&p,data,length)==PMKB_OK);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_export(&p,data,length-1u,&length)==PMKB_LIMIT);
+    CHECK(pmkb_power_policy_import(&p,data,length-1u)==PMKB_INVALID);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_import(&p,
+          "pmkb-cover-v2\nmagnetic_cover=off\n",33u)==PMKB_INVALID);
+    CHECK(p.cover_enabled);
+    CHECK(pmkb_power_policy_filter(&p,(PMKBPowerEvent)111)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_filter(NULL,PMKB_POWER_BUTTON_PRESSED)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_set_cover(NULL,false)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_import(NULL,data,length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_import(&p,NULL,length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(NULL,data,sizeof(data),&length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(&p,NULL,sizeof(data),&length)==PMKB_INVALID);
+    CHECK(pmkb_power_policy_export(&p,data,sizeof(data),NULL)==PMKB_INVALID);
+
+    /* Repeated close signals must never produce repeated sleep requests. */
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    for(int i=0;i<2000;i++)
+        CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_CLOSED)==
+              (i==0?PMKB_OK:PMKB_NO_CHANGE));
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_COVER_OPENED)==PMKB_OK);
+    CHECK(pmkb_power_policy_filter(&p,PMKB_POWER_BUTTON_PRESSED)==PMKB_OK);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;

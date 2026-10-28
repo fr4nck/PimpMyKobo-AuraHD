@@ -286,3 +286,8 @@ explicite pour remplacer un carnet non vide. Un import réussi avance
 la génération afin de rejeter les appels tardifs. Le carnet reste RAM,
 et PMKB_UNSAVED reste donc en vigueur même après une récupération.
 Voir docs/native-notes-import-transaction-v0-fr.md.
+
+
+## Housse magnétique — politique d'événements V0 (hôte)
+
+PMKB-HAL inclut maintenant un filtre C11 optionnel pour les événements **déjà identifiés** comme provenant de la housse magnétique : **désactivé par défaut**, bouton physique toujours transmis, doublons de niveau ignorés. Un format exact de configuration mémoire (pmkb-cover-v1) est prêt pour un futur stockage sûr, mais aucun réglage utilisateur durable ni traitement d'IRQ matériel n'est implémenté. Voir [contrat et limites](../../docs/native-cover-policy-v0-fr.md). La CI exécute les régressions synthétiques dans pmkb-hal-tests. **Ne pas déclarer la veille/réveil réelle de la Kobo qualifiée.**
