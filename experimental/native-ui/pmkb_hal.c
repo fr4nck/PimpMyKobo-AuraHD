@@ -284,3 +284,27 @@ PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
     return rc;
 }
 
+
+/* Read-only metadata classifier: no evdev device or sysfs is accessed here.
+ * Output means "possible NTX keyboard", never "verified Hall event source". */
+PMKBPowerProbeResult pmkb_power_probe_inputs(
+        const PMKBPowerInputInfo *devices,size_t count,size_t *candidate_index){
+    if(!candidate_index||count>PMKB_POWER_SCAN_MAX||
+       (count!=0&&!devices))return PMKB_POWER_PROBE_INVALID;
+    size_t found=0;
+    bool have_candidate=false;
+    for(size_t i=0;i<count;i++){
+        const PMKBPowerInputInfo *d=&devices[i];
+        /* Key capabilities alone would accept external USB keyboards. */
+        if(!d->name||strcmp(d->name,"mxckpd")!=0||
+           d->bustype!=PMKB_BUS_HOST||!d->has_ev_key||
+           (!d->has_key_f1&&!d->has_key_h))continue;
+        if(have_candidate)return PMKB_POWER_PROBE_AMBIGUOUS;
+        found=i;
+        have_candidate=true;
+    }
+    if(!have_candidate)return PMKB_POWER_PROBE_NONE;
+    *candidate_index=found;
+    return PMKB_POWER_PROBE_CANDIDATE;
+}
+

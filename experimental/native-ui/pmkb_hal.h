@@ -144,4 +144,29 @@ PMKBStatus pmkb_power_evdev_init(PMKBPowerEvdev *decoder,
 PMKBStatus pmkb_power_evdev_feed(PMKBPowerEvdev *decoder,
         int type,int code,int value,PMKBPowerEvent *event);
 
+
+/* Inventory of already discovered evdev devices. Both legacy NTX
+ * gpio_keys and matrix-keypad paths can advertise the name "mxckpd".
+ * BUS_HOST and KEY_F1/KEY_H are hints, never hardware authentication.
+ * Older matrix drivers may not advertise KEY_POWER in their key bitmap.
+ * The index is an array position, not an assumed /dev/input/eventN. */
+enum { PMKB_BUS_HOST=0x19, PMKB_POWER_SCAN_MAX=32 };
+typedef struct {
+    const char *name;       /* NUL-terminated EVIOCGNAME supplied by caller */
+    unsigned int bustype;  /* EVIOCGID, zero if not available */
+    bool has_ev_key;
+    bool has_key_f1,has_key_h,has_key_power;
+} PMKBPowerInputInfo;
+typedef enum {
+    PMKB_POWER_PROBE_INVALID=0,
+    PMKB_POWER_PROBE_NONE=1,
+    PMKB_POWER_PROBE_CANDIDATE=2,  /* STILL UNQUALIFIED */
+    PMKB_POWER_PROBE_AMBIGUOUS=3
+} PMKBPowerProbeResult;
+/* Never binds PMKBPowerEvdev and never outputs a cover_code.
+ * Only an independently verified live Hall transition can establish which
+ * code is actually emitted. The output index changes on CANDIDATE only. */
+PMKBPowerProbeResult pmkb_power_probe_inputs(
+        const PMKBPowerInputInfo *devices,size_t count,size_t *candidate_index);
+
 #endif

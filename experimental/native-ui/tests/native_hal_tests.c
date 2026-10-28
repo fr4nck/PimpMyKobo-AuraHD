@@ -653,13 +653,95 @@ static int cover_evdev_contract(void){
     groups++;return 0;
 }
 
+
+/* Historical NTX uses "mxckpd" for both gpio_keys and matrix paths.
+ * This is deliberately only a candidate finder, NOT source authentication. */
+static int cover_candidate_inventory(void){
+    PMKBPowerInputInfo devices[]={
+        {.name="zForce-ir-touch",.bustype=PMKB_BUS_HOST,
+         .has_ev_key=true,.has_key_f1=false,.has_key_h=false},
+        {.name="mxckpd",.bustype=PMKB_BUS_HOST,.has_ev_key=true,
+         .has_key_f1=true,.has_key_power=true},
+        {.name="External Keyboard",.bustype=0x03,.has_ev_key=true,
+         .has_key_f1=true,.has_key_h=true,.has_key_power=true},
+    };
+    size_t selected=999;
+    CHECK(PMKB_BUS_HOST==0x19);
+    CHECK(PMKB_POWER_SCAN_MAX==32);
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==1);
+    /* Must not bind the live decoder on the basis of a plausible name. */
+    PMKBPowerEvdev decoder={0};
+    PMKBPowerEvent e=PMKB_POWER_OTHER;
+    CHECK(pmkb_power_evdev_feed(&decoder,PMKB_EV_KEY,PMKB_KEY_F1,1,&e)
+          ==PMKB_INVALID);
+    CHECK(e==PMKB_POWER_OTHER);
+    /* Array order and eventN renumbering do not determine the candidate. */
+    PMKBPowerInputInfo swapped=devices[0];
+    devices[0]=devices[1];devices[1]=swapped;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    /* The matrix path may advertise KEY_F1 but not KEY_POWER or KEY_H. */
+    devices[0].has_key_power=false;
+    devices[0].has_key_h=false;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    devices[0].has_key_f1=false;
+    devices[0].has_key_h=true;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    devices[0].has_key_h=false;
+    selected=999;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    CHECK(selected==999);
+    devices[0].has_key_f1=true;
+    devices[0].name="mxckpd-extra";
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].name="mxckpd";
+    devices[0].bustype=0x03; /* USB keyboard pretending to be mxckpd. */
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].bustype=PMKB_BUS_HOST;
+    devices[0].has_ev_key=false;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    devices[0].has_ev_key=true;
+    /* A duplicated NTX-like source is ambiguous: reject both. */
+    devices[1]=devices[0];
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_AMBIGUOUS);
+    CHECK(selected==999);
+    devices[1].name=NULL;
+    CHECK(pmkb_power_probe_inputs(devices,3,&selected)==
+          PMKB_POWER_PROBE_CANDIDATE);
+    CHECK(selected==0);
+    selected=999;
+    CHECK(pmkb_power_probe_inputs(NULL,0,&selected)==
+          PMKB_POWER_PROBE_NONE);
+    CHECK(selected==999);
+    CHECK(pmkb_power_probe_inputs(NULL,1,&selected)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_inputs(devices,PMKB_POWER_SCAN_MAX+1u,&selected)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(pmkb_power_probe_inputs(devices,3,NULL)==
+          PMKB_POWER_PROBE_INVALID);
+    CHECK(selected==999);
+    groups++;return 0;
+}
+
 int main(void){
     if(decode_taps()||rotate_mirror()||extreme_abs_corner_matrix()||
        center_rotation_recovery_matrix()||missing_and_invalid_events()||
        lost_frame_quarantine()||two_fingers_are_not_taps()||
        eink_partial_and_policy()||retry_and_marker()||
        retry_with_intervening_edit()||invalid_hal_calls()||
-       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract())return 1;
+       end_to_end_legacy_touch()||cover_policy_contract()||cover_evdev_contract()||cover_candidate_inventory())return 1;
     printf("PMKB HAL: %u assertions PASS, %u groups PASS, 0 FAIL\n",
            assertions,groups);
     return 0;
