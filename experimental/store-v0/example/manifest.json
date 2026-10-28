@@ -1,0 +1,11 @@
+{
+  "manifest_version": 1,
+  "id": "org.pmkb.demo",
+  "name": "Demonstrateur PMKB",
+  "version": "0.1.0",
+  "target": "dragon",
+  "runtime": "pmkb-ui-v0",
+  "entrypoint": "bin/demo",
+  "dependencies": [],
+  "network": false
+}

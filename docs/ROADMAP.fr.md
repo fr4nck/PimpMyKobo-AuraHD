@@ -2,263 +2,110 @@
 
 **Français** | [English](ROADMAP.md)
 
-État au **6 octobre 2026**, référence d'intégration `integration/pmkb-first-boot-1@27e33654626fb996398284d8ca683fd81737262c`.
+État au 3 octobre 2026, branche `feat/rebuild-rootfs-spec`. Une fonctionnalité codée et testée sur fichiers ne constitue pas une validation sur la vraie Kobo. Cette roadmap ne donne aucune autorisation d'écriture physique.
 
-Une fonctionnalité codée et testée sur fichiers ne constitue pas une validation sur la vraie Kobo. **Aucune écriture physique sur une microSD Kobo n'a encore été réalisée dans ce chantier.** Cette roadmap n'autorise aucune écriture implicite.
+## Recherche externe et composants candidats — 24 octobre 2026
 
-## Objectif immédiat
+Le [registre permanent des sources et de la recherche](recherche-sources-fr.md) centralise les dépôts Kobo/Netronix, noyaux, pilotes EPDC et ZForce, émulation E606C0, FBInk, outils ARM, Notes, terminal, SSH, dictionnaires et synchronisation Calibre. Toute nouvelle ressource pertinente, notamment [Oniricorpe — Kobo hacks & mods](https://oniricorpe.eu/log/tech/kobo-hacks-mods/), doit y être classée **INFO / INSPIRATION / CANDIDAT** et rattachée à un jalon R0–R10.
 
-Le jalon prioritaire n'est plus de restaurer P1 sur la microSD originale.
+Le registre suit aussi désormais [Kobo Reader](https://www.mobileread.com/forums/forumdisplay.php?f=223) et son [Kobo Developer's Corner](https://www.mobileread.com/forums/forumdisplay.php?f=247), notamment les projets **kos (KOReader OS)**, **Quill OS / InkBox**, **Kobalt** et les fils de récupération : voir **R10**. Les OS tiers couvrent d'autres modèles ; la compatibilité Aura HD E606C0 n'est pas démontrée.
 
-Le parcours normal visé est désormais :
+Décision R2 (25 octobre 2026) : l'émulateur QEMU E606C0 de katadelos est retenu comme banc de boot, mais **son constructeur d'image est écarté pour FIRST BOOT**, car il réécrit `rcS` et `passwd` et exige Nickel. Une carte virtuelle PMKB copie P1/P2 à l'identique, voir [Exploitation R2](recherche-sources-fr.md#exploitation-r2--25-octobre-2026).
 
-**microSD originale en lecture seule → prélèvement PRE-P1 + P2 → retrait de l'originale → construction d'une nouvelle microSD PMKB → relecture complète → FIRST BOOT matériel sur l'Aura HD.**
+Priorité : FIRST BOOT sans Nickel reste bloquant pour le matériel. Recherche, documentation et prototypes hors matériel peuvent avancer en parallèle, sans modifier le candidat scellé, PRE-P1, P2 ou les cartes. **Une source consultée ne vaut ni intégration ni qualification matérielle** ; chaque reprise de code exige diff, licence, compatibilité E606C0, tests et décision distincte.
 
-La microSD originale doit rester intacte et être conservée comme sauvegarde matérielle.
+## Jalon ajouté le 27 octobre 2026 — housse magnétique / veille et réveil (PLANIFIÉ)
 
-La ligne d'arrivée immédiate est simple :
+**Décision PMKB :** les commandes automatiques de veille et de réveil déclenchées par la housse aimantée doivent être **ignorées par défaut**, avec une option explicite pour les réactiver. Le bouton physique d'alimentation doit rester utilisable pour la veille et le réveil, indépendamment de la housse. Le capteur Hall TLE4913 figure dans le HWCONFIG E606C0 ; son GPIO, son IRQ et sa chaîne réelle d'événements restent à confirmer.
 
-**fabriquer une nouvelle microSD, l'installer dans l'Aura HD et qualifier enfin le premier démarrage réel.**
+**Symptôme à diagnostiquer :** sur l'exemplaire étudié, le réveil nécessitait parfois de brancher l'USB. **La responsabilité du capteur Hall n'est pas établie** : examiner également bouton, batterie/PMIC, MSP430 et chemin suspend/resume.
+
+Portes d'acceptation, dans l'ordre :
+
+1. **Audit hors matériel** : identifier dans les sources et les contrats PMKB/KOReader les événements de housse (input/GPIO/IRQ), leur éventuel rôle de source de réveil et les interactions avec le bouton physique ; ne pas supposer que filtrer un événement utilisateur supprime un réveil matériel.
+2. **Implémentation légère** : définir un réglage persistant *housse magnétique activée* (par défaut **non**), filtrer uniquement les événements de housse dans la couche appropriée sans service résident ; toute modification des IRQ/wakeup au niveau noyau nécessite un audit distinct et doit préserver le bouton physique et les autres sources de réveil.
+3. **Tests synthétiques** : fermeture/ouverture, événements répétés, réglage on/off et redémarrage, mise en veille et réveil au bouton ; vérifier l'absence de boucles veille/réveil et de perte des autres entrées.
+4. **Qualification Aura HD ultérieure** : sur carte de test et avec autorisation matérielle distincte, reproduire plusieurs cycles avec/sans housse, veille prolongée, réveil **sans USB**, puis recueillir les causes de réveil et la consommation. Comparer les deux modes avant de conclure à une panne du Hall.
+
+**État : PLANIFIÉ, non implémenté et non qualifié sur Kobo.** Aucun changement du FIRST BOOT scellé, de P1/P2/P3, de l'image, du firmware ni du matériel n'est autorisé par cet ajout. Voir [matrice des pilotes](kernel-driver-matrix-v1-fr.md) et [chantier énergie](kernel-energy-roadmap-fr.md).
+
+## Ajout du 13 octobre 2026 — launcher expérimental (hôte uniquement)
+
+| Jalons | État vérifiable | Limitations |
+| --- | --- | --- |
+| V0.2 — composition manga et versions optimisées | **Validé et conservé dans Git** : PNG RGB, 16 gris (1080 × 1440, 250 757 octets), 4 gris, 1 bit et manifeste SHA-256 | Pas une interface embarquée |
+| V0.3 — barre système simulée Lua | **Implémenté et testé** : batterie, Wi-Fi, éclairage, contraste, rafraîchissement, veille et réglages | Demandes inertes ; aucune mesure réelle |
+| V0.4 — [accueil illustré cliquable sur PC](../experimental/launcher-v0/simulator.html) | **Fusionné dans main** : huit scènes approuvées, navigation clavier/souris et états fictifs | KOReader non lancé ; navigateur/tactile matériel non qualifiés |
+| V0.5 — dock et sélection | **Prototype hôte** : dock applicatif distinct, favoris configurables en session, états clair/sombre via composition CSS, sans modifier les images | Compromis d'espace et de contraste e-ink à valider sur matériel |
+
+Détails et commandes : [README du launcher](../experimental/launcher-v0/README.md). L'ordre approuvé reste **Livres / Applications, Jeux / Web, Recettes / Notes, Boutique / Réglages**. Le PNG original **ne doit pas être redessiné**. Le chemin FIRST BOOT, `rcS`, `pmkb-reader`, P1/P2/P3 restent protégés. **Toute qualification matérielle (écran, tactile, frontlight, énergie, Wi-Fi, veille, boot, lancement KOReader) est en attente** ; aucune opération d'écriture n'est autorisée par ces versions.
 
 ## Où nous en sommes
 
-| Étape | État réel | Limite restante |
+| Étape | État | Limite restante |
 |---|---|---|
-| Candidat P1 PMKB FIRST BOOT #1 | **FIGÉ / qualifié logiciel** — 268 435 968 octets, SHA-256 `7980fec15cb62ca3c2cabcb64cbbb683446fbf64070d75b45acf9a5e99e0f67c` | Démarrage matériel non essayé |
-| PRE-P1 / HWCONFIG de référence | **Qualifié** | À relire sur la donneuse réelle lors de la création |
-| P2 / recoveryfs de référence | **Qualifié** — SHA-256 `fe7885d391a5627cf2b04bd75518cf8fb5b0f379b29032727adb29cba35b968a` | À relire sur la donneuse réelle lors de la création |
-| Backend de remplacement `replace-microsd-linux.py` | **Implémenté et fusionné** via PR #16 | Écriture réelle sur carte de remplacement non qualifiée |
-| Donneuse originale | Contrat **lecture seule** implémenté | Lecture matérielle réelle du nouveau parcours à effectuer |
-| Staging Live | PRE-P1 + P2 seulement, environ 278 Mio ; un seul lecteur de cartes suffit | À exercer sur le Live réel |
-| Nouvelle P3 | Création FAT32 `KOBOeReader`, taille adaptée à la cible | Montage réel par la Kobo non qualifié |
-| Live UX | Français/anglais, AZERTY, parcours remplacement prioritaire, progression texte | Rapport opérateur à rendre plus lisible sur un écran unique |
-| Identité du Live | **Fusionnée via PR #17** — séparation `candidate_head` / `live_head`, CI #130 verte | Le nouveau Live réel doit maintenant être reconstruit depuis cette référence |
-| Boot du PC sur un ancien Live PMKB | **Observé** jusqu'au menu PMKB | Le nouveau Live intégrant le parcours de remplacement doit être reconstruit et requalifié |
-| FIRST BOOT Aura HD | **UNQUALIFIED** | Boot, écran, tactile, frontlight, P3, USB/Calibre |
+| Inspection et vérification du recovery | Outils et tests disponibles | Qualification des accès selon l'environnement |
+| Import historique | Implémenté ; vrais fichiers pré-P1/P2 qualifiés | Provenance `legacy/imported`, association déclarée, aucun faux manifeste natif |
+| Sauvegarde complète de notre carte | Copie et relectures complètes concordantes | Acquisition spécifique à cette tâche, distincte du futur outil natif |
+| Reconstruction de P1 | Réalisée sur nos données ; filesystem, contenu, permissions, liens et empreintes vérifiés | Démarrage non essayé |
+| Simulation complète | Réalisée sur la vraie sauvegarde ; seule P1 change dans une copie du PC | Aucune restauration physique |
+| Exécuteur P1 sous Linux Live | Garde-fous implémentés et tests synthétiques réussis | Verrouillage/ioctl et restauration sur matériel réel non qualifiés |
+| Commande `pmkb` et paquet `.deb` 0.2.0 | Construits ; paquet extrait et lanceur vérifiés ; 150 tests Linux (5 Qt ignorés sans dépendance) et CI Linux/Windows | Installation APT sur l'environnement Live de référence à valider |
+| Application Qt/PySide6 | Premier atelier local implémenté et testé | Qt optionnel ; aucune restauration physique |
 
-Voir [remplacement-microsd-fr.md](remplacement-microsd-fr.md), [qualification-usb-fr.md](qualification-usb-fr.md) et [pmkb-first-boot-1-fr.md](pmkb-first-boot-1-fr.md).
+## 1. Préparer l'environnement de référence — prochaine étape
 
-## 1. Aligner et figer le Live de préparation
+- Préparer Linux Live USB natif et les fichiers de preuve sur un support persistant accessible.
+- Valider l'installation de `pmkb`, ses dépendances et ses commandes locales.
+- Conserver la hiérarchie des fichiers référencés par le manifeste historique.
+- Prévoir l'espace pour P1 reconstruite et P1 originale, ainsi qu'un journal durable hors de la carte Kobo.
 
-Avant toute microSD réelle :
+La création d'une clé Live écrit aussi sur un support physique : elle nécessite une autorisation préalable. L'installation du paquet sur le PC ne lance aucun accès à la Kobo. Voir [l'installation CLI](cli-install-fr.md).
 
-1. partir de la référence Live qualifiée issue de la PR #17, avec identités distinctes du candidat P1 et du code Live ;
-2. reconstruire l'ISO depuis un checkout Git propre de cette référence exacte ;
-3. conserver le SHA-256 de l'ISO produite ;
-4. vérifier dans l'ISO le candidat, les backends, le manifest, le plan et l'identité de build ;
-5. garder l'interface principale sur **un écran unique** : progression, résultats essentiels et erreurs lisibles au même endroit ;
-6. présenter les analyses sous forme synthétique `OK / ERREUR / À TESTER`, avec détails techniques accessibles sans imposer une autre console ;
-7. versionner dans Git les sources graphiques utiles et leur provenance ; leur affichage dans le Live reste un raffinement, pas un prérequis de sécurité.
+## 2. Qualifier la restauration réelle — en attente de l'opérateur
 
-Aucun effet graphique ou animation complexe n'est requis pour FIRST BOOT #1.
+1. Identifier explicitement la carte entière, puis effectuer la comparaison exclusive **en lecture seule** avec la sauvegarde complète.
+2. Préciser/documenter le retour à P1 originale avant la première écriture. Les données de retour existent ; le rollback automatique n'est pas implémenté.
+3. Examiner cible, bornes de P1 et plan exact, puis obtenir une autorisation humaine distincte de lancer la restauration.
+4. Restaurer P1 seule sous Linux Live, synchroniser et relire P1 ainsi que toutes les zones préservées.
+5. Essayer le démarrage sur la Kobo et consigner le résultat réel. Une interruption exige l'examen du journal avant toute autre écriture ; aucun retry automatique.
 
-## 2. Rendre disponible le candidat P1 exact
+Les étapes précédentes ne prouvent ni le démarrage ni la santé du filesystem P3. Le contrat legacy conserve ses limites : les vérifications contemporaines et l'intention de l'opérateur sont distinctes. Voir [la procédure Linux Live](restore-p1-linux-fr.md).
 
-Le nouveau parcours peut reprélever PRE-P1 et P2 depuis la microSD originale, mais **pas le candidat P1 PMKB**.
+## 3. Application Qt/PySide6 — premier lot local
 
-Avant de construire le Live réel, il faut donc disposer exactement de :
+Première version centrée sur les fichiers locaux :
 
-- `PMKB-FIRST-BOOT-1-0b00d858.img`
-- taille : `268435968`
-- SHA-256 : `7980fec15cb62ca3c2cabcb64cbbb683446fbf64070d75b45acf9a5e99e0f67c`
+- sélectionner sauvegardes, recovery et rapports ;
+- afficher qualification, provenance et contrôles manquants ;
+- piloter reconstruction et simulation à travers les commandes existantes ;
+- présenter erreurs, progression et rapports JSON ;
+- préserver les décisions et garde-fous de la CLI.
 
-Cet artefact peut venir du build privé existant ou d'un ancien Live privé qui l'embarque, sous réserve de vérification du SHA-256.
+La première interface n'effectue pas de restauration physique. Voir [l’atelier local](gui-fr.md). Une future interface d'écriture demandera une conception et une qualification séparées. Ce lot local peut avancer pendant que les essais matériels attendent l'opérateur. Qt reste une dépendance optionnelle ; la CLI fonctionne sans lui.
 
-## 3. Construire puis démarrer le nouveau Live réel
+## 4. Rendre le sauvetage reproductible sur d'autres Aura HD
 
-1. construire l'ISO PMKB avec le candidat exact et le plan scellé ;
-2. vérifier son SHA-256 ;
-3. écrire l'ISO sur la clé USB de qualification, jamais sur une microSD Kobo ;
-4. démarrer le portable en Linux Live natif ;
-5. vérifier l'arrivée sur PMKB, le français/AZERTY et l'identité affichée du candidat et du Live.
+- Intégrer et qualifier le contrat natif `backup-aura-hd`, développé séparément ; ne pas convertir artificiellement les preuves historiques en sauvegarde native.
+- Valider la chaîne inspection → sauvegarde → reconstruction → simulation → restauration protégée sur d'autres exemplaires E606C0.
+- Documenter les variantes et les géométries non prises en charge avec des diagnostics explicites.
+- Choisir la licence du code propre au projet avant de planifier une distribution publique du paquet.
+- Garder les tests synthétiques et la documentation FR/EN ; ne publier aucun dump ou firmware privé.
 
-L'ancien boot réussi sur le PC prouve seulement que cette famille de Live peut démarrer sur ce portable ; il ne qualifie pas la nouvelle ISO.
+## 5. Libérer la Kobo — prototype local en cours, matériel en attente
 
-## 4. Lire la microSD originale — strictement en lecture seule
+- Direction validée : démarrage direct de KOReader, sans interface/services Kobo ; réseau refusé au lancement hors loopback. Voir [le prototype autonome](offline-liberation-fr.md).
+- L’autorisation de restauration physique est retirée ; les anciens plans ne qualifient pas la nouvelle image.
+- Documenter et extraire la waveform E-Ink de manière reproductible.
+- Compiler les références U-Boot/kernel et qualifier les contraintes E606C0.
+- Construire un userspace minimal maintenable puis intégrer KOReader.
+- Conserver une voie documentée de retour à la sauvegarde originale vérifiée.
+- Tester une microSD libérée sur le matériel réel avant toute généralisation.
 
-Parcours normal :
+Les thèmes rétro et Easter eggs restent facultatifs, hors des chemins de détection, qualification, confirmation ou écriture.
 
-1. choisir **Créer / réparer une nouvelle microSD PMKB** ;
-2. insérer la microSD originale ;
-3. saisir explicitement son disque complet, par exemple `/dev/sdb` ;
-4. vérifier support amovible USB, secteurs 512 octets, géométrie et Aura HD E606C0 ;
-5. relire et vérifier PRE-P1 / HWCONFIG ;
-6. relire et vérifier P2 / recoveryfs ;
-7. copier en staging Live uniquement :
-   - PRE-P1 : environ 9,5 Mio ;
-   - P2 : 256 Mio ;
-   - manifeste de capture.
+## Règle commune
 
-La carte originale est ouverte en lecture seule. **Aucune écriture n'est requise sur elle dans ce parcours.**
+**Sauvegarder → reconstruire hors ligne → vérifier → simuler → autoriser séparément → restaurer P1 → relire → tester le démarrage.**
 
-Le staging tient en RAM ; un seul lecteur de cartes suffit.
-
-## 5. Retirer et préserver l'originale
-
-Après capture réussie :
-
-1. retirer physiquement la microSD originale ;
-2. la ranger et la conserver comme sauvegarde matérielle ;
-3. ne plus en dépendre pour la phase d'écriture de la nouvelle carte.
-
-La donneuse ne doit pas avoir besoin d'être présente pendant l'écriture de la cible.
-
-## 6. Préparer la nouvelle microSD
-
-1. insérer une autre microSD ;
-2. saisir explicitement son disque complet ;
-3. vérifier qu'elle est amovible, USB, inutilisée et suffisamment grande ;
-4. refuser une cible qui ressemble à la donneuse ;
-5. calculer la P3 à partir de la capacité réelle ;
-6. afficher la capacité cible, la future P3 et le plan exact ;
-7. lier le plan à l'identité et à l'empreinte de cette cible ;
-8. demander la confirmation destructive exacte.
-
-Géométrie système conservée :
-
-- PRE-P1 : offset 0, taille 9 961 472 ;
-- P1 : offset 9 961 472, taille 268 435 968 ;
-- P2 : offset 278 397 440, taille 268 435 968 ;
-- P3 commence à 546 833 408.
-
-Le contrat actuel réserve au minimum 1 Gio à P3, soit un minimum théorique total d'environ 1,51 Gio. **La capacité de la cible n'a pas à être identique à celle de la donneuse et aucune capacité commerciale particulière ne doit être codée en dur.** Toute cible dont la capacité réelle satisfait les contraintes du profil peut être préparée ; la compatibilité matérielle aux différentes capacités reste à qualifier sur l'Aura HD.
-
-## 7. Construire la nouvelle carte
-
-Après confirmation seulement :
-
-1. écrire le PRE-P1 issu de la donneuse en n'adaptant que la taille MBR de P3 ;
-2. écrire P1 avec le candidat PMKB figé ;
-3. écrire P2 bit pour bit depuis le staging ;
-4. créer P3 en FAT32 avec le label `KOBOeReader`.
-
-Les opérations longues affichent une progression texte, par exemple :
-
-`Lecture originale P2 recovery: 72% (184.3/256.0 MiB, 18.4 MiB/s)`
-
-Aucun retry automatique et aucun rollback automatique implicite.
-
-## 8. Relire et qualifier la nouvelle carte avant la Kobo
-
-La création n'est réussie que si les contrôles post-écriture passent :
-
-- PRE-P1 relu et conforme ;
-- P1 relue avec le SHA-256 attendu ;
-- P2 relue avec le SHA-256 attendu ;
-- MBR et géométrie conformes ;
-- P3 FAT32 valide ;
-- label `KOBOeReader` valide.
-
-Le rapport opérateur doit distinguer clairement :
-
-- **OK** : démontré par lecture/contrôle ;
-- **ERREUR** : opération invalide ou interrompue ;
-- **À TESTER** : dépend du matériel Kobo et ne peut pas être déduit de la carte seule.
-
-Une carte cible partiellement écrite reste reconstruisible ; en cas d'échec, on diagnostique puis on recommence sur la cible. L'originale reste intacte.
-
-## 9. FIRST BOOT matériel sur l'Aura HD
-
-Installer la nouvelle carte dans la Kobo puis qualifier explicitement :
-
-1. démarrage réel ;
-2. framebuffer / affichage E-Ink ;
-3. lancement de KOReader ;
-4. tactile ;
-5. frontlight ;
-6. montage de P3 `/mnt/onboard` ;
-7. accès aux livres/fichiers ;
-8. USB / Calibre ;
-9. stabilité après redémarrage.
-
-Tant que ces essais ne sont pas réalisés sur l'appareil réel, ces points restent **UNQUALIFIED**.
-
-Le résultat matériel doit être rattaché au SHA du candidat P1, au commit du Live, à l'identité de la carte construite et au rapport de session.
-
-## 10. Le backup complet de 31,9 Go n'est plus un prérequis du parcours normal
-
-Le backup complet existant reste une archive utile, notamment pour conserver une photographie exacte de l'ancienne P3 et des données utilisateur.
-
-Mais le nouveau parcours de remplacement n'en dépend pas :
-
-- PRE-P1 peut être reprélevé sur l'originale ;
-- P2 peut être reprélevée sur l'originale ;
-- P3 est recréée ;
-- P1 PMKB vient du candidat figé.
-
-Politique cible :
-
-- conserver la microSD originale intacte ;
-- conserver les hashes, manifests, scripts, documentation et petites sources dans Git ;
-- conserver les gros dumps comme archives froides facultatives, pas comme service 24/24 ;
-- ne pas synchroniser 31,9 Go uniquement pour rendre le parcours courant possible.
-
-## 11. La restauration P1 sur l'originale reste un contrat avancé séparé
-
-`restore-p1-linux.py` n'est pas supprimé.
-
-Il garde son contrat historique strict :
-
-- cible = carte originale connue ;
-- carte complète identique à la sauvegarde qualifiée ;
-- seule P1 peut être écrite ;
-- tout l'extérieur de P1 reste inchangé.
-
-Ce mode est une voie avancée de restauration, **pas le parcours normal de réparation**.
-
-Il ne faut jamais assouplir ce backend pour accepter arbitrairement une autre carte : le remplacement complet appartient à `replace-microsd-linux.py`.
-
-## 12. Après FIRST BOOT seulement — phase produit PMKB
-
-Aucun développement produit ne doit retarder le premier démarrage matériel.
-
-Une fois FIRST BOOT qualifié :
-
-- stabiliser KOReader comme jalon V1 ;
-- concevoir le launcher e-ink PMKB ;
-- organiser les entrées Books / Apps / Games / Store / Web / Notes / Recipes / Settings ;
-- poursuivre les applications légères, outils réseau/diagnostic, PDA, cartes hors ligne et autres fonctions prévues ;
-- maintenir les services optionnels non résidents en RAM ;
-- étudier ensuite le split 2 panneaux et les raffinements d'interface ;
-- garder thèmes rétro, Ikari Mode et autres Easter eggs hors de tous les chemins de sécurité.
-
-## 13. Rendre ensuite le sauvetage reproductible sur d'autres Aura HD
-
-Après succès sur l'appareil de développement :
-
-- qualifier le même parcours sur d'autres E606C0 ;
-- documenter les variantes matérielles et géométries non prises en charge ;
-- conserver tests synthétiques et documentation FR/EN ;
-- ne publier aucun dump, recovery ou firmware privé ;
-- décider séparément ce qui peut devenir une distribution publique légère.
-
-## Invariant d'architecture
-
-Le parcours principal doit rester segmenté :
-
-```text
-microSD originale
-      |
-      | lecture seule
-      v
-PRE-P1 + P2 + identification E606C0
-      |
-      | staging Live (~278 Mio)
-      v
-retirer l'originale
-      |
-      v
-nouvelle microSD explicitement choisie
-      |
-      | plan + confirmation destructive
-      v
-PRE-P1 + P1 PMKB + P2 + P3 FAT32
-      |
-      | relecture / vérification
-      v
-FIRST BOOT sur l'Aura HD
-```
-
-**Lire l'originale → la retirer → construire une autre carte → relire → tester le matériel.**
-
-Aucun bouton, raccourci ou amélioration d'interface ne doit transformer cette chaîne en écriture implicite sur la carte originale.
+Aucun bouton ou raccourci ne doit transformer cette chaîne en écriture implicite « réparer ma Kobo ».

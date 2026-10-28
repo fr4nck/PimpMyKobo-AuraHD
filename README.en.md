@@ -222,12 +222,25 @@ A read-only tool does not make the host operating system unable to write to the 
 - [ ] Integrate KOReader
 - [ ] Test a fully liberated microSD image
 
+## E-ink launcher — V0.2 artwork, V0.4 preview and V0.5 dock
+
+An isolated host-side Lua prototype implements menu navigation and SVG preview. The approved **V0.2 manga/pixel-art design** and its graphic assets are now committed. **16 grayscale levels (4-bit indexed PNG, 250,757 bytes)** are the preferred starting point for future tests; the original RGB artwork is preserved unchanged.
+
+- [Lua prototype, V0.4/V0.5 and launcher README](experimental/launcher-v0/README.md).
+- [**Open the V0.4/V0.5 local host simulator**](experimental/launcher-v0/simulator.html): unchanged approved 16-gray PNG, eight clickable tiles, keyboard navigation and **simulated** system telemetry.
+- **V0.5:** configurable session-only app shortcut dock, distinct from seven system controls; light/dark focus states composed on-screen without editing approved PNG files.
+- [Approved V0.2 assets (original, 16-gray, 4-gray, 1-bit, comparison and manifest)](experimental/launcher-v0/assets/v02/).
+- [Compression measurements and qualification limits (French)](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
+
+**No graphical launcher is qualified on the real Kobo.** All Wi-Fi/battery values are illustrative. KOReader remains an inert `open_reader` intent, not an executable launch. Dock/system buttons cannot change hardware; approved artwork, P1/P2/P3 and FIRST BOOT remain untouched.
+
 ## Documentation
 
 - [Disassemble the Aura HD and access the internal microSD](docs/disassembly-en.md) — with original photos, iFixit/MobileRead sources and a Lynx-friendly text edition.
 - [Text / Lynx disassembly guide](docs/disassembly-lynx-en.txt)
 - [Documentation index](docs/README.en.md)
 - [Roadmap and next steps](docs/ROADMAP.md)
+- [External research sources, inspiration and integration candidates (French)](docs/recherche-sources-fr.md)
 - [Aura HD rescue](docs/rescue-en.md)
 - [Recover the recovery files](docs/recover-files-en.md)
 - [Aura HD inspector](docs/inspect-aura-hd-en.md)

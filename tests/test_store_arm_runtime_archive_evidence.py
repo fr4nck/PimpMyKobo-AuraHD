@@ -1,0 +1,364 @@
+"""L08-M: bounded dependency graph from archive-matched synthetic ELF files."""
+from io import BytesIO
+import hashlib
+import os
+import struct
+from pathlib import Path
+import sys
+import tarfile
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+STORE = Path(__file__).resolve().parents[1] / "experimental" / "store-v0"
+sys.path.insert(0, str(STORE))
+from arm_runtime_archive_evidence import (
+    ArmArchiveRuntimeEvidenceError, inspect_arm_archive_dependency_graph,
+)
+from rootfs_snapshot_audit import scan_rootfs_snapshot
+from test_store_arm_elf_runtime_metadata import build_elf
+from test_store_arm_elf_symbol_resolution import add_symbol_table
+
+
+def make_archive(files, links=None):
+    output = BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for path, data in files.items():
+            info = tarfile.TarInfo(path)
+            info.size = len(data)
+            info.mtime = 0
+            archive.addfile(info, BytesIO(data))
+        for path, target in (links or {}).items():
+            info = tarfile.TarInfo(path)
+            info.type = tarfile.SYMTYPE
+            info.linkname = target
+            info.mtime = 0
+            archive.addfile(info)
+    return output.getvalue()
+
+
+def make_snapshot(files, links=None):
+    with TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "lib").mkdir()
+        (root / "usr" / "lib").mkdir(parents=True)
+        for path, data in files.items():
+            destination = root / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+        for path, target in (links or {}).items():
+            destination = root / path
+            try:
+                destination.symlink_to(target)
+            except (OSError, NotImplementedError):
+                raise unittest.SkipTest("symlinks unavailable on this host")
+        return scan_rootfs_snapshot(root, source_id="l08m-synthetic")
+
+
+def run_graph(candidate, files, links=None, *, archive_files=None,
+              expected_candidate_sha256=None):
+    snapshot = make_snapshot(files, links)
+    archive = make_archive(files if archive_files is None else archive_files, links)
+    return inspect_arm_archive_dependency_graph(
+        candidate, archive, snapshot,
+        expected_candidate_sha256=expected_candidate_sha256,
+        expected_archive_sha256=hashlib.sha256(archive).hexdigest(),
+        expected_audit_sha256=snapshot["audit_sha256"],
+        expected_source_id="l08m-synthetic")
+
+
+class ArmArchiveDependencyGraphTests(unittest.TestCase):
+    def test_observes_direct_and_transitive_edges_and_version_nodes(self):
+        executable = build_elf(needed="libc.so.6", verneed="GLIBC_2.4")
+        libc = build_elf(kind=3, needed="libm.so.6", soname="libc.so.6",
+                         verneed="GLIBC_2.4", verdef="GLIBC_2.4")
+        libm = build_elf(kind=3, soname="libm.so.6", verdef="GLIBC_2.4")
+        files = {"lib/libc.so.6": libc, "lib/libm.so.6": libm}
+        result = run_graph(executable, files)
+        self.assertEqual(result["archive_verdict"], "scoped_content_match")
+        self.assertTrue(result["dependency_graph_complete_in_scanned_scope"])
+        edges = {(e["from"], e["needed"], e["state"])
+                 for e in result["dependency_edges"]}
+        self.assertIn(("<executable>", "libc.so.6",
+                       "metadata_observed_in_archive_only"), edges)
+        self.assertIn(("libc.so.6", "libm.so.6",
+                       "metadata_observed_in_archive_only"), edges)
+        reports = {r["object"]: r["comparison"] for r in result["version_node_reports"]}
+        self.assertTrue(reports["<executable>"]["all_required_version_nodes_observed"])
+        self.assertTrue(reports["libc.so.6"]["all_required_version_nodes_observed"])
+        self.assertFalse(result["transitive_dependencies_verified"])
+        self.assertFalse(result["symbol_versions_verified"])
+        self.assertFalse(result["runtime_compatible"])
+        self.assertFalse(result["launchable"])
+
+    def test_missing_library_is_unresolved_not_claimed_available(self):
+        executable = build_elf(needed="libmissing.so")
+        result = run_graph(executable, {})
+        self.assertEqual(result["archive_verdict"], "scoped_content_match")
+        self.assertFalse(result["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(result["dependency_edges"][0]["state"],
+                         "not_observed_in_scanned_directories")
+        self.assertEqual(result["unresolved_names"], ("libmissing.so",))
+
+    def test_archive_mismatch_blocks_dependency_graph(self):
+        executable = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        changed = libc + b"changed"
+        result = run_graph(executable, {"lib/libc.so.6": libc},
+                           archive_files={"lib/libc.so.6": changed})
+        self.assertEqual(result["archive_verdict"], "mismatch")
+        self.assertEqual(result["verdict"], "archive_mismatch")
+        self.assertFalse(result["dependency_graph_available"])
+        self.assertIsNone(result["dependency_graph_complete_in_scanned_scope"])
+
+    def test_symlink_alias_reads_the_matched_target_not_the_link(self):
+        executable = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4")
+        files = {"lib/libc-2.19.so": libc}
+        result = run_graph(executable, files,
+                           {"lib/libc.so.6": "libc-2.19.so"})
+        edge = result["dependency_edges"][0]
+        self.assertEqual(edge["state"], "metadata_observed_in_archive_only")
+        self.assertEqual(edge["archive_path"], "lib/libc-2.19.so")
+        self.assertEqual(edge["alias_state"], "alias_to_arm_header_observed_only")
+
+    def test_pt_interp_is_observed_separately_from_launchability(self):
+        executable = build_elf(needed="libc.so.6", interpreter="/lib/ld-linux.so.3")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        loader = build_elf(kind=3, soname="ld-linux.so.3")
+        result = run_graph(executable, {
+            "lib/libc.so.6": libc,
+            "lib/ld-linux.so.3": loader,
+        })
+        self.assertEqual(result["interpreter"]["state"],
+                         "interpreter_metadata_observed_only")
+        self.assertEqual(result["interpreter"]["archive_path"],
+                         "lib/ld-linux.so.3")
+        self.assertFalse(result["interpreter"]["launchable"])
+        self.assertFalse(result["hardware_verified"])
+
+    def test_missing_version_node_is_reported_even_if_graph_is_observed(self):
+        executable = build_elf(needed="libc.so.6", verneed="GLIBC_2.4")
+        libc = build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.17")
+        result = run_graph(executable, {"lib/libc.so.6": libc})
+        self.assertTrue(result["dependency_graph_complete_in_scanned_scope"])
+        comparison = result["version_node_reports"][0]["comparison"]
+        self.assertFalse(comparison["all_required_version_nodes_observed"])
+        self.assertEqual(comparison["binary_version_requirements"][0]["state"],
+                         "required_version_nodes_missing")
+        self.assertFalse(result["symbol_versions_verified"])
+
+    def test_archive_backed_symbol_and_version_pair_is_observed_only(self):
+        candidate = add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4"))
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        result = run_graph(candidate, {"lib/libc.so.6": libc})
+        symbols = result["candidate_symbol_report"]
+        self.assertEqual(result["archive_verdict"], "scoped_content_match")
+        self.assertEqual(symbols["verdict"], "symbol_pairs_observed")
+        self.assertEqual(symbols["symbol_findings"][0]["state"],
+                         "symbol_and_version_node_observed_in_library")
+        self.assertTrue(symbols["all_versioned_symbol_pairs_observed"])
+        self.assertFalse(result["symbol_versions_verified"])
+        self.assertFalse(result["runtime_compatible"])
+        self.assertFalse(result["launchable"])
+
+    def test_symbol_mismatch_does_not_block_graph_but_never_becomes_a_pass(self):
+        candidate = add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4"))
+        wrong = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            symbol_name="close", defined=True)
+        result = run_graph(candidate, {"lib/libc.so.6": wrong})
+        self.assertTrue(result["dependency_graph_complete_in_scanned_scope"])
+        symbols = result["candidate_symbol_report"]
+        self.assertEqual(symbols["verdict"], "symbol_pairs_incomplete")
+        self.assertEqual(symbols["symbol_findings"][0]["state"],
+                         "required_symbol_not_exported")
+        self.assertFalse(symbols["all_versioned_symbol_pairs_observed"])
+
+    def test_archive_mismatch_never_attempts_symbol_resolution(self):
+        candidate = add_symbol_table(build_elf(needed="libc.so.6"))
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6"), defined=True)
+        changed = libc + b"changed"
+        with patch("arm_runtime_archive_evidence.compare_required_symbols",
+                   side_effect=AssertionError("symbol comparison attempted")):
+            result = run_graph(
+                candidate, {"lib/libc.so.6": libc},
+                archive_files={"lib/libc.so.6": changed})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "not_evaluated_due_to_archive_verdict")
+        self.assertFalse(result["launchable"])
+
+    def test_candidate_without_symbol_table_cannot_claim_symbol_match(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        result = run_graph(candidate, {"lib/libc.so.6": libc})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "candidate_symbol_table_unavailable")
+        self.assertFalse(result["symbol_versions_verified"])
+
+    def test_invalid_symbol_hash_reports_refusal_without_execution(self):
+        candidate = bytearray(add_symbol_table(
+            build_elf(needed="libc.so.6", verneed="GLIBC_2.4")))
+        # SysV DT_HASH nchain outside the supported table bounds.
+        struct.pack_into("<I", candidate, 1454, 0xFFFFFFFF)
+        libc = add_symbol_table(
+            build_elf(kind=3, soname="libc.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        result = run_graph(bytes(candidate), {"lib/libc.so.6": libc})
+        self.assertEqual(result["candidate_symbol_report"]["verdict"],
+                         "comparison_refused")
+        self.assertFalse(result["launchable"])
+
+    def test_imports_from_transitive_library_are_observed_not_executed(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"),
+            defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertTrue(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(report["symbol_audited_dependency_objects"], 2)
+        self.assertEqual(items["libc.so.6"]["verdict"], "symbol_pairs_observed")
+        self.assertEqual(items["libm.so.6"]["verdict"], "no_undefined_symbols")
+        self.assertFalse(report["symbol_versions_verified"])
+        self.assertFalse(report["launchable"])
+
+    def test_missing_transitive_symbol_is_detected_despite_complete_graph(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"),
+            symbol_name="close", defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertTrue(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(items["libc.so.6"]["symbol_findings"][0]["state"],
+                         "required_symbol_not_exported")
+        self.assertFalse(items["libc.so.6"]["all_versioned_symbol_pairs_observed"])
+
+    def test_unobserved_transitive_provider_does_not_become_available(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4"))
+        report = run_graph(candidate, {"lib/libc.so.6": libc})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertFalse(report["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(items["libc.so.6"]["symbol_findings"][0]["state"],
+                         "required_library_not_supplied")
+
+    def test_malformed_transitive_hash_is_reported_as_refusal(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = bytearray(add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", needed="libm.so.6",
+            verneed="GLIBC_2.4")))
+        struct.pack_into("<I", libc, 1454, 0xFFFFFFFF)
+        libm = add_symbol_table(build_elf(
+            kind=3, soname="libm.so.6", verdef="GLIBC_2.4"), defined=True)
+        report = run_graph(candidate, {
+            "lib/libc.so.6": bytes(libc), "lib/libm.so.6": libm})
+        items = {x["object"]: x["comparison"]
+                 for x in report["dependency_symbol_reports"]}
+        self.assertEqual(items["libc.so.6"]["verdict"], "comparison_refused")
+        self.assertFalse(report["launchable"])
+
+    def test_interpreter_symbol_evidence_is_separate(self):
+        candidate = build_elf(
+            needed="libc.so.6", interpreter="/lib/ld-linux.so.3")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6", verdef="GLIBC_2.4"), defined=True)
+        loader = add_symbol_table(build_elf(
+            kind=3, soname="ld-linux.so.3", needed="libc.so.6",
+            verneed="GLIBC_2.4"))
+        report = run_graph(candidate, {
+            "lib/libc.so.6": libc, "lib/ld-linux.so.3": loader})
+        seen = report["interpreter_symbol_report"]
+        self.assertEqual(seen["state"], "interpreter_metadata_observed_only")
+        self.assertEqual(seen["comparison"]["verdict"], "symbol_pairs_observed")
+        self.assertFalse(seen["launchable"])
+
+    def test_archive_mismatch_blocks_all_transitive_symbol_audits(self):
+        candidate = build_elf(needed="libc.so.6")
+        libc = add_symbol_table(build_elf(
+            kind=3, soname="libc.so.6"), defined=True)
+        with patch("arm_runtime_archive_evidence.compare_required_symbols",
+                   side_effect=AssertionError("unexpected symbol audit")):
+            report = run_graph(candidate, {"lib/libc.so.6": libc},
+                               archive_files={"lib/libc.so.6": libc + b"changed"})
+        self.assertEqual(report["dependency_symbol_reports"], ())
+        self.assertIsNone(report["interpreter_symbol_report"]["comparison"])
+        self.assertFalse(report["launchable"])
+
+    def test_dependency_depth_is_bounded(self):
+        executable = build_elf(needed="lib0.so")
+        files = {}
+        for index in range(9):
+            name = "lib%d.so" % index
+            child = "lib%d.so" % (index + 1) if index < 8 else None
+            files["lib/" + name] = build_elf(
+                kind=3, needed=child, soname=name)
+        result = run_graph(executable, files)
+        self.assertFalse(result["dependency_graph_complete_in_scanned_scope"])
+        self.assertIn("dependency_depth_limit",
+                      {edge["state"] for edge in result["dependency_edges"]})
+        self.assertFalse(result["transitive_dependencies_verified"])
+
+    def test_candidate_digest_mismatch_is_refused(self):
+        executable = build_elf(needed="libc.so.6")
+        with self.assertRaisesRegex(
+                ArmArchiveRuntimeEvidenceError,
+                "expected_candidate_digest_mismatch"):
+            run_graph(executable, {}, expected_candidate_sha256="f" * 64)
+
+    def test_malformed_library_metadata_does_not_become_a_match(self):
+        executable = build_elf(needed="libc.so.6")
+        # Header still identifies ARM EABI5, but the dynamic table lacks DT_NULL.
+        malformed = bytearray(build_elf(kind=3, soname="libc.so.6"))
+        struct.pack_into("<I", malformed, 256, 0x7FFFFFFF)
+        result = run_graph(executable, {"lib/libc.so.6": bytes(malformed)})
+        self.assertFalse(result["dependency_graph_complete_in_scanned_scope"])
+        self.assertEqual(result["dependency_edges"][0]["state"],
+                         "library_metadata_rejected")
+
+    def test_crc_corruption_is_rejected(self):
+        executable = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        snapshot = make_snapshot({"lib/libc.so.6": libc})
+        archive = bytearray(make_archive({"lib/libc.so.6": libc}))
+        archive[-8] ^= 1
+        with self.assertRaisesRegex(
+                ArmArchiveRuntimeEvidenceError, "input_evidence_rejected"):
+            inspect_arm_archive_dependency_graph(
+                executable, bytes(archive), snapshot)
+
+    def test_archive_graph_is_memory_only(self):
+        executable = build_elf(needed="libc.so.6")
+        libc = build_elf(kind=3, soname="libc.so.6")
+        snapshot = make_snapshot({"lib/libc.so.6": libc})
+        archive = make_archive({"lib/libc.so.6": libc})
+        with patch("builtins.open", side_effect=AssertionError("host file read")):
+            with patch("os.open", side_effect=AssertionError("host file read")):
+                result = inspect_arm_archive_dependency_graph(
+                    executable, archive, snapshot)
+        self.assertTrue(result["dependency_graph_complete_in_scanned_scope"])
+        self.assertFalse(result["hardware_verified"])
+        self.assertFalse(result["launchable"])
+
+
+if __name__ == "__main__":
+    unittest.main()

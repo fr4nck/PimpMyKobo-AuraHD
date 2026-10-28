@@ -222,12 +222,25 @@ Le dépôt doit en revanche fournir documentation, inspection, validation, sauve
 - [ ] Intégrer KOReader
 - [ ] Tester une microSD totalement libérée
 
+## Launcher e-ink — visuels V0.2, simulation V0.4 et dock V0.5
+
+Un prototype Lua isolé sur PC fournit la navigation et un aperçu SVG ; la composition manga/pixel-art **V0.2** et ses images sont désormais versionnées. Le format **16 niveaux de gris (PNG 4 bits, 250 757 octets)** est privilégié pour les essais futurs ; l'original RGB reste intact.
+
+- [Prototype Lua, V0.4/V0.5 et README du launcher](experimental/launcher-v0/README.md).
+- [**Ouvrir le simulateur V0.4/V0.5 sur PC**](experimental/launcher-v0/simulator.html) : véritable PNG 16 gris, huit tuiles cliquables, navigation et états de batterie/Wi-Fi **simulés**.
+- **V0.5** : dock de raccourcis applicatifs personnalisables en session, séparé des sept contrôles système ; états visuels clair/sombre générés à l'affichage sans modifier les PNG.
+- [Graphismes V0.2 validés (original, 16 gris, 4 gris, 1 bit, comparatif et manifeste)](experimental/launcher-v0/assets/v02/).
+- [Mesures d'optimisation et limites de qualification](docs/launcher-v02-asset-qualification-2026-10-13-fr.md).
+
+**Aucun launcher graphique embarqué n'est encore qualifié sur la Kobo** ; les valeurs d'énergie et réseau restent fictives. KOReader reçoit seulement une intention `open_reader`, sans lancement effectif. Le dock et la barre système n'activent aucun périphérique. Les illustrations validées, P1/P2/P3 et FIRST BOOT restent inchangés.
+
 ## Documentation
 
 - [Démonter l'Aura HD et accéder à la microSD interne](docs/disassembly-fr.md) — avec photos originales, sources iFixit/MobileRead et version texte pour Lynx.
 - [Version texte / Lynx du guide de démontage](docs/disassembly-lynx-fr.txt)
 - [Index de la documentation](docs/README.md)
 - [Roadmap et prochaines étapes](docs/ROADMAP.fr.md)
+- [Registre de recherche : sources externes, inspirations et candidats d'intégration](docs/recherche-sources-fr.md)
 - [Sauvetage d'une Aura HD](docs/rescue-fr.md)
 - [Retrouver les fichiers de recovery](docs/retrouver-fichiers-fr.md)
 - [Inspecteur Aura HD](docs/inspect-aura-hd-fr.md)

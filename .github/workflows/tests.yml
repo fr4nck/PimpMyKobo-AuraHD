@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, fix/claude-audit, feat/rebuild-rootfs-spec, feat/audit-arm-runtime]
+    branches: [main, fix/claude-audit, feat/rebuild-rootfs-spec]
   pull_request:
 
 permissions:
@@ -26,6 +26,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y fakeroot e2fsprogs
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Run Lua launcher tests (one Linux matrix job)
+        if: runner.os == 'Linux' && matrix.python-version == '3.10'
+        run: |
+          sudo apt-get install -y lua5.1
+          lua tests/test_launcher_v0.lua
+          lua tests/test_launcher_statusbar.lua
+          lua experimental/launcher-v0/status-preview.lua > /tmp/pmkb-v03-status-preview.svg
+      - name: Check illustrated launcher simulator model (one Linux matrix job)
+        if: runner.os == 'Linux' && matrix.python-version == '3.10'
+        run: node --test tests/test_launcher_simulator.cjs
   qt:
     strategy:
       fail-fast: false
@@ -43,7 +53,6 @@ jobs:
         run: python -m pip install PySide6-Essentials==6.10.2
       - name: Run local GUI tests
         run: python -m unittest discover -s tests -p test_gui.py -v
-
 
   qualification-live:
     runs-on: ubuntu-latest

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 1,
+  "id": "org.pmkb.whiteboard",
+  "name": "Tableau blanc",
+  "version": "0.1.0",
+  "target": "dragon",
+  "runtime": "pmkb-ui-v0",
+  "entrypoint": "bin/pmkb-whiteboard",
+  "dependencies": [],
+  "network": false
+}

@@ -1,0 +1,66 @@
+{
+  "original": {
+    "filename": "PMKB-launcher-V0.2-ordre-valide.png",
+    "size_bytes": 1933866,
+    "sha256": "4596389be32ba4cded6dde0940ec7528d3f0fc91e25638b0006802907a886d6d",
+    "dimensions": [
+      1086,
+      1448
+    ]
+  },
+  "asset_policy": "original stays intact; image previews are static concept; bottom Wi-Fi/battery values are illustrative; no hardware qualification",
+  "native_resolution": [
+    1080,
+    1440
+  ],
+  "assets": [
+    {
+      "file": "PMKB-V0.2-16gris.png",
+      "size_bytes": 250757,
+      "sha256": "d4408b0a04d27f3d493e68acdcee21b4905db76f8c845f08e8a97619227819b6",
+      "dimensions": [
+        1080,
+        1440
+      ],
+      "png_bit_depth": 4,
+      "png_color_type": 3,
+      "mode": "P"
+    },
+    {
+      "file": "PMKB-V0.2-4gris.png",
+      "size_bytes": 98919,
+      "sha256": "260d5e2cc35a125a3184cefc208971f328e63df958a4a834a135563075861b25",
+      "dimensions": [
+        1080,
+        1440
+      ],
+      "png_bit_depth": 2,
+      "png_color_type": 3,
+      "mode": "P"
+    },
+    {
+      "file": "PMKB-V0.2-1bit.png",
+      "size_bytes": 46780,
+      "sha256": "23de94889bd83cf670c1886230a14a86f0a5117bb12df903e040d7e586426456",
+      "dimensions": [
+        1080,
+        1440
+      ],
+      "png_bit_depth": 1,
+      "png_color_type": 0,
+      "mode": "1"
+    },
+    {
+      "file": "PMKB-comparatif-zoom.png",
+      "size_bytes": 342751,
+      "sha256": "3b40cb31a89f1a26d7855e8201b1c9e6c8e52206ead159f20041e0b511fb4e9d",
+      "dimensions": [
+        1080,
+        900
+      ],
+      "png_bit_depth": 8,
+      "png_color_type": 2,
+      "mode": "RGB"
+    }
+  ]
+}
