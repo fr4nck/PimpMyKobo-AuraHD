@@ -1,6 +1,6 @@
 # PMKB — candidat de neutralisation du réveil Hall (source seule)
 
-28 octobre 2026 — **CANDIDAT NON APPLIQUÉ, aucun test matériel**.
+28 octobre 2026 — **CANDIDAT non appliqué, aucun test matériel**.
 
 ## Origine traçable
 
