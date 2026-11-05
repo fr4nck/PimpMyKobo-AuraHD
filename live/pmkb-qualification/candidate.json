@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "project": "PimpMyKobo-AuraHD",
+  "model": "Kobo Aura HD E606C0",
+  "head": "0b00d858e26c8c65c5764ef939052704350eaaa9",
+  "image_name": "PMKB-FIRST-BOOT-1-0b00d858.img",
+  "image_size": 268435968,
+  "image_sha256": "7980fec15cb62ca3c2cabcb64cbbb683446fbf64070d75b45acf9a5e99e0f67c",
+  "disk": {
+    "size": 31914983424,
+    "partition_table": "dos",
+    "sector_size": 512
+  },
+  "pre_p1": {
+    "offset": 0,
+    "size": 9961472,
+    "sha256": "4b0c72f9d38a2d81d4d5ffb316b1b0d1efcb8e4bf0fa8610025e75fef837c2b6"
+  },
+  "partitions": [
+    {"number": 1, "offset": 9961472, "size": 268435968, "role": "rootfs"},
+    {"number": 2, "offset": 278397440, "size": 268435968, "role": "recoveryfs", "sha256": "fe7885d391a5627cf2b04bd75518cf8fb5b0f379b29032727adb29cba35b968a"},
+    {"number": 3, "offset": 546833408, "size": 31368150016, "role": "KOBOeReader"}
+  ]
+}

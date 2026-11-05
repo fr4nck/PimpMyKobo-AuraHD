@@ -113,6 +113,29 @@ Il vérifie tous les octets hors P1 et ne possède aucun mode physique.
 
 `prepare-p1-restore.py` relie la sauvegarde complète, la reconstruction et la simulation par leurs empreintes et produit un plan sans autoriser d'écriture physique. Voir [la procédure](../docs/prepare-p1-restore-fr.md).
 
+## Rootfs KOReader expérimental (sans Nickel)
+
+`build-koreader-rootfs.py` assemble un rootfs P1 expérimental à partir de la surcouche `experimental/offline-rootfs`, d'une version locale de KOReader et de composants runtime locaux (jamais committés). L'assemblage est multiplateforme et ne nécessite aucun outil Linux ; `--build` construit l'image ext4 et réutilise les fonctions de `rebuild-rootfs.py`, sous Linux uniquement. `scan_tree_for_nickel(root)` est le point d'entrée public destiné aux outils tiers (par exemple un futur `preflight-koreader` fusionné) qui analysent un répertoire déjà assemblé par cet outil. Voir [le contrat V1](../docs/build-koreader-rootfs-spec-fr.md).
+
+## `recover-live-bundle.py`
+
+Récupère le **bundle privé scellé** déjà embarqué dans un ancien Live PMKB, sans dépendre du poste qui l'a construit. La source est lue uniquement et peut être :
+
+- une racine Live déjà extraite/montée contenant `/opt/pmkb` ;
+- le fichier `live/filesystem.squashfs` de la clé/ISO Live.
+
+L'outil récupère uniquement le candidat P1, `candidate.json`, `restore-plan.json` et `BUILD-IDENTITY.json`, puis recalcule les SHA-256 et refuse toute incohérence. Les chemins `/dev/*` et périphériques bloc/caractère sont explicitement refusés.
+
+Exemple depuis Linux/WSL lorsque `filesystem.squashfs` est accessible comme fichier :
+
+```bash
+python3 tools/recover-live-bundle.py \
+  /chemin/vers/live/filesystem.squashfs \
+  ~/pmkb-recovered
+```
+
+Pour une source SquashFS, `unsquashfs` (paquet `squashfs-tools`) est requis. L'outil n'écrit que dans le répertoire de destination fourni et refuse de l'écraser s'il n'est pas vide.
+
 ## Tests
 
 La première restauration physique dispose d'un exécuteur Linux Live distinct : `restore-p1-linux.py`. Son mode par défaut vérifie uniquement les fichiers locaux. Voir [Français](../docs/restore-p1-linux-fr.md) / [English](../docs/restore-p1-linux-en.md) pour les refus, l'autorisation séparée et les limites.
@@ -132,3 +155,11 @@ Ils reconstruisent en mémoire ou dans des fichiers temporaires uniquement les s
 - Retour arrière physique automatisé : non implémenté. `restore-rootfs.py` reste un simulateur local ; la première écriture P1 relève de l'exécuteur Linux Live séparé.
 
 Voir la [roadmap actualisée](../docs/ROADMAP.fr.md) pour distinguer fonctionnalités implémentées et qualification matérielle restante.
+
+## `audit-arm-runtime.py`
+
+Audit statique en lecture seule d'un rootfs extrait localement : ELF ARM32 little-endian, chargeur, dépendances et SHA-256. Disponible via `pmkb audit-arm-runtime`. Aucun ELF exécuté, aucun montage ni écriture. Voir [le contrat et ses limites](../docs/audit-arm-runtime-fr.md). L’option `--check-bootstrap` vérifie aussi les fichiers de lancement, permissions et actions `inittab` du prototype hors ligne (POSIX uniquement). L’option indépendante `--check-storage` contrôle les répertoires `/mnt` et `/mnt/onboard`, sans montage ni accès à P3. Ce contrôle ne qualifie pas le démarrage matériel ni une restauration physique.
+
+## `preflight-koreader.py`
+
+`pmkb preflight-koreader ROOTFS_OU_IMAGE_LOCALE` agrège les contrôles hors matériel existants, avec verdicts `PASS`, `FAIL`, `UNQUALIFIED`. Aucun montage ni restauration ; toutes les qualifications matérielles restent `UNQUALIFIED`. Voir [la portée exacte, le scanner Nickel optionnel et les limites des images](../docs/preflight-koreader-fr.md).
